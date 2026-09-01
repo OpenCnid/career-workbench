@@ -5,6 +5,16 @@
   "required": ["displayName", "locale", "timezone"],
   "properties": {
     "displayName": { "minLength": 1, "maxLength": 120, "type": "string" },
+    "candidateName": { "minLength": 1, "maxLength": 300, "type": "string" },
+    "targetRole": { "minLength": 1, "maxLength": 500, "type": "string" },
+    "targetPriorities": { "minLength": 1, "maxLength": 2000, "type": "string" },
+    "locationPreference": {
+      "minLength": 1,
+      "maxLength": 300,
+      "type": "string"
+    },
+    "deferTargetPreferences": { "type": "boolean" },
+    "rubricPreset": { "const": "balanced_fit", "type": "string" },
     "locale": {
       "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$",
       "maxLength": 10,

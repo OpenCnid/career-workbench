@@ -274,7 +274,7 @@ describe("deterministic SQLite and filesystem vertical slice", () => {
       "Deterministic total: 7800 basis points",
     );
     expect(await fixture.store.health()).toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: 6,
       foreignKeys: true,
       journalMode: "wal",
       integrity: "ok",
@@ -394,7 +394,10 @@ describe("deterministic SQLite and filesystem vertical slice", () => {
         "UPDATE opportunities SET record_json = json_remove(record_json, '$.legitimacyStatus')",
       )
       .run();
-    downgraded.prepare("DELETE FROM schema_migrations WHERE version = 4").run();
+    downgraded.exec("DROP TABLE discovery_leads; DROP TABLE search_profiles;");
+    downgraded
+      .prepare("DELETE FROM schema_migrations WHERE version >= 4")
+      .run();
     downgraded.close();
 
     const upgraded = await SqliteWorkspaceStore.open(fixture.root, NOW);
@@ -402,9 +405,10 @@ describe("deterministic SQLite and filesystem vertical slice", () => {
       upgraded.get("opportunity", fixture.opportunityId),
     ).resolves.toMatchObject({ legitimacyStatus: "unknown" });
     expect(await upgraded.health()).toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: 6,
       integrity: "ok",
     });
+    expect(await upgraded.readConfig()).toContain("schema_version = 6");
     await upgraded.backup("release-rehearsal");
     await upgraded.close();
 
@@ -431,6 +435,32 @@ describe("deterministic SQLite and filesystem vertical slice", () => {
       access(join(fixture.root, restored.rollbackRelativePath)),
     ).resolves.toBeUndefined();
     await restored.store.close();
+  });
+
+  it("creates search and discovery tables when upgrading a genuine v4 database", async () => {
+    const fixture = await createFixture("upgrade-search-discovery");
+    await fixture.store.close();
+
+    const databasePath = join(fixture.root, "career-workbench.sqlite");
+    const downgraded = new Database(databasePath);
+    downgraded.exec("DROP TABLE discovery_leads; DROP TABLE search_profiles;");
+    downgraded
+      .prepare("DELETE FROM schema_migrations WHERE version >= 5")
+      .run();
+    downgraded.close();
+
+    const upgraded = await SqliteWorkspaceStore.open(fixture.root, NOW);
+    await expect(
+      upgraded.list("searchProfile", fixture.service.workspaceId),
+    ).resolves.toEqual([]);
+    await expect(
+      upgraded.list("discoveryLead", fixture.service.workspaceId),
+    ).resolves.toEqual([]);
+    expect(await upgraded.health()).toMatchObject({
+      schemaVersion: 6,
+      integrity: "ok",
+    });
+    await upgraded.close();
   });
 
   it("returns an identical prior result for a matching idempotency key and rejects changed content", async () => {

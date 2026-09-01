@@ -5,6 +5,12 @@
   "required": ["sourceFingerprint", "confirm"],
   "properties": {
     "sourceFingerprint": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
-    "confirm": { "const": true, "type": "boolean" }
+    "confirm": { "const": true, "type": "boolean" },
+    "selectedMappingIds": {
+      "maxItems": 512,
+      "uniqueItems": true,
+      "type": "array",
+      "items": { "minLength": 1, "maxLength": 500, "type": "string" }
+    }
   }
 }

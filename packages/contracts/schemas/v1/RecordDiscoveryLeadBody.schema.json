@@ -1,0 +1,54 @@
+{
+  "$id": "RecordDiscoveryLeadBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "organization",
+    "roleTitle",
+    "originalUrl",
+    "postingText",
+    "whyFound",
+    "matchedCriteria",
+    "gaps",
+    "risks"
+  ],
+  "properties": {
+    "organization": { "minLength": 1, "maxLength": 300, "type": "string" },
+    "roleTitle": { "minLength": 1, "maxLength": 300, "type": "string" },
+    "originalUrl": {
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^https?://",
+      "type": "string"
+    },
+    "postingText": { "minLength": 1, "maxLength": 1048576, "type": "string" },
+    "location": { "minLength": 1, "maxLength": 300, "type": "string" },
+    "workArrangement": { "minLength": 1, "maxLength": 300, "type": "string" },
+    "advertisedCompensation": {
+      "minLength": 1,
+      "maxLength": 300,
+      "type": "string"
+    },
+    "requisitionId": { "minLength": 1, "maxLength": 300, "type": "string" },
+    "whyFound": {
+      "maxItems": 8,
+      "type": "array",
+      "items": { "minLength": 1, "maxLength": 500, "type": "string" }
+    },
+    "matchedCriteria": {
+      "maxItems": 12,
+      "type": "array",
+      "items": { "minLength": 1, "maxLength": 300, "type": "string" }
+    },
+    "gaps": {
+      "maxItems": 12,
+      "type": "array",
+      "items": { "minLength": 1, "maxLength": 500, "type": "string" }
+    },
+    "risks": {
+      "maxItems": 12,
+      "type": "array",
+      "items": { "minLength": 1, "maxLength": 500, "type": "string" }
+    }
+  }
+}

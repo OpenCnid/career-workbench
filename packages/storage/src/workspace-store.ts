@@ -8,6 +8,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import {
   Kysely,
@@ -25,6 +26,7 @@ import {
   type Artifact,
   type CommandContext,
   type Comparison,
+  type DiscoveryLead,
   type DomainEvent,
   type EntityId,
   type Evaluation,
@@ -34,6 +36,7 @@ import {
   type Operation,
   type ProfileFact,
   type Rubric,
+  type SearchProfile,
   type SourceDocument,
   type UtcTimestamp,
   type Workspace,
@@ -87,6 +90,8 @@ interface DatabaseSchema {
   workspaces: EntityRow;
   sources: EntityRow;
   profile_facts: EntityRow;
+  search_profiles: EntityRow;
+  discovery_leads: EntityRow;
   opportunities: EntityRow;
   evidence_items: EntityRow;
   rubrics: EntityRow;
@@ -102,10 +107,14 @@ interface DatabaseSchema {
   schema_migrations: MigrationRow;
 }
 
+const CURRENT_SCHEMA_VERSION = 6;
+
 export type EntityKind =
   | "workspace"
   | "source"
   | "profileFact"
+  | "searchProfile"
+  | "discoveryLead"
   | "opportunity"
   | "evidence"
   | "rubric"
@@ -121,6 +130,8 @@ export interface EntityByKind {
   workspace: Workspace;
   source: SourceDocument;
   profileFact: ProfileFact;
+  searchProfile: SearchProfile;
+  discoveryLead: DiscoveryLead;
   opportunity: Opportunity;
   evidence: EvidenceItem;
   rubric: Rubric;
@@ -138,6 +149,8 @@ type EntityTable =
   | "workspaces"
   | "sources"
   | "profile_facts"
+  | "search_profiles"
+  | "discovery_leads"
   | "opportunities"
   | "evidence_items"
   | "rubrics"
@@ -153,6 +166,8 @@ const tableByKind: Readonly<Record<EntityKind, EntityTable>> = {
   workspace: "workspaces",
   source: "sources",
   profileFact: "profile_facts",
+  searchProfile: "search_profiles",
+  discoveryLead: "discovery_leads",
   opportunity: "opportunities",
   evidence: "evidence_items",
   rubric: "rubrics",
@@ -428,6 +443,163 @@ async function migrate(
         .execute();
     });
   }
+  if ((existing?.version ?? 0) < 5) {
+    await db.transaction().execute(async (transaction) => {
+      for (const table of ["search_profiles", "discovery_leads"]) {
+        await sql
+          .raw(
+            `
+              CREATE TABLE IF NOT EXISTS ${table} (
+                id TEXT PRIMARY KEY,
+                workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT,
+                revision INTEGER NOT NULL CHECK(revision > 0),
+                state TEXT,
+                record_json TEXT NOT NULL CHECK(json_valid(record_json)),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+              ) STRICT
+            `,
+          )
+          .execute(transaction);
+        await sql
+          .raw(
+            `CREATE INDEX IF NOT EXISTS ${table}_workspace_updated ON ${table}(workspace_id, updated_at, id)`,
+          )
+          .execute(transaction);
+      }
+      await transaction
+        .insertInto("schema_migrations")
+        .values({
+          version: 5,
+          name: "005_search_discovery",
+          applied_at: timestamp,
+        })
+        .execute();
+    });
+  }
+  if ((existing?.version ?? 0) < 6) {
+    await db.transaction().execute(async (transaction) => {
+      const inputRows = await transaction
+        .selectFrom("search_profiles")
+        .select(["id", "revision", "record_json"])
+        .execute();
+      const opportunityRows = await transaction
+        .selectFrom("opportunities")
+        .select(["id", "revision", "record_json"])
+        .execute();
+      const inputs = new Map(
+        [...inputRows, ...opportunityRows].map((row) => [row.id, row] as const),
+      );
+      const operationRows = await transaction
+        .selectFrom("operations")
+        .select(["id", "record_json"])
+        .execute();
+      const operations = new Map<string, Operation>();
+      for (const row of operationRows) {
+        const legacy = JSON.parse(row.record_json) as Omit<
+          Operation,
+          "inputRevision" | "inputDigest" | "resourceLimits"
+        > &
+          Partial<
+            Pick<Operation, "inputRevision" | "inputDigest" | "resourceLimits">
+          >;
+        if (
+          legacy.inputRevision === undefined ||
+          legacy.inputDigest === undefined ||
+          legacy.resourceLimits === undefined
+        ) {
+          const input =
+            legacy.inputIdentity === null
+              ? undefined
+              : inputs.get(legacy.inputIdentity);
+          const bound = {
+            ...legacy,
+            inputRevision: input?.revision ?? null,
+            inputDigest:
+              input === undefined
+                ? null
+                : createHash("sha256")
+                    .update(canonicalJson(JSON.parse(input.record_json)))
+                    .digest("hex"),
+            resourceLimits:
+              legacy.kind === "job_discovery"
+                ? {
+                    maximumLeads: 64,
+                    maximumLeadsPerHost: 20,
+                    maximumSourceBytes: 8 * 1024 * 1024,
+                  }
+                : {},
+          } as Operation;
+          await transaction
+            .updateTable("operations")
+            .set({ record_json: canonicalJson(bound) })
+            .where("id", "=", row.id)
+            .execute();
+          operations.set(row.id, bound);
+        } else {
+          operations.set(row.id, legacy as Operation);
+        }
+      }
+      const leadRows = await transaction
+        .selectFrom("discovery_leads")
+        .select(["id", "record_json"])
+        .execute();
+      for (const row of leadRows) {
+        const lead = JSON.parse(row.record_json) as Omit<
+          DiscoveryLead,
+          "searchProfileId" | "searchProfileRevision" | "searchCriteriaDigest"
+        > &
+          Partial<
+            Pick<
+              DiscoveryLead,
+              | "searchProfileId"
+              | "searchProfileRevision"
+              | "searchCriteriaDigest"
+            >
+          >;
+        if (lead.searchProfileId !== undefined) continue;
+        const operation = operations.get(lead.operationId);
+        if (
+          operation?.inputIdentity === null ||
+          operation?.inputIdentity === undefined ||
+          operation.inputRevision === null ||
+          operation.inputDigest === null
+        ) {
+          throw new DomainError(
+            "internal_error",
+            "Legacy discovery lead cannot be bound to its search criteria.",
+          );
+        }
+        const bound: DiscoveryLead = {
+          ...lead,
+          searchProfileId: operation.inputIdentity,
+          searchProfileRevision: operation.inputRevision,
+          searchCriteriaDigest: operation.inputDigest,
+        };
+        await transaction
+          .updateTable("discovery_leads")
+          .set({ record_json: canonicalJson(bound) })
+          .where("id", "=", row.id)
+          .execute();
+      }
+      await sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS search_profiles_one_per_workspace
+        ON search_profiles(workspace_id)
+      `.execute(transaction);
+      await sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS discovery_leads_workspace_url
+        ON discovery_leads(workspace_id, json_extract(record_json, '$.normalizedUrl'))
+      `.execute(transaction);
+      await transaction
+        .insertInto("schema_migrations")
+        .values({
+          version: 6,
+          name: "006_discovery_integrity",
+          applied_at: timestamp,
+        })
+        .execute();
+    });
+  }
 }
 
 function assertBackupLabel(label: string): void {
@@ -544,8 +716,12 @@ export class SqliteWorkspaceStore {
     root: string,
     timestamp: UtcTimestamp,
   ): Promise<SqliteWorkspaceStore> {
-    const safeRoot = await assertSafeWorkspaceRoot(root);
-    await mkdir(safeRoot, { recursive: false });
+    let safeRoot = await assertSafeWorkspaceRoot(root);
+    await mkdir(dirname(safeRoot), { recursive: true, mode: 0o700 });
+    // Creating a missing parent changes the filesystem boundary. Validate the
+    // complete chain again before exclusively creating the workspace itself.
+    safeRoot = await assertSafeWorkspaceRoot(safeRoot);
+    await mkdir(safeRoot, { recursive: false, mode: 0o700 });
     await Promise.all(
       ["artifacts", "exports", "backups"].map((directory) =>
         mkdir(resolveWorkspaceRelative(safeRoot, directory)),
@@ -553,7 +729,7 @@ export class SqliteWorkspaceStore {
     );
     await writeFile(
       resolveWorkspaceRelative(safeRoot, "config.toml"),
-      'contract_version = "v1"\nschema_version = 4\n',
+      `contract_version = "v1"\nschema_version = ${String(CURRENT_SCHEMA_VERSION)}\n`,
       { encoding: "utf8", flag: "wx", mode: 0o600 },
     );
     return SqliteWorkspaceStore.open(safeRoot, timestamp);
@@ -574,6 +750,22 @@ export class SqliteWorkspaceStore {
     });
     try {
       await migrate(db, timestamp);
+      const configPath = resolveWorkspaceRelative(safeRoot, "config.toml");
+      const config = await readFile(configPath, "utf8");
+      const synchronized = /(?:^|\n)schema_version\s*=\s*\d+(?:\n|$)/u.test(
+        config,
+      )
+        ? config.replace(
+            /(^|\n)schema_version\s*=\s*\d+(?=\n|$)/u,
+            `$1schema_version = ${String(CURRENT_SCHEMA_VERSION)}`,
+          )
+        : `${config.replace(/\s*$/u, "")}\nschema_version = ${String(CURRENT_SCHEMA_VERSION)}\n`;
+      if (synchronized !== config) {
+        await writeFile(configPath, synchronized, {
+          encoding: "utf8",
+          mode: 0o600,
+        });
+      }
       return new SqliteWorkspaceStore(safeRoot, native, db);
     } catch (error) {
       await db.destroy();
@@ -771,6 +963,82 @@ export class SqliteWorkspaceStore {
     }));
   }
 
+  public async recentEvents(
+    workspaceId: WorkspaceId,
+    limit = 100,
+  ): Promise<DomainEvent[]> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+      throw new DomainError(
+        "invalid_request",
+        "Recent event limit is invalid.",
+      );
+    }
+    const rows = await this.db
+      .selectFrom("domain_events")
+      .selectAll()
+      .where("workspace_id", "=", workspaceId)
+      .orderBy("sequence", "desc")
+      .limit(limit)
+      .execute();
+    return rows.reverse().map((row) => ({
+      sequence: row.sequence,
+      eventKind: row.event_kind,
+      schemaVersion: row.schema_version,
+      workspaceId: row.workspace_id as WorkspaceId,
+      aggregateId: row.aggregate_id as EntityId,
+      aggregateRevision: row.aggregate_revision,
+      commandId: row.command_id as EntityId,
+      operationId: row.operation_id as EntityId | null,
+      payload: JSON.parse(row.payload_json) as Readonly<
+        Record<string, unknown>
+      >,
+      timestamp: row.timestamp as UtcTimestamp,
+      actor: row.actor as ActorClass,
+    }));
+  }
+
+  public async eventsBefore(
+    workspaceId: WorkspaceId,
+    sequence: number,
+    limit = 100,
+  ): Promise<DomainEvent[]> {
+    if (
+      !Number.isInteger(sequence) ||
+      sequence < 1 ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 1000
+    ) {
+      throw new DomainError(
+        "invalid_request",
+        "Historical event cursor or limit is invalid.",
+      );
+    }
+    const rows = await this.db
+      .selectFrom("domain_events")
+      .selectAll()
+      .where("workspace_id", "=", workspaceId)
+      .where("sequence", "<", sequence)
+      .orderBy("sequence", "desc")
+      .limit(limit)
+      .execute();
+    return rows.reverse().map((row) => ({
+      sequence: row.sequence,
+      eventKind: row.event_kind,
+      schemaVersion: row.schema_version,
+      workspaceId: row.workspace_id as WorkspaceId,
+      aggregateId: row.aggregate_id as EntityId,
+      aggregateRevision: row.aggregate_revision,
+      commandId: row.command_id as EntityId,
+      operationId: row.operation_id as EntityId | null,
+      payload: JSON.parse(row.payload_json) as Readonly<
+        Record<string, unknown>
+      >,
+      timestamp: row.timestamp as UtcTimestamp,
+      actor: row.actor as ActorClass,
+    }));
+  }
+
   public async health(): Promise<WorkspaceHealth> {
     const foreignKeys = await sql<{
       foreign_keys: number;
@@ -816,7 +1084,14 @@ export class SqliteWorkspaceStore {
     const records: Record<string, unknown> = {};
     for (const kind of kinds)
       records[kind] = await this.list(kind, workspaceId);
-    const events = await this.eventsAfter(workspaceId, 0, 1000);
+    const events: DomainEvent[] = [];
+    let cursor = 0;
+    for (;;) {
+      const page = await this.eventsAfter(workspaceId, cursor, 1000);
+      events.push(...page);
+      if (page.length < 1000) break;
+      cursor = page.at(-1)?.sequence ?? cursor;
+    }
     const body = { schemaVersion: 1, records, events };
     return {
       ...body,

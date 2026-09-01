@@ -6,39 +6,66 @@ export function registerEventRoutes(
   server: FastifyInstance,
   runtime: Runtime,
 ): void {
-  server.get<{ Querystring: { after?: string; limit?: string } }>(
-    "/api/v1/events",
-    async (request) => {
-      const workspace = runtime.workspace;
-      if (workspace === null) {
+  server.get<{
+    Querystring: { after?: string; before?: string; limit?: string };
+  }>("/api/v1/events", async (request) => {
+    const workspace = runtime.workspace;
+    if (workspace === null) {
+      throw new DomainError(
+        "workspace_not_found",
+        "Create a workspace before reading activity.",
+      );
+    }
+    const limit = Number(request.query.limit ?? "100");
+    if (request.query.before !== undefined) {
+      if (request.query.after !== undefined) {
         throw new DomainError(
-          "workspace_not_found",
-          "Create a workspace before reading activity.",
+          "invalid_request",
+          "Use either an after cursor or a before cursor, not both.",
         );
       }
-      const after = Number(request.query.after ?? "0");
-      const limit = Number(request.query.limit ?? "100");
+      const before = Number(request.query.before);
       if (
-        !Number.isInteger(after) ||
-        after < 0 ||
+        !Number.isInteger(before) ||
+        before < 1 ||
         !Number.isInteger(limit) ||
         limit < 1 ||
         limit > 1000
       ) {
         throw new DomainError(
           "invalid_request",
-          "Event cursor or limit is invalid.",
+          "Historical event cursor or limit is invalid.",
         );
       }
       return {
-        events: await requireStore(runtime).eventsAfter(
+        events: await requireStore(runtime).eventsBefore(
           workspace.id,
-          after,
+          before,
           limit,
         ),
       };
-    },
-  );
+    }
+    const after = Number(request.query.after ?? "0");
+    if (
+      !Number.isInteger(after) ||
+      after < 0 ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 1000
+    ) {
+      throw new DomainError(
+        "invalid_request",
+        "Event cursor or limit is invalid.",
+      );
+    }
+    return {
+      events: await requireStore(runtime).eventsAfter(
+        workspace.id,
+        after,
+        limit,
+      ),
+    };
+  });
 
   server.get<{ Querystring: { after?: string } }>(
     "/api/v1/events/stream",

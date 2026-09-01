@@ -13,6 +13,12 @@ interface Entity {
   readonly revision: number;
 }
 
+interface Approval extends Entity {
+  readonly state: string;
+  readonly effectKind: string;
+  readonly targetId: string;
+}
+
 interface Fact extends Entity {
   readonly subject: string;
   readonly predicate: string;
@@ -244,12 +250,41 @@ describe("coherent day-to-day product workflow", () => {
       throw new Error("Expected one accepted evidence identity.");
     }
 
+    const pendingApprovalA = (
+      await post("/api/v1/approvals", {
+        effectKind: "artifact.review",
+        targetId: draftA.id,
+        expectedRevision: draftA.revision,
+      })
+    ).json<Approval>();
+    const pendingApprovalB = (
+      await post("/api/v1/approvals", {
+        effectKind: "artifact.review",
+        targetId: draftB.id,
+        expectedRevision: draftB.revision,
+      })
+    ).json<Approval>();
+    expect(pendingApprovalA).toMatchObject({
+      state: "pending",
+      effectKind: "artifact.review",
+      targetId: draftA.id,
+    });
+
     await server.close();
     server = await createServer({
       workspaceRoot: workspace,
       csrfToken: CSRF,
       idFactory: new DeterministicIdFactory("SYN7HPD100"),
     });
+    const persistedApprovals = (
+      await server.inject({ method: "GET", url: "/api/v1/approvals" })
+    ).json<{ approvals: Approval[] }>().approvals;
+    expect(persistedApprovals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: pendingApprovalA.id, state: "pending" }),
+        expect.objectContaining({ id: pendingApprovalB.id, state: "pending" }),
+      ]),
+    );
     const content = await server.inject({
       method: "GET",
       url: `/api/v1/artifacts/${draftA.id}/content`,
@@ -264,11 +299,27 @@ describe("coherent day-to-day product workflow", () => {
     expect(markdown).toContain("No application was submitted");
     expect(markdown.match(/^# /gmu)).toHaveLength(1);
 
+    const approvedA = (
+      await post(`/api/v1/approvals/${pendingApprovalA.id}/decision`, {
+        expectedRevision: pendingApprovalA.revision,
+        decision: "approved",
+      })
+    ).json<Approval>();
+    const approvedB = (
+      await post(`/api/v1/approvals/${pendingApprovalB.id}/decision`, {
+        expectedRevision: pendingApprovalB.revision,
+        decision: "approved",
+      })
+    ).json<Approval>();
     const reviewedA = await post(`/api/v1/artifacts/${draftA.id}/review`, {
       expectedRevision: draftA.revision,
+      approvalId: approvedA.id,
+      expectedApprovalRevision: approvedA.revision,
     });
     const reviewedB = await post(`/api/v1/artifacts/${draftB.id}/review`, {
       expectedRevision: draftB.revision,
+      approvalId: approvedB.id,
+      expectedApprovalRevision: approvedB.revision,
     });
     expect(reviewedA.json()).toMatchObject({ state: "sealed", revision: 2 });
     expect(reviewedB.json()).toMatchObject({ state: "sealed", revision: 2 });
@@ -336,6 +387,25 @@ describe("coherent day-to-day product workflow", () => {
         (item) => item.inlineText === null && item.originalLocator === null,
       ),
     ).toBe(true);
+    const exportWithArtifact = await post("/api/v1/export", {
+      selectedArtifactIds: [draftB.id],
+    });
+    expect(exportWithArtifact.statusCode).toBe(200);
+    expect(
+      exportWithArtifact.json<{
+        selectedArtifacts: {
+          artifactId: string;
+          bytesBase64: string;
+          contentDigest: string;
+        }[];
+      }>().selectedArtifacts,
+    ).toEqual([
+      expect.objectContaining({
+        artifactId: draftB.id,
+        contentDigest: expect.stringMatching(/^[0-9a-f]{64}$/u),
+        bytesBase64: expect.stringMatching(/^[A-Za-z0-9+/]+=*$/u),
+      }),
+    ]);
   });
 
   it("rejects draft generation when a verified fact lacks accepted evidence", async () => {

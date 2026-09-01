@@ -136,4 +136,33 @@ describe("Career Ops read-only discovery", () => {
       first.plan.sourceIdentityDigest,
     );
   });
+
+  it("never invents an application date for malformed or impossible input", async () => {
+    const root = await tempRoot();
+    await mkdir(join(root, "data"), { recursive: true });
+    await writeFile(
+      join(root, "data", "applications.md"),
+      [
+        "| # | Date | Company | Role | Score | Status |",
+        "|---|---|---|---|---|---|",
+        "| 1 | someday | Synthetic One | Engineer | 4/5 | Applied |",
+        "| 2 | 2026-02-31 | Synthetic Two | Engineer | 4/5 | Applied |",
+        "| 3 | 2026-02-28 | Synthetic Three | Engineer | 4/5 | Applied |",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await discoverCareerOps(root);
+
+    expect(result.preview.applications).toEqual([
+      expect.objectContaining({ organization: "Synthetic Three" }),
+    ]);
+    expect(result.preview.warnings.join(" ")).toMatch(
+      /row 1.*invalid or missing date/u,
+    );
+    expect(result.preview.warnings.join(" ")).toMatch(
+      /row 2.*invalid or missing date/u,
+    );
+    expect(JSON.stringify(result.plan)).not.toContain("1970-01-01");
+  });
 });

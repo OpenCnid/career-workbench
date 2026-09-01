@@ -40,6 +40,7 @@
     "release:prepare": "pnpm build && tsx scripts/create-release-bundles.ts && pnpm run sbom && prettier --write sbom.cdx.json && pnpm run checksums",
     "check:release": "tsx scripts/check-release.ts",
     "check:isolated": "tsx scripts/check-isolated-install.ts",
+    "check:packaged-product": "tsx scripts/check-packaged-product.ts",
     "workspace:admin": "tsx scripts/workspace-admin.ts",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:all && pnpm check:contracts && pnpm check:provenance && pnpm check:patches && pnpm check:hygiene && pnpm check:docs && pnpm build && pnpm check:packages",
     "sbom": "pnpm sbom --sbom-format cyclonedx --sbom-spec-version 1.6 --lockfile-only --out sbom.cdx.json",

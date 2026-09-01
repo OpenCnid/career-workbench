@@ -2,3 +2,4 @@
 
 *.png binary
 *.tgz binary
+provenance/patches/**/*.patch whitespace=-space-before-tab

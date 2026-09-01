@@ -2,9 +2,10 @@
 
 This source preview implements the deterministic SQLite/filesystem career
 workflow, protected browser UI, native DSH tools, continuable child lifecycle,
-selective native RLM/Jupyter comparison, Career Ops import, pipeline, reviewed
-drafts, correction/staleness, search, export, and recovery. It is not published,
-deployed, announced, or a consequential-action system.
+selective native RLM/Jupyter comparison, editable search direction, safe DSH job
+discovery with a source-preserved triage inbox, Career Ops import, pipeline,
+reviewed drafts, correction/staleness, search, export, and recovery. It is not
+published, deployed, announced, or a consequential-action system.
 
 Supported upstreams are Career Ops `3a067ee580b7982cf5dd6edf7895112e4e99600b`
 (1.31.0), DSH `dd6322d604e00eec1ba5e0c8541159906a21094a` (`dsh-v0.1.2-alpha.3`)
@@ -19,21 +20,26 @@ Security limitations: the backend and IPython have OS authority; IPython is not
 a sandbox; external content is untrusted; credentials remain with their owning
 runtime; the local service token is sensitive; exports contain career data; and
 human evidence decisions can be wrong. No v0.1 path performs external sends or
-submissions.
+submissions. Job discovery requires a research capability supplied by the owning
+DSH runtime; no browser or built-in board scraper bypasses DSH.
 
 Release blockers remain visible until evidence changes:
 
+- current Windows, Ubuntu, and macOS hosted matrix for this delta;
+- packaged native SQLite/browser launch after the required local C++ toolchain
+  is available;
 - qualitative product-team rehearsal: not conducted;
 - independent first-time participants: 0/3.
 
 The authenticated live acceptance passed on 2026-09-01 through DSH's
 `openai-codex/gpt-5.6-sol` provider at reasoning `high`, including ordinary
 orchestration, native child/follow-up/cancel/delete, real Jupyter no-replay
-restore (`41` to `42`), durable comparison acceptance, backend restart, a real
-Chromium Activity view, and port/process cleanup. Only scrubbed synthetic
-evidence is retained.
+restore (`41` to `42`), durable comparison acceptance, in-process server and
+Cordis reconstruction, a real Chromium Activity view, and port/process cleanup.
+Separate backend and DSH OS-process restart remains unexecuted. Only scrubbed
+synthetic evidence is retained.
 
-The hosted GitHub Actions matrix has executed successfully on Windows, Ubuntu,
-and macOS, including native clean install, repository checks, Chromium E2E,
-release construction and verification, and isolated installation.
-`docs/qa/MILESTONE_9.md` is the authoritative executed-gate record.
+An earlier committed revision passed the hosted Windows, Ubuntu, and macOS
+matrix. The current uncommitted 13-package delta has not; no cross-platform
+result is inferred from that older run. `docs/qa/MILESTONE_9.md` is the
+authoritative executed-gate record.

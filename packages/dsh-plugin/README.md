@@ -1,7 +1,7 @@
 # Career Workbench DSH plugin
 
 This is the native Cordis/DeepSeek Harness adapter for Career Workbench. It
-registers five deterministic-workflow tools, six native-child tools when the
+registers twenty deterministic-workflow tools, six native-child tools when the
 public DSH subagent service is present, and a security-critical prompt section.
 It does not contain an LLM provider, Agent loop, Python runtime, worker, or
 browser mutation bypass.
@@ -46,6 +46,21 @@ downgrades them.
 - `career_workbench_propose_evidence`
 - `career_workbench_decide_evidence`
 - `career_workbench_complete_evaluation`
+- `career_workbench_capture_source`
+- `career_workbench_inspect_source`
+- `career_workbench_capture_opportunity`
+- `career_workbench_inspect_opportunity`
+- `career_workbench_inspect_evaluation`
+- `career_workbench_cancel_evaluation`
+- `career_workbench_record_gap`
+- `career_workbench_inspect_application`
+- `career_workbench_transition_application`
+- `career_workbench_draft_artifact`
+- `career_workbench_inspect_artifact`
+- `career_workbench_inspect_operation`
+- `career_workbench_start_discovery`
+- `career_workbench_record_discovery`
+- `career_workbench_complete_discovery`
 - `career_workbench_start_child`
 - `career_workbench_child_status`
 - `career_workbench_child_followup`
@@ -53,11 +68,29 @@ downgrades them.
 - `career_workbench_cancel_child`
 - `career_workbench_delete_child`
 
-Every mutation is authenticated to the local backend, idempotent, correlated to
-one operation, and checked against the exact in-process originating Agent object
-and authenticated DSH session. Completion marks a turn terminal only after the
-backend has committed the deterministic evaluation and trusted operation
-terminal.
+Every mutation is authenticated to the local backend and idempotent.
+Evaluation-scoped mutations are correlated to one operation and checked against
+the exact in-process originating Agent object and authenticated DSH session.
+Completion marks a turn terminal only after the backend has committed the
+deterministic evaluation and trusted operation terminal.
+
+Job discovery starts only against an active user-owned search profile. The
+originating Agent may record exact HTTP(S) posting sources and bounded match,
+gap, and risk summaries into a deduplicated inbox. Those records remain
+untrusted leads: DSH cannot shortlist them. Only a same-origin browser/user
+decision can atomically promote a lead into a canonical opportunity. The plugin
+does not itself provide a web scraper or job-board client; discovery depends on
+research capabilities explicitly composed into the owning DSH runtime.
+
+Source capture is deliberately restricted to external opportunity, company, and
+market text. It cannot create candidate-primary material. Candidate artifact
+generation produces only a staged draft, requires verified facts plus accepted
+candidate evidence, and never marks the artifact reviewed. Application
+inspection is read-only. A transition tool call succeeds only when it presents
+an unexpired browser-requested and browser-approved `application.transition`
+approval bound to the exact application revision, state, effective date, and
+note. The backend consumes that approval atomically with the transition; model
+prose cannot create or approve it.
 
 The HTTP provider accepts only uncredentialed loopback HTTP URLs, bounds
 responses, rejects duplicate JSON keys, and projects backend entities onto

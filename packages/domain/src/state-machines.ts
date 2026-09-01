@@ -1,4 +1,5 @@
 import type {
+  ApprovalState,
   ApplicationState,
   EvaluationState,
   OperationState,
@@ -36,7 +37,7 @@ const evaluationTransitions: Readonly<
 const operationTransitions: Readonly<
   Record<OperationState, readonly OperationState[]>
 > = {
-  queued: ["running", "canceled"],
+  queued: ["running", "canceled", "indeterminate"],
   running: [
     "waiting_for_user",
     "succeeded",
@@ -49,6 +50,16 @@ const operationTransitions: Readonly<
   failed: [],
   canceled: [],
   indeterminate: [],
+};
+
+const approvalTransitions: Readonly<
+  Record<ApprovalState, readonly ApprovalState[]>
+> = {
+  pending: ["approved", "denied", "expired"],
+  approved: ["expired", "consumed"],
+  denied: [],
+  expired: [],
+  consumed: [],
 };
 
 function requireTransition<State extends string>(
@@ -88,6 +99,14 @@ export function requireOperationTransition(
   requireTransition(operationTransitions, from, to, "Operation");
 }
 
+export function requireApprovalTransition(
+  from: ApprovalState,
+  to: ApprovalState,
+): void {
+  requireTransition(approvalTransitions, from, to, "Approval");
+}
+
 export const APPLICATION_TRANSITIONS = applicationTransitions;
 export const EVALUATION_TRANSITIONS = evaluationTransitions;
 export const OPERATION_TRANSITIONS = operationTransitions;
+export const APPROVAL_TRANSITIONS = approvalTransitions;

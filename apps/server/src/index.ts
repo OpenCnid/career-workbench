@@ -1,6 +1,7 @@
+#!/usr/bin/env node
 import { access, mkdtemp, realpath, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "./server.js";
 
@@ -36,9 +37,8 @@ async function main(): Promise<void> {
   if (!Number.isInteger(port) || port < 1024 || port > 65_535) {
     throw new Error("Configured server port is invalid.");
   }
-  const webRoot = resolve(
-    fileURLToPath(new URL(".", import.meta.url)),
-    "../../web/dist",
+  const webRoot = dirname(
+    fileURLToPath(import.meta.resolve("@career-workbench/web/dist/index.html")),
   );
   const dshToken =
     process.env["CAREER_WORKBENCH_DSH_TOKEN"] ??

@@ -1,12 +1,14 @@
 # Milestone 3 evidence
 
-Status: **complete.** Automated composition and the authenticated live OAuth
-route pass on Windows with synthetic data.
+Status: **partial.** All 20 native core tools compose and the corrected
+authenticated ordinary-evaluation route passes. The browser still lacks a
+DSH-backed conversation, and the expanded tool surface has not all been
+exercised by the real authenticated Agent; those gaps prevent a complete claim.
 
 Implemented behavior:
 
-- installable native Cordis plugin with five closed-schema DSH tools and ordered
-  system-prompt guidance;
+- installable native Cordis plugin with 20 closed-schema core tools plus
+  capability-gated native child/RLM tools and ordered system-prompt guidance;
 - loopback-only HTTP service provider backed by the canonical Fastify,
   application, SQLite, and artifact services;
 - separate browser and DSH mutation authorities with constant-time service-token
@@ -18,6 +20,8 @@ Implemented behavior:
 - audited admission and start, proposed/decided evidence, deterministic
   evaluation, and a trusted terminal that alone concludes the Agent turn;
 - browser-visible ordinary-DSH route, state, and terminal message.
+- authenticated search-profile discovery admission, source-preserved lead
+  ingestion, trusted terminal settlement, and user-only lead promotion.
 
 Primary automated evidence is
 `tests/integration/dsh-plugin.integration.test.ts`. It boots the published
@@ -27,7 +31,8 @@ SQLite/filesystem storage. It verifies schema exposure, prompt guidance, policy
 denial before mutation, unsupported model and reasoning failures, pre-dispatch
 cancellation, bounded context, exact-Agent rejection, browser and wrong-session
 rejection, persisted evidence, deterministic completion, `concludesTurn`, plugin
-unload and reload, backend restart, and post-restart reconciliation.
+unload and reload, in-process server recreation, and post-recreation
+reconciliation.
 
 Exact compatibility:
 
@@ -43,10 +48,12 @@ were inspected at the pinned revision. The package contains no provider client,
 Agent loop, continuation-manager field access, Prime integration, nested agent
 CLI launch, or Python implementation.
 
-The authenticated route ran on 2026-09-01 through DSH-owned credentials with
-`openai-codex/gpt-5.6-sol` and reasoning `high`. It verified a real tool call,
-durable backend evaluation activity, exact unsupported-option failures, and the
-trusted terminal in a real Chromium Activity view. Scrubbed evidence is
-`docs/qa/generated/live-acceptance.json` and
-`docs/qa/generated/live-activity.png`; no credential or provider payload is
+The corrected 2026-09-01 OAuth route used DSH-owned credentials with
+`openai-codex/gpt-5.6-sol` and reasoning `high`. The Agent itself executed the
+exact start → propose → decide → complete tool chain; new evidence was accepted,
+the evaluation reached its trusted terminal, both survived in-process server
+reconstruction, and no queued/running operation leaked. Separate backend and DSH
+OS-process restart remains unexecuted. Scrubbed evidence is
+`docs/qa/generated/live-acceptance.json` with browser evidence at
+`docs/qa/generated/live-activity.png`. No credential or provider payload is
 retained.

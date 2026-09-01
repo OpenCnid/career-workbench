@@ -10,8 +10,14 @@ interface PackResult {
 }
 
 const packageDirectories = [
+  "packages/domain",
+  "packages/storage",
+  "packages/application",
+  "packages/career-ops-import",
   "packages/contracts",
   "packages/dsh-plugin",
+  "apps/web",
+  "apps/server",
   "vendor/deepseek-rlm/packages/rlm",
   "vendor/deepseek-rlm/packages/prime-runtime",
   "vendor/deepseek-rlm/packages/rlm-jupyter",

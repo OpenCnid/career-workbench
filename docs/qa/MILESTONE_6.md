@@ -28,6 +28,9 @@ selected byte.
 - Re-importing an identical source identity/fingerprint returns the existing
   manifest without duplicate state or events. A modified tree is reported as a
   changed source and requires a fresh preview.
+- Every supported mapping can be selected independently in preview. Confirmed
+  receipts retain and display imported and skipped dispositions; selection never
+  changes the preserved source bytes.
 
 ## Executed evidence
 

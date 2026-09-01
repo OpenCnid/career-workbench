@@ -12,5 +12,6 @@ test-results/
 .env
 .env.*
 !.env.example
-docs/qa/generated/
-
+docs/qa/generated/*
+!docs/qa/generated/live-evaluation-evidence.png
+!docs/qa/generated/live-evaluation-gaps.png

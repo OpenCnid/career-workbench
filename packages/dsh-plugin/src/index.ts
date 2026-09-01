@@ -39,7 +39,9 @@ Career Workbench is the authoritative career-state backend. Use only the career_
 - Candidate-facing assertions require accepted candidate evidence linked to a verified fact and exact source locator.
 - Call career_workbench_start_evaluation before proposing evidence; use the returned operationId only from the same originating DSH Agent.
 - Proposals are not accepted facts. Explicitly accept or reject them through career_workbench_decide_evidence.
+- Capture only external opportunity/company/market text; these tools cannot create candidate-primary sources. Use career_workbench_record_gap instead of inventing missing evidence.
 - Complete with closed dimension inputs. Career Workbench performs deterministic arithmetic and returns the only trusted terminal.
+- Candidate artifacts created by DSH remain staged drafts requiring separate human review. Application transitions require an unexpired, browser-requested and browser-approved single-use approval bound to the exact revision and displayed effect.
 - Native child start receipts prove inbox admission only. Wait for authoritative lifecycle state or a selected child report before synthesis.
 - Use only public ctx.subagents continuation operations. Follow-ups create a new linked operation epoch; cancellation receipts are not terminal settlement.
 - Never claim completion from model prose, browser state, notebook variables, or child reports.

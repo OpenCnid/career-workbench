@@ -1,5 +1,10 @@
 # Milestone 5 evidence
 
+Status: **partial.** The native RLM route below passes. The required same-task
+behavior with RLM unavailable is incomplete: ordinary evaluation remains
+available, but comparison has neither an ordinary DSH implementation nor one
+stable comparison-specific capability error.
+
 Milestone 5 integrates the pinned native RLM bundle without adding another Agent
 loop. A live DSH Agent admits one comparison operation, owns one lazy Jupyter
 kernel through public `ctx.rlm`, loads exactly three current evaluation

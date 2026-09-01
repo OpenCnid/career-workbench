@@ -30,10 +30,23 @@ $env:CAREER_WORKBENCH_PORT = '4317'
 pnpm --filter @career-workbench/server start
 ```
 
-Open `http://127.0.0.1:4317`, create the local workspace, and use Profile,
-Opportunities, Evidence, Compare, Pipeline, Drafts, Activity, Import, and
-Diagnostics. The browser supplies same-origin/CSRF proof automatically. The
-server never listens beyond loopback.
+```sh
+CAREER_WORKBENCH_ROOT=/absolute/path/to/career-workspaces/preview \
+CAREER_WORKBENCH_PORT=4317 \
+pnpm --filter @career-workbench/server start
+```
+
+Open `http://127.0.0.1:4317` and set up the local workbench. Each server process
+owns exactly one configured workspace root; the name identifies that workbench's
+records and exports, not a browser-switchable project. To operate a different
+root, stop this process and start a separately configured local server. Use
+Profile, Discover, Opportunities, Evaluations, Compare, Pipeline, Drafts,
+Activity, Import, and Diagnostics. In Discover, save an active search profile,
+copy the bounded request into the configured DSH Agent, and review the returned
+source-preserved inbox. Discovery requires the owning DSH runtime to provide a
+research capability; the browser does not scrape job boards or call an LLM
+provider. The browser supplies same-origin/CSRF proof automatically. The server
+never listens beyond loopback.
 
 For a reproducible import example, choose `tests/fixtures/career-ops-v1.18`,
 inspect the preview and warnings, and confirm. The importer reads only its
@@ -42,15 +55,25 @@ browsers, or workers.
 
 ## DSH plugin and RLM bundle
 
-Run `pnpm release:prepare` and verify `release/SHA256SUMS`. The seven archives
-and exact contents are listed in `release/package-inventory.json`. Install the
-Career Workbench contracts/plugin archives and all five native RLM archives into
-one clean DSH profile with the exact peers in `docs/COMPATIBILITY.md`. Apply all
-three checked pnpm package adaptations under `provenance/patches/npm/`:
-`dsh-session` exposes ignorable RLM events, `dsh-subagent` exposes durable
-continuable deletion, and `dsh-llm-pi-ai` cleans provider session resources at
-Agent teardown. The source-level patch inventory and exact hashes are in
-`provenance/upstreams.json`. Do not install a second Cordis or DSH package set.
+Run `pnpm release:prepare` and verify `release/SHA256SUMS`. The 13 archives
+(eight Career Workbench packages and five native RLM packages) and exact
+contents are listed in `release/package-inventory.json`. Run
+`pnpm check:isolated` to install all archives as one linked clean profile, and
+`pnpm check:packaged-product` to install the seven product archives, compile
+native SQLite, launch the packed server, and fetch the packed web app. On this
+Windows host the latter currently stops at the documented missing Visual Studio
+C++ toolchain. The archives are not published, so a standalone `pnpm add` would
+try to resolve their private inter-package dependencies from the public
+registry; use the clean source installation above for first use of this preview.
+
+Install the Career Workbench contracts/plugin archives and all five native RLM
+archives into one clean DSH profile with the exact peers in
+`docs/COMPATIBILITY.md`. Apply all three checked pnpm package adaptations under
+`provenance/patches/npm/`: `dsh-session` exposes ignorable RLM events,
+`dsh-subagent` exposes durable continuable deletion, and `dsh-llm-pi-ai` cleans
+provider session resources at Agent teardown. The source-level patch inventory
+and exact hashes are in `provenance/upstreams.json`. Do not install a second
+Cordis or DSH package set.
 
 Configure one random local service token of at least 32 characters in the owning
 server and DSH processes. Never place it in a URL, patch, screenshot, or

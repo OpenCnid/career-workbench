@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  evidenceRejectionIdentity,
   validateEvidenceForAcceptance,
   type Digest,
   type EntityId,
@@ -67,6 +68,41 @@ const evidence: EvidenceItem = {
 };
 
 describe("candidate evidence admission", () => {
+  it("uses normalized claims and immutable source bytes for rejection identity", () => {
+    const copiedSourceId = "source_01K3YV3Q52" as EntityId;
+    const copiedSource = { ...source, id: copiedSourceId };
+    const copiedEvidence = {
+      ...evidence,
+      claim: "  AVERY Example  built TypeScript services\n",
+      sourceId: copiedSourceId,
+      locator: {
+        sourceId: copiedSourceId,
+        start: 0,
+        end: text.length,
+        quote: "Avery Example  built TypeScript services",
+      },
+    };
+
+    expect(evidenceRejectionIdentity(copiedEvidence, copiedSource)).toBe(
+      evidenceRejectionIdentity(evidence, source),
+    );
+    expect(
+      evidenceRejectionIdentity(copiedEvidence, {
+        ...copiedSource,
+        contentDigest: "1".repeat(64) as Digest,
+      }),
+    ).not.toBe(evidenceRejectionIdentity(evidence, source));
+    expect(
+      evidenceRejectionIdentity(
+        {
+          ...copiedEvidence,
+          locator: { ...copiedEvidence.locator, start: 1 },
+        },
+        copiedSource,
+      ),
+    ).not.toBe(evidenceRejectionIdentity(evidence, source));
+  });
+
   it("accepts exact complete support", () => {
     expect(() =>
       validateEvidenceForAcceptance(evidence, source, fact),

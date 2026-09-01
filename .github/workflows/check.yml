@@ -35,4 +35,5 @@ jobs:
       - run: pnpm test:e2e
       - run: pnpm release:prepare
       - run: pnpm check:release
+      - run: pnpm check:packaged-product
       - run: pnpm check:isolated

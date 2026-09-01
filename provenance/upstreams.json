@@ -35,9 +35,9 @@
         {
           "source": "packages/core/session/src/index.ts (public seam patch 0003)",
           "destination": "provenance/patches/npm/@deepseek-ai__dsh-session@0.1.2-alpha.3.patch",
-          "modifications": "Mechanically adapted the exact public appendIgnorable source seam to the published JavaScript and declaration layout so the pinned workspace exercises persisted ignorable RLM events.",
+          "modifications": "Mechanically adapted the public appendIgnorable source seam to the published JavaScript/declaration layout and regenerated the pinned session event catalog entry introduced by the companion continuable-deletion patch, preserving required deletion tombstones across JSONL restart.",
           "license": "MIT",
-          "sha256": "29ca46973e6c36b39df9dbc62cd4b8ad1dbdb61dc9427a93a86e83d4dc273601"
+          "sha256": "afad70d894a0f6fe7d41a9d5a16a9ac4a1f079b3ee92522a2526868df8c56572"
         },
         {
           "source": "packages/subagent/subagent (public seam patch 0002)",

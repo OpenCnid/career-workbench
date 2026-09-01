@@ -4,6 +4,7 @@ import type {
   EvidenceView,
   OperationView,
   OpportunityView,
+  SearchProfileView,
 } from "@career-workbench/contracts";
 
 declare module "@deepseek-ai/cordis" {
@@ -32,6 +33,8 @@ export interface WorkbenchContext {
   readonly contractVersion: "v1";
   readonly workspace: Readonly<Record<string, unknown>>;
   readonly opportunity: OpportunityView | null;
+  readonly searchProfile: SearchProfileView | null;
+  readonly discoverySummary: Readonly<Record<string, number>>;
   readonly verifiedFacts: readonly Readonly<Record<string, unknown>>[];
   readonly sources: readonly SourceExcerpt[];
   readonly rubrics: readonly Readonly<Record<string, unknown>>[];
@@ -117,6 +120,115 @@ export interface EvaluationResult {
   readonly gaps: readonly string[];
 }
 
+export interface CaptureExternalSourceCommand {
+  readonly kind: "opportunity" | "company" | "market";
+  readonly mediaType: string;
+  readonly text: string;
+  readonly originalLocator?: string;
+}
+
+export interface CapturedSource {
+  readonly id: string;
+  readonly revision: number;
+  readonly contentDigest: string;
+  readonly byteLength: number;
+}
+
+export interface CaptureOpportunityCommand {
+  readonly sourceDocumentId: string;
+  readonly organization: string;
+  readonly roleTitle: string;
+  readonly originalUrl?: string;
+  readonly location?: string;
+  readonly workArrangement?: string;
+  readonly advertisedCompensation?: string;
+  readonly requisitionId?: string;
+}
+
+export interface CapturedOpportunity {
+  readonly id: string;
+  readonly revision: number;
+  readonly sourceDocumentId: string;
+  readonly organization: string;
+  readonly roleTitle: string;
+}
+
+export interface RecordDiscoveryLeadCommand {
+  readonly organization: string;
+  readonly roleTitle: string;
+  readonly originalUrl: string;
+  readonly postingText: string;
+  readonly location?: string;
+  readonly workArrangement?: string;
+  readonly advertisedCompensation?: string;
+  readonly requisitionId?: string;
+  readonly whyFound: readonly string[];
+  readonly matchedCriteria: readonly string[];
+  readonly gaps: readonly string[];
+  readonly risks: readonly string[];
+}
+
+export interface RecordedDiscoveryLead {
+  readonly id: string;
+  readonly revision: number;
+  readonly sourceDocumentId: string;
+  readonly operationId: string;
+  readonly state: string;
+  readonly organization: string;
+  readonly roleTitle: string;
+}
+
+export type InspectableEntityKind =
+  "source" | "opportunity" | "evaluation" | "application" | "artifact";
+
+export interface EntityInspection {
+  readonly id: string;
+  readonly revision: number;
+  readonly contextJson: string;
+}
+
+export interface OperationInspection extends EntityInspection {
+  readonly operationKind: string;
+  readonly state: string;
+  readonly route: string;
+}
+
+export interface DraftArtifactCommand {
+  readonly kind:
+    | "draft_cv"
+    | "draft_cover_letter"
+    | "draft_outreach"
+    | "draft_interview_prep";
+  readonly opportunityId: string;
+  readonly factIds: readonly string[];
+  readonly styleNote?: string;
+}
+
+export interface DraftedArtifact {
+  readonly id: string;
+  readonly revision: number;
+  readonly state: string;
+  readonly contentDigest: string;
+  readonly byteLength: number;
+}
+
+export interface TransitionApplicationCommand {
+  readonly expectedRevision: number;
+  readonly state: string;
+  readonly effectiveDate: string;
+  readonly note?: string;
+  readonly approvalId: string;
+  readonly expectedApprovalRevision: number;
+}
+
+export interface TransitionedApplication {
+  readonly id: string;
+  readonly revision: number;
+  readonly state: string;
+  readonly stateRevision: number;
+  readonly effectiveDate: string;
+}
+
 export interface ProposeEvidenceCommand {
   readonly classification: string;
   readonly claim: string;
@@ -192,12 +304,69 @@ export abstract class CareerWorkbenchService extends Service {
     signal: AbortSignal,
   ): Promise<WorkbenchContext>;
 
+  public abstract captureExternalSource(
+    authority: AgentAuthority,
+    command: CaptureExternalSourceCommand,
+    commandIdentity: string,
+    signal: AbortSignal,
+  ): Promise<CapturedSource>;
+
+  public abstract captureOpportunity(
+    authority: AgentAuthority,
+    command: CaptureOpportunityCommand,
+    commandIdentity: string,
+    signal: AbortSignal,
+  ): Promise<CapturedOpportunity>;
+
+  public abstract inspectEntity(
+    authority: AgentAuthority,
+    kind: InspectableEntityKind,
+    entityId: string,
+    signal: AbortSignal,
+  ): Promise<EntityInspection>;
+
+  public abstract inspectOperation(
+    authority: AgentAuthority,
+    operationId: string,
+    signal: AbortSignal,
+  ): Promise<OperationInspection>;
+
+  public abstract draftArtifact(
+    authority: AgentAuthority,
+    command: DraftArtifactCommand,
+    commandIdentity: string,
+    signal: AbortSignal,
+  ): Promise<DraftedArtifact>;
+
+  public abstract transitionApplication(
+    authority: AgentAuthority,
+    applicationId: string,
+    command: TransitionApplicationCommand,
+    commandIdentity: string,
+    signal: AbortSignal,
+  ): Promise<TransitionedApplication>;
+
   public abstract startEvaluation(
     authority: AgentAuthority,
     opportunityId: string,
     commandIdentity: string,
     signal: AbortSignal,
   ): Promise<StartedOperation>;
+
+  public abstract startDiscovery(
+    authority: AgentAuthority,
+    searchProfileId: string,
+    commandIdentity: string,
+    signal: AbortSignal,
+  ): Promise<StartedOperation>;
+
+  public abstract recordDiscoveryLead(
+    authority: AgentAuthority,
+    operationId: string,
+    command: RecordDiscoveryLeadCommand,
+    commandIdentity: string,
+    signal: AbortSignal,
+  ): Promise<RecordedDiscoveryLead>;
 
   public abstract admitChildOperation(
     authority: AgentAuthority,

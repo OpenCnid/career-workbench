@@ -4,6 +4,7 @@ import type {
   SourceDocument,
   SourceLocator,
 } from "./entities.js";
+import { canonicalJson } from "./canonical.js";
 import { assertDomain } from "./errors.js";
 
 export type FactConfirmationOutcome =
@@ -20,6 +21,45 @@ export function renderProfileFactClaim(
   fact: Pick<ProfileFact, "subject" | "predicate" | "value">,
 ): string {
   return `${fact.subject} ${fact.predicate} ${String(fact.value)}`;
+}
+
+function normalizeEvidenceText(value: string): string {
+  return value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLowerCase();
+}
+
+/**
+ * Stable rejection identity for an evidence assertion. Source bytes, rather
+ * than generated entity IDs, prevent a recaptured copy from reviving a
+ * rejected claim. A genuinely different source or locator remains distinct.
+ */
+export function evidenceRejectionIdentity(
+  evidence: Pick<EvidenceItem, "claim" | "sourceId" | "locator">,
+  source: SourceDocument | null,
+): string {
+  assertDomain(
+    evidence.sourceId === null
+      ? source === null
+      : source?.id === evidence.sourceId,
+    "evidence_locator_invalid",
+    "Evidence rejection identity requires its exact captured source.",
+  );
+  return canonicalJson({
+    claim: normalizeEvidenceText(evidence.claim),
+    source:
+      source === null
+        ? null
+        : {
+            contentDigest: source.contentDigest,
+            locator:
+              evidence.locator === null
+                ? null
+                : {
+                    start: evidence.locator.start,
+                    end: evidence.locator.end,
+                    quote: normalizeEvidenceText(evidence.locator.quote),
+                  },
+          },
+  });
 }
 
 export function validateSourceLocator(

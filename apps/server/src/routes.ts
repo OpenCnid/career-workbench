@@ -3,6 +3,7 @@ import {
   factClaim,
   type CaptureOpportunityInput,
   type CaptureSourceInput,
+  type AddCareerHistoryEntryInput,
   type CreateRubricInput,
   type EvaluateInput,
   type IdFactory,
@@ -14,18 +15,25 @@ import {
   type CreateCandidateArtifactInput,
   type OperationActivityInput,
   type RequestChildFollowupInput,
+  type RequestApprovalInput,
   type StartOperationInput,
+  type RecordDiscoveryLeadInput,
   type TerminalOperationInput,
+  type TriageDiscoveryLeadInput,
   type TransitionApplicationInput,
+  type UpsertSearchProfileInput,
   type UpdateOpportunitySignalsInput,
 } from "@career-workbench/application";
 import { discoverCareerOps } from "@career-workbench/career-ops-import";
 import {
   AcceptComparisonBodySchema,
+  DecideApprovalBodySchema,
+  AddCareerHistoryEntryBodySchema,
   ApplyCareerOpsImportBodySchema,
   CancelOperationBodySchema,
   CaptureOpportunityBodySchema,
   CaptureSourceBodySchema,
+  RecordDiscoveryLeadBodySchema,
   ConfirmProfileFactBodySchema,
   ComparisonProjectionBodySchema,
   CorrectFactBodySchema,
@@ -34,23 +42,30 @@ import {
   CreateRubricBodySchema,
   DecideEvidenceBodySchema,
   EvaluateBodySchema,
+  ExportWorkspaceBodySchema,
   IdParameterSchema,
   OperationActivityBodySchema,
   ProposeEvidenceBodySchema,
   ProposeComparisonBodySchema,
   ProposeProfileFactBodySchema,
   PreviewCareerOpsImportBodySchema,
+  RequestApprovalBodySchema,
   RequestChildFollowupBodySchema,
   StartOperationBodySchema,
+  TriageDiscoveryLeadBodySchema,
   TerminalOperationBodySchema,
   TransitionApplicationBodySchema,
   UpdateOpportunitySignalsBodySchema,
+  UpsertSearchProfileBodySchema,
   ReviewArtifactBodySchema,
   type CaptureOpportunityBody,
+  type AddCareerHistoryEntryBody,
   type AcceptComparisonBody,
+  type DecideApprovalBody,
   type ApplyCareerOpsImportBody,
   type CancelOperationBody,
   type CaptureSourceBody,
+  type RecordDiscoveryLeadBody,
   type ConfirmProfileFactBody,
   type ComparisonProjectionBody,
   type CorrectFactBody,
@@ -59,16 +74,20 @@ import {
   type CreateRubricBody,
   type DecideEvidenceBody,
   type EvaluateBody,
+  type ExportWorkspaceBody,
   type ProposeEvidenceBody,
   type ProposeComparisonBody,
   type ProposeProfileFactBody,
   type PreviewCareerOpsImportBody,
+  type RequestApprovalBody,
   type OperationActivityBody,
   type RequestChildFollowupBody,
   type StartOperationBody,
+  type TriageDiscoveryLeadBody,
   type TerminalOperationBody,
   type TransitionApplicationBody,
   type UpdateOpportunitySignalsBody,
+  type UpsertSearchProfileBody,
   type ReviewArtifactBody,
 } from "@career-workbench/contracts";
 import {
@@ -121,6 +140,46 @@ export function registerDomainRoutes(
   runtime: Runtime,
   ids: IdFactory,
 ): void {
+  server.get("/api/v1/approvals", async () => ({
+    contractVersion: "v1" as const,
+    approvals: await requireService(runtime).listApprovals(),
+  }));
+
+  server.post<{ Body: RequestApprovalBody }>(
+    "/api/v1/approvals",
+    { schema: { body: RequestApprovalBodySchema } },
+    async (request, reply) =>
+      reply
+        .status(201)
+        .send(
+          await requireService(runtime).requestApproval(
+            validatedBody<RequestApprovalInput>(request.body),
+            commandContext(request, ids),
+          ),
+        ),
+  );
+
+  server.post<{
+    Params: { id: EntityId };
+    Body: DecideApprovalBody;
+  }>(
+    "/api/v1/approvals/:id/decision",
+    {
+      schema: { params: IdParameterSchema, body: DecideApprovalBodySchema },
+    },
+    async (request) => {
+      const context = commandContext(request, ids);
+      return requireService(runtime).decideApproval(
+        request.params.id,
+        {
+          ...request.body,
+          interactionId: context.commandId,
+        },
+        context,
+      );
+    },
+  );
+
   server.post<{ Body: PreviewCareerOpsImportBody }>(
     "/api/v1/imports/career-ops/preview",
     { schema: { body: PreviewCareerOpsImportBodySchema } },
@@ -204,9 +263,76 @@ export function registerDomainRoutes(
           "Career Ops source changed after preview. Review a fresh preview.",
         );
       }
+      const profileIdentity = (
+        item: (typeof current.plan.profileFacts)[number],
+      ) => `${item.sourceRelativePath}:${item.predicate}`;
+      const availableMappingIds = new Set([
+        ...current.plan.profileFacts.map(profileIdentity),
+        ...current.plan.applications.map((item) => item.sourceIdentity),
+        ...current.plan.passiveMappings.map((item) => item.sourceIdentity),
+      ]);
+      const selectedMappingIds = new Set(
+        request.body.selectedMappingIds ?? availableMappingIds,
+      );
+      if (
+        [...selectedMappingIds].some(
+          (identity) => !availableMappingIds.has(identity),
+        )
+      ) {
+        throw new DomainError(
+          "invalid_request",
+          "Career Ops selection contains a mapping outside the current server-owned preview.",
+        );
+      }
+      const selectedPlan = {
+        ...current.plan,
+        profileFacts: current.plan.profileFacts.filter((item) =>
+          selectedMappingIds.has(profileIdentity(item)),
+        ),
+        applications: current.plan.applications.filter((item) =>
+          selectedMappingIds.has(item.sourceIdentity),
+        ),
+        passiveMappings: [
+          ...current.plan.passiveMappings.map((item) =>
+            selectedMappingIds.has(item.sourceIdentity)
+              ? item
+              : {
+                  ...item,
+                  disposition: "skipped" as const,
+                  note: `Skipped by user selection.${item.note === null ? "" : ` ${item.note}`}`,
+                },
+          ),
+          ...current.plan.profileFacts
+            .filter((item) => !selectedMappingIds.has(profileIdentity(item)))
+            .map((item) => ({
+              sourceType: "profile" as const,
+              sourceIdentity: profileIdentity(item),
+              sourceRelativePath: item.sourceRelativePath,
+              disposition: "skipped" as const,
+              originalStatus: null,
+              originalScore: null,
+              note: "Skipped by user selection; no profile fact was proposed.",
+            })),
+          ...current.plan.applications
+            .filter((item) => !selectedMappingIds.has(item.sourceIdentity))
+            .map((item) => ({
+              sourceType: "application" as const,
+              sourceIdentity: item.sourceIdentity,
+              sourceRelativePath: item.sourceRelativePath,
+              disposition: "skipped" as const,
+              originalStatus: item.originalStatus,
+              originalScore: item.originalScore,
+              note: "Skipped by user selection; no opportunity or pipeline record was created.",
+            })),
+        ],
+        warnings: [
+          ...current.plan.warnings,
+          `User selected ${String(selectedMappingIds.size)} of ${String(availableMappingIds.size)} supported mappings.`,
+        ],
+      };
       const base = commandContext(request, ids);
       return reply.status(201).send(
-        await requireService(runtime).applyCareerOpsImport(current.plan, {
+        await requireService(runtime).applyCareerOpsImport(selectedPlan, {
           ...base,
           actor: "import",
         }),
@@ -244,6 +370,16 @@ export function registerDomainRoutes(
         request.params.id,
         validatedBody<TransitionApplicationInput>(request.body),
         commandContext(request, ids),
+        {
+          ...(request.body.approvalId === undefined
+            ? {}
+            : { approvalId: request.body.approvalId as EntityId }),
+          ...(request.body.expectedApprovalRevision === undefined
+            ? {}
+            : {
+                expectedApprovalRevision: request.body.expectedApprovalRevision,
+              }),
+        },
       ),
   );
 
@@ -293,6 +429,16 @@ export function registerDomainRoutes(
         request.params.id,
         request.body.expectedRevision,
         commandContext(request, ids),
+        {
+          ...(request.body.approvalId === undefined
+            ? {}
+            : { approvalId: request.body.approvalId as EntityId }),
+          ...(request.body.expectedApprovalRevision === undefined
+            ? {}
+            : {
+                expectedApprovalRevision: request.body.expectedApprovalRevision,
+              }),
+        },
       ),
   );
 
@@ -387,6 +533,21 @@ export function registerDomainRoutes(
     return requireService(runtime).exportWorkspace();
   });
 
+  server.post<{ Body: ExportWorkspaceBody }>(
+    "/api/v1/export",
+    { schema: { body: ExportWorkspaceBodySchema } },
+    async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      reply.header(
+        "content-disposition",
+        'attachment; filename="career-workbench-export.json"',
+      );
+      return requireService(runtime).exportWorkspace(
+        request.body.selectedArtifactIds as EntityId[],
+      );
+    },
+  );
+
   server.post<{
     Params: { id: EntityId };
     Body: CancelOperationBody;
@@ -420,6 +581,20 @@ export function registerDomainRoutes(
         ),
   );
 
+  server.post<{ Body: AddCareerHistoryEntryBody }>(
+    "/api/v1/profile/history-entries",
+    { schema: { body: AddCareerHistoryEntryBodySchema } },
+    async (request, reply) =>
+      reply
+        .status(201)
+        .send(
+          await requireService(runtime).addCareerHistoryEntry(
+            validatedBody<AddCareerHistoryEntryInput>(request.body),
+            commandContext(request, ids),
+          ),
+        ),
+  );
+
   server.post<{ Body: ProposeProfileFactBody }>(
     "/api/v1/profile-facts",
     { schema: { body: ProposeProfileFactBodySchema } },
@@ -432,6 +607,49 @@ export function registerDomainRoutes(
             commandContext(request, ids),
           ),
         ),
+  );
+
+  server.post<{ Body: UpsertSearchProfileBody }>(
+    "/api/v1/search-profiles",
+    { schema: { body: UpsertSearchProfileBodySchema } },
+    (request) =>
+      requireService(runtime).upsertSearchProfile(
+        validatedBody<UpsertSearchProfileInput>(request.body),
+        commandContext(request, ids),
+      ),
+  );
+
+  server.post<{ Body: RecordDiscoveryLeadBody }>(
+    "/api/v1/discovery-leads",
+    { schema: { body: RecordDiscoveryLeadBodySchema } },
+    async (request, reply) =>
+      reply
+        .status(201)
+        .send(
+          await requireService(runtime).recordDiscoveryLead(
+            validatedBody<RecordDiscoveryLeadInput>(request.body),
+            commandContext(request, ids),
+          ),
+        ),
+  );
+
+  server.post<{
+    Params: { id: EntityId };
+    Body: TriageDiscoveryLeadBody;
+  }>(
+    "/api/v1/discovery-leads/:id/triage",
+    {
+      schema: {
+        params: IdParameterSchema,
+        body: TriageDiscoveryLeadBodySchema,
+      },
+    },
+    (request) =>
+      requireService(runtime).triageDiscoveryLead(
+        request.params.id,
+        validatedBody<TriageDiscoveryLeadInput>(request.body),
+        commandContext(request, ids),
+      ),
   );
 
   server.post<{
@@ -630,6 +848,16 @@ export function registerDomainRoutes(
         request.params.id,
         request.body.expectedRevision,
         commandContext(request, ids),
+        {
+          ...(request.body.approvalId === undefined
+            ? {}
+            : { approvalId: request.body.approvalId as EntityId }),
+          ...(request.body.expectedApprovalRevision === undefined
+            ? {}
+            : {
+                expectedApprovalRevision: request.body.expectedApprovalRevision,
+              }),
+        },
       ),
   );
 
@@ -716,6 +944,19 @@ export function registerDomainRoutes(
       const repository = requireStore(runtime);
       const domain = requireService(runtime);
       const fact = await repository.get("profileFact", request.params.id);
+      if (fact.revision !== request.body.expectedRevision) {
+        throw new DomainError("revision_conflict", "Fact revision is stale.");
+      }
+      if (
+        fact.status !== "verified" &&
+        fact.status !== "proposed" &&
+        fact.status !== "derived_unverified"
+      ) {
+        throw new DomainError(
+          "invalid_transition",
+          "Only a verified or unverified active fact can be corrected.",
+        );
+      }
       const claim = `${fact.subject} ${fact.predicate} ${String(request.body.value)}`;
       const start = request.body.sourceText.indexOf(claim);
       if (start < 0) {
@@ -735,18 +976,30 @@ export function registerDomainRoutes(
         },
         subcommand(base, ids, "source"),
       );
-      return domain.correctVerifiedFact(
-        fact.id,
-        request.body.expectedRevision,
-        request.body.value,
-        {
-          sourceId: source.id,
-          start,
-          end: start + claim.length,
-          quote: claim,
-        },
-        subcommand(base, ids, "correct"),
-      );
+      const locator = {
+        sourceId: source.id,
+        start,
+        end: start + claim.length,
+        quote: claim,
+      };
+      return fact.status === "verified"
+        ? domain.correctVerifiedFact(
+            fact.id,
+            request.body.expectedRevision,
+            request.body.value,
+            locator,
+            subcommand(base, ids, "correct"),
+          )
+        : domain.confirmProfileFact(
+            fact.id,
+            request.body.expectedRevision,
+            {
+              kind: "correct",
+              value: request.body.value,
+              locator,
+            },
+            subcommand(base, ids, "correct"),
+          );
     },
   );
 
@@ -765,11 +1018,19 @@ export function registerDomainRoutes(
         "profileFact",
         opportunity.workspaceId,
       );
-      const fact = facts.find((item) => item.status === "verified");
+      const fact =
+        facts.find(
+          (item) =>
+            item.status === "verified" && item.factType === "achievement",
+        ) ??
+        facts.find(
+          (item) =>
+            item.status === "verified" && item.factType === "experience",
+        );
       if (fact?.sourceLocators[0] === undefined) {
         throw new DomainError(
           "evidence_unsupported",
-          "Fixture evaluation requires a verified candidate fact.",
+          "Local demonstration requires a verified experience or achievement fact.",
         );
       }
       const candidateLocator = fact.sourceLocators[0];
@@ -864,7 +1125,8 @@ export function registerDomainRoutes(
               dimensionKey: "preferences",
               semanticScoreBasisPoints: null,
               evidenceIds: [],
-              disposition: "Preferences not established",
+              disposition:
+                "Preference matching requires a live DSH semantic evaluation",
             },
           ],
         },

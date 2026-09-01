@@ -13,8 +13,10 @@ import type { CareerOpsDiscovery } from "@career-workbench/career-ops-import";
 import {
   ContractValidationError,
   CreateWorkspaceBodySchema,
+  DiagnosticsResponseSchema,
   parseJsonWithoutDuplicateKeys,
   type CreateWorkspaceBody,
+  type DiagnosticsResponse,
 } from "@career-workbench/contracts";
 import {
   DomainError,
@@ -25,7 +27,12 @@ import {
 import {
   ContentAddressedArtifactStore,
   SqliteWorkspaceStore,
+  STORAGE_SCHEMA_VERSION,
 } from "@career-workbench/storage";
+import {
+  buildCompatibilityDiagnostics,
+  CAREER_WORKBENCH_VERSION,
+} from "./compatibility.js";
 import { registerDomainRoutes } from "./routes.js";
 import { registerEventRoutes } from "./sse.js";
 
@@ -43,6 +50,7 @@ export interface Runtime {
   artifacts: ContentAddressedArtifactStore | null;
   service: WorkbenchService | null;
   workspace: Workspace | null;
+  recentErrorCategories: DomainError["code"][];
   careerOpsPreviews: Map<
     string,
     {
@@ -68,10 +76,12 @@ const knownApiPaths = [
   /^\/api\/v1\/snapshot$/u,
   /^\/api\/v1\/events(?:\/stream)?$/u,
   /^\/api\/v1\/workspaces$/u,
-  /^\/api\/v1\/(?:sources|profile-facts|opportunities|evidence|rubrics|evaluations|artifacts|operations)$/u,
+  /^\/api\/v1\/(?:sources|profile-facts|search-profiles|discovery-leads|opportunities|evidence|rubrics|evaluations|artifacts|operations)$/u,
   /^\/api\/v1\/(?:applications|search|export)$/u,
+  /^\/api\/v1\/approvals(?:\/[^/]+\/decision)?$/u,
   /^\/api\/v1\/applications\/[^/]+\/transitions$/u,
   /^\/api\/v1\/opportunities\/[^/]+\/signals$/u,
+  /^\/api\/v1\/discovery-leads\/[^/]+\/triage$/u,
   /^\/api\/v1\/artifacts\/(?:candidate-drafts|[^/]+\/(?:review|content))$/u,
   /^\/api\/v1\/comparison-projections$/u,
   /^\/api\/v1\/comparisons\/[^/]+\/accept$/u,
@@ -85,11 +95,26 @@ const knownApiPaths = [
 
 function statusFor(code: DomainError["code"]): number {
   if (code === "entity_not_found" || code === "workspace_not_found") return 404;
-  if (code === "revision_conflict" || code === "duplicate_identity") return 409;
+  if (
+    code === "revision_conflict" ||
+    code === "duplicate_identity" ||
+    code === "approval_stale"
+  )
+    return 409;
   if (code === "approval_required" || code === "approval_denied") return 403;
   if (code === "capability_unavailable") return 503;
   if (code === "internal_error") return 500;
   return 400;
+}
+
+function recordErrorCategory(
+  runtime: Runtime,
+  code: DomainError["code"],
+): void {
+  runtime.recentErrorCategories = [
+    ...runtime.recentErrorCategories.filter((item) => item !== code),
+    code,
+  ].slice(-16);
 }
 
 function cookieValue(header: string | undefined, name: string): string | null {
@@ -306,6 +331,7 @@ export async function createServer(
     artifacts: null,
     service: null,
     workspace: null,
+    recentErrorCategories: [],
     careerOpsPreviews: new Map(),
   };
 
@@ -328,6 +354,11 @@ export async function createServer(
         ids,
         clock,
       );
+      await runtime.service.reconcileInterruptedOperations({
+        actor: "system",
+        commandId: ids.entity("command"),
+        idempotencyKey: "startup-recovery",
+      });
     }
   }
 
@@ -358,6 +389,7 @@ export async function createServer(
 
   server.setErrorHandler((error, _request, reply) => {
     if (error instanceof DomainError) {
+      recordErrorCategory(runtime, error.code);
       void reply.status(statusFor(error.code)).send({
         error: {
           code: error.code,
@@ -372,6 +404,7 @@ export async function createServer(
       error instanceof ContractValidationError ||
       (error as { validation?: unknown }).validation !== undefined
     ) {
+      recordErrorCategory(runtime, "invalid_request");
       void reply.status(400).send({
         error: {
           code: "invalid_request",
@@ -381,6 +414,7 @@ export async function createServer(
       });
       return;
     }
+    recordErrorCategory(runtime, "internal_error");
     void reply.status(500).send({
       error: {
         code: "internal_error",
@@ -440,6 +474,8 @@ export async function createServer(
         workspace: null,
         sources: [],
         profileFacts: [],
+        searchProfiles: [],
+        discoveryLeads: [],
         opportunities: [],
         evidence: [],
         rubrics: [],
@@ -456,6 +492,8 @@ export async function createServer(
     const [
       sources,
       profileFacts,
+      searchProfiles,
+      discoveryLeads,
       opportunities,
       evidence,
       rubrics,
@@ -469,6 +507,8 @@ export async function createServer(
     ] = await Promise.all([
       repository.list("source", workspace.id),
       repository.list("profileFact", workspace.id),
+      repository.list("searchProfile", workspace.id),
+      repository.list("discoveryLead", workspace.id),
       repository.list("opportunity", workspace.id),
       repository.list("evidence", workspace.id),
       repository.list("rubric", workspace.id),
@@ -478,13 +518,15 @@ export async function createServer(
       repository.list("importManifest", workspace.id),
       repository.list("artifact", workspace.id),
       repository.list("operation", workspace.id),
-      repository.eventsAfter(workspace.id, 0, 1000),
+      repository.recentEvents(workspace.id, 1000),
     ]);
     return {
       contractVersion: "v1",
       workspace: await repository.get("workspace", workspace.id),
       sources,
       profileFacts,
+      searchProfiles,
+      discoveryLeads,
       opportunities,
       evidence,
       rubrics,
@@ -498,30 +540,37 @@ export async function createServer(
     };
   });
 
-  server.get("/api/v1/diagnostics", async () => {
-    const health = runtime.store === null ? null : await runtime.store.health();
-    return {
-      contractVersion: "v1",
-      version: "0.1.0-preview.0",
-      workspaceConfigured: runtime.workspace !== null,
-      schemaVersion: health?.schemaVersion ?? 3,
-      storage: health === null ? "not_initialized" : health.integrity,
-      journalMode: health?.journalMode ?? "unavailable",
-      capabilities: {
-        deterministic: true,
-        dsh: options.dshToken !== undefined,
-        nativeChildren: false,
-        nativeChildBackend: options.dshToken !== undefined,
-        rlm: options.rlmEnabled === true,
-        careerOpsImport: true,
-      },
-      security: {
-        loopbackOnly: true,
-        sameOriginMutations: true,
-        ipythonOsAuthority: true,
-      },
-    };
-  });
+  server.get(
+    "/api/v1/diagnostics",
+    { schema: { response: { 200: DiagnosticsResponseSchema } } },
+    async (): Promise<DiagnosticsResponse> => {
+      const health =
+        runtime.store === null ? null : await runtime.store.health();
+      return {
+        contractVersion: "v1",
+        version: CAREER_WORKBENCH_VERSION,
+        workspaceConfigured: runtime.workspace !== null,
+        schemaVersion: health?.schemaVersion ?? STORAGE_SCHEMA_VERSION,
+        storage: health === null ? "not_initialized" : health.integrity,
+        journalMode: health?.journalMode ?? "unavailable",
+        capabilities: {
+          deterministic: true,
+          dsh: options.dshToken !== undefined,
+          nativeChildren: false,
+          nativeChildBackend: options.dshToken !== undefined,
+          rlm: options.rlmEnabled === true,
+          careerOpsImport: true,
+        },
+        security: {
+          loopbackOnly: true,
+          sameOriginMutations: true,
+          ipythonOsAuthority: true,
+        },
+        ...buildCompatibilityDiagnostics(),
+        recentErrorCategories: [...runtime.recentErrorCategories],
+      };
+    },
+  );
 
   registerDomainRoutes(server, runtime, ids);
   registerEventRoutes(server, runtime);

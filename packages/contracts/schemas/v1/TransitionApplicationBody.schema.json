@@ -21,6 +21,13 @@
       ]
     },
     "effectiveDate": { "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "type": "string" },
-    "note": { "minLength": 1, "maxLength": 2000, "type": "string" }
+    "note": { "minLength": 1, "maxLength": 2000, "type": "string" },
+    "approvalId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    },
+    "expectedApprovalRevision": { "minimum": 1, "type": "integer" }
   }
 }

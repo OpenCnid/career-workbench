@@ -1,6 +1,8 @@
 # Milestone 2 evidence
 
-Status: met on Windows for the available local platform. Synthetic data only.
+Status: **partial.** The automated Windows browser/API behavior passes with
+synthetic data, but the required first-time-human confirmation and an in-product
+DSH-backed conversation are not complete.
 
 Implemented behavior:
 

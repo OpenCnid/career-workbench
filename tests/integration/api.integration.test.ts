@@ -69,7 +69,7 @@ describe("local /api/v1 boundary", () => {
       locale: "en-US",
       timezone: "America/Chicago",
     });
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode, response.body).toBe(201);
     return response.json<Identified>();
   }
 
@@ -92,6 +92,209 @@ describe("local /api/v1 boundary", () => {
       workspace: null,
       events: [],
     });
+  });
+
+  it("atomically creates guided identity, target preferences, and a selected rubric", async () => {
+    const response = await injectMutation("/api/v1/workspaces", {
+      displayName: "AI Engineering Search",
+      candidateName: "Morgan Example",
+      targetRole: "Senior Software Engineer focused on AI platforms",
+      targetPriorities: "Hands-on AI systems and strong engineering culture",
+      locationPreference: "Remote in the United States",
+      deferTargetPreferences: false,
+      rubricPreset: "balanced_fit",
+      locale: "en-US",
+      timezone: "America/Chicago",
+    });
+    expect(response.statusCode, response.body).toBe(201);
+    expect(
+      response.json<{ readonly defaultRubricId: string }>().defaultRubricId,
+    ).toMatch(/^rubric_/u);
+
+    const snapshot = await server.inject({
+      method: "GET",
+      url: "/api/v1/snapshot",
+    });
+    const body = snapshot.json<{
+      readonly sources: readonly {
+        readonly trustClass: string;
+        readonly originalLocator: string;
+      }[];
+      readonly profileFacts: readonly {
+        readonly factType: string;
+        readonly status: string;
+        readonly confirmedByUserAt: string | null;
+      }[];
+      readonly rubrics: readonly { readonly name: string }[];
+    }>();
+    expect(body.sources).toEqual([
+      expect.objectContaining({
+        trustClass: "candidate_primary",
+        originalLocator: "user-entry://onboarding/preferences",
+      }),
+    ]);
+    expect(body.profileFacts).toHaveLength(4);
+    expect(body.profileFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ factType: "identity", status: "verified" }),
+        expect.objectContaining({ factType: "preference", status: "verified" }),
+      ]),
+    );
+    expect(
+      body.profileFacts.every((fact) => fact.confirmedByUserAt !== null),
+    ).toBe(true);
+    expect(body.rubrics).toEqual([
+      expect.objectContaining({ name: "Balanced fit" }),
+    ]);
+  });
+
+  it("fails guided setup closed when no target or explicit deferral is provided", async () => {
+    const response = await injectMutation("/api/v1/workspaces", {
+      displayName: "Incomplete Guided Setup",
+      candidateName: "Morgan Example",
+      deferTargetPreferences: false,
+      rubricPreset: "balanced_fit",
+      locale: "en-US",
+      timezone: "America/Chicago",
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json<ErrorBody>().error).toMatchObject({
+      code: "invalid_request",
+      message: "Choose a target role or explicitly defer target preferences.",
+    });
+    const snapshot = await server.inject({
+      method: "GET",
+      url: "/api/v1/snapshot",
+    });
+    expect(
+      snapshot.json<{ readonly workspace: unknown }>().workspace,
+    ).toBeNull();
+  });
+
+  it("atomically turns a guided history entry into a primary source and reviewable claims", async () => {
+    await initialize();
+    const response = await injectMutation(
+      "/api/v1/profile/history-entries",
+      {
+        personName: "Avery Example",
+        roleTitle: "Software Engineer",
+        organization: "Synthetic Systems",
+        dateRange: "2021 to 2024",
+        achievements: [
+          "built TypeScript services",
+          "reduced synthetic onboarding time by 30%",
+        ],
+      },
+      "synthetic-career-history-0001",
+    );
+    expect(response.statusCode).toBe(201);
+    const body = response.json<{
+      readonly source: { readonly id: string; readonly inlineText: string };
+      readonly facts: readonly {
+        readonly id: string;
+        readonly predicate: string;
+        readonly value: string;
+        readonly status: string;
+        readonly sourceLocators: readonly {
+          readonly sourceId: string;
+          readonly start: number;
+          readonly end: number;
+          readonly quote: string;
+        }[];
+      }[];
+    }>();
+    expect(body.facts).toHaveLength(3);
+    expect(body.facts.map((fact) => fact.status)).toEqual([
+      "proposed",
+      "proposed",
+      "proposed",
+    ]);
+    expect(body.facts[1]).toMatchObject({
+      predicate: "built",
+      value: "TypeScript services",
+    });
+    for (const fact of body.facts) {
+      const locator = fact.sourceLocators[0];
+      expect(locator?.sourceId).toBe(body.source.id);
+      expect(body.source.inlineText.slice(locator?.start, locator?.end)).toBe(
+        locator?.quote,
+      );
+    }
+
+    const repeated = await injectMutation(
+      "/api/v1/profile/history-entries",
+      {
+        personName: "Avery Example",
+        roleTitle: "Software Engineer",
+        organization: "Synthetic Systems",
+        dateRange: "2021 to 2024",
+        achievements: [
+          "built TypeScript services",
+          "reduced synthetic onboarding time by 30%",
+        ],
+      },
+      "synthetic-career-history-0001",
+    );
+    expect(repeated.json()).toEqual(body);
+
+    const snapshot = (
+      await server.inject({ method: "GET", url: "/api/v1/snapshot" })
+    ).json<{
+      readonly sources: readonly unknown[];
+      readonly profileFacts: readonly unknown[];
+    }>();
+    expect(snapshot.sources).toHaveLength(1);
+    expect(snapshot.profileFacts).toHaveLength(3);
+  });
+
+  it("rejects a local evaluation when only identity and preference facts are verified", async () => {
+    const setup = await injectMutation("/api/v1/workspaces", {
+      displayName: "Synthetic Preference-Only Workspace",
+      candidateName: "Avery Example",
+      targetRole: "Senior AI Platform Engineer",
+      deferTargetPreferences: false,
+      rubricPreset: "balanced_fit",
+      locale: "en-US",
+      timezone: "America/Chicago",
+    });
+    expect(setup.statusCode, setup.body).toBe(201);
+    const jobSource = (
+      await injectMutation("/api/v1/sources", {
+        kind: "opportunity",
+        trustClass: "external",
+        mediaType: "text/plain",
+        text: "Synthetic Labs needs a Senior AI Platform Engineer.",
+        originalLocator: "https://example.test/jobs/ai-platform",
+      })
+    ).json<Identified>();
+    const opportunity = (
+      await injectMutation("/api/v1/opportunities", {
+        sourceDocumentId: jobSource.id,
+        organization: "Synthetic Labs",
+        roleTitle: "Senior AI Platform Engineer",
+        originalUrl: "https://example.test/jobs/ai-platform",
+        location: "Remote",
+        workArrangement: "remote",
+      })
+    ).json<Identified>();
+
+    const response = await injectMutation("/api/v1/evaluations/fixture", {
+      opportunityId: opportunity.id,
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json<ErrorBody>().error).toMatchObject({
+      code: "evidence_unsupported",
+      message:
+        "Local demonstration requires a verified experience or achievement fact.",
+    });
+    const snapshot = (
+      await server.inject({ method: "GET", url: "/api/v1/snapshot" })
+    ).json<{
+      readonly evidence: readonly unknown[];
+      readonly evaluations: readonly unknown[];
+    }>();
+    expect(snapshot.evidence).toEqual([]);
+    expect(snapshot.evaluations).toEqual([]);
   });
 
   it("persists the full HTTP fixture flow and reports ordered activity", async () => {
@@ -194,6 +397,20 @@ describe("local /api/v1 boundary", () => {
     }>();
     expect(resumed.events).toHaveLength(2);
     expect(resumed.events[0]?.sequence).toBeGreaterThan(after);
+    const before = snapshot.events.at(-1)?.sequence ?? 1;
+    const historical = (
+      await server.inject({
+        method: "GET",
+        url: `/api/v1/events?before=${String(before)}&limit=2`,
+      })
+    ).json<{
+      readonly events: readonly { readonly sequence: number }[];
+    }>();
+    expect(historical.events).toHaveLength(2);
+    expect(historical.events.at(-1)?.sequence).toBeLessThan(before);
+    expect(historical.events[0]?.sequence).toBeLessThan(
+      historical.events[1]?.sequence ?? 0,
+    );
   });
 
   it("rejects cross-origin, missing-CSRF, wrong media type, and missing idempotency proof", async () => {
@@ -289,6 +506,84 @@ describe("local /api/v1 boundary", () => {
     );
     expect(stale.statusCode).toBe(409);
     expect(stale.json<ErrorBody>().error.code).toBe("revision_conflict");
+  });
+
+  it("corrects a proposed fact and rejects a stale retry before creating a source", async () => {
+    await initialize();
+    const source = (
+      await injectMutation("/api/v1/sources", {
+        kind: "candidate",
+        trustClass: "candidate_primary",
+        mediaType: "text/plain",
+        text: "Avery Example built TypeScript services",
+      })
+    ).json<Identified>();
+    const fact = (
+      await injectMutation("/api/v1/profile-facts", {
+        factType: "experience",
+        subject: "Avery Example",
+        predicate: "built",
+        value: "TypeScript services",
+        sourceLocators: [
+          {
+            sourceId: source.id,
+            start: 0,
+            end: 39,
+            quote: "Avery Example built TypeScript services",
+          },
+        ],
+        proposedBy: "user",
+      })
+    ).json<Identified>();
+
+    const correction = await injectMutation(
+      `/api/v1/profile-facts/${fact.id}/corrections`,
+      {
+        expectedRevision: fact.revision,
+        value: "JavaScript services",
+        sourceText: "Avery Example built JavaScript services",
+      },
+    );
+    expect(correction.statusCode).toBe(200);
+    const afterCorrection = (
+      await server.inject({ method: "GET", url: "/api/v1/snapshot" })
+    ).json<{
+      readonly profileFacts: readonly {
+        readonly supersedesFactId: string | null;
+        readonly status: string;
+        readonly value: unknown;
+      }[];
+      readonly sources: readonly unknown[];
+    }>();
+    expect(afterCorrection.profileFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          status: "superseded",
+          value: "TypeScript services",
+        }),
+        expect.objectContaining({
+          status: "verified",
+          supersedesFactId: fact.id,
+          value: "JavaScript services",
+        }),
+      ]),
+    );
+    expect(afterCorrection.sources).toHaveLength(2);
+
+    const stale = await injectMutation(
+      `/api/v1/profile-facts/${fact.id}/corrections`,
+      {
+        expectedRevision: fact.revision,
+        value: "Rust services",
+        sourceText: "Avery Example built Rust services",
+      },
+    );
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json<ErrorBody>().error.code).toBe("revision_conflict");
+    const afterStaleRetry = (
+      await server.inject({ method: "GET", url: "/api/v1/snapshot" })
+    ).json<{ readonly sources: readonly unknown[] }>();
+    expect(afterStaleRetry.sources).toHaveLength(2);
   });
 
   it("distinguishes unsupported methods, unknown routes, and malformed cursors", async () => {

@@ -1,0 +1,50 @@
+{
+  "$id": "RequestApprovalBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["effectKind", "targetId", "expectedRevision"],
+  "properties": {
+    "effectKind": {
+      "anyOf": [
+        { "const": "comparison.accept", "type": "string" },
+        { "const": "artifact.review", "type": "string" },
+        { "const": "application.transition", "type": "string" }
+      ]
+    },
+    "targetId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    },
+    "expectedRevision": { "minimum": 1, "type": "integer" },
+    "expiresInSeconds": { "minimum": 1, "maximum": 3600, "type": "integer" },
+    "applicationTransition": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": ["state", "effectiveDate"],
+      "properties": {
+        "state": {
+          "anyOf": [
+            { "const": "considering", "type": "string" },
+            { "const": "preparing", "type": "string" },
+            { "const": "ready_for_review", "type": "string" },
+            { "const": "applied", "type": "string" },
+            { "const": "responded", "type": "string" },
+            { "const": "interview", "type": "string" },
+            { "const": "offer", "type": "string" },
+            { "const": "hired", "type": "string" },
+            { "const": "rejected", "type": "string" },
+            { "const": "withdrawn", "type": "string" },
+            { "const": "closed", "type": "string" }
+          ]
+        },
+        "effectiveDate": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "note": { "minLength": 1, "maxLength": 2000, "type": "string" }
+      }
+    }
+  }
+}

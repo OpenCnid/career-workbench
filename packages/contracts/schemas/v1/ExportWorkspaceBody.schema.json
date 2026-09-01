@@ -1,0 +1,19 @@
+{
+  "$id": "ExportWorkspaceBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["selectedArtifactIds"],
+  "properties": {
+    "selectedArtifactIds": {
+      "maxItems": 64,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 10,
+        "maxLength": 80,
+        "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+        "type": "string"
+      }
+    }
+  }
+}

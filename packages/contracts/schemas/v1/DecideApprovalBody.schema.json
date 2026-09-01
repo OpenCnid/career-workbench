@@ -1,0 +1,15 @@
+{
+  "$id": "DecideApprovalBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["expectedRevision", "decision"],
+  "properties": {
+    "expectedRevision": { "minimum": 1, "type": "integer" },
+    "decision": {
+      "anyOf": [
+        { "const": "approved", "type": "string" },
+        { "const": "denied", "type": "string" }
+      ]
+    }
+  }
+}

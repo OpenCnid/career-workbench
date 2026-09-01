@@ -3,5 +3,14 @@
   "additionalProperties": false,
   "type": "object",
   "required": ["expectedRevision"],
-  "properties": { "expectedRevision": { "minimum": 1, "type": "integer" } }
+  "properties": {
+    "expectedRevision": { "minimum": 1, "type": "integer" },
+    "approvalId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    },
+    "expectedApprovalRevision": { "minimum": 1, "type": "integer" }
+  }
 }
