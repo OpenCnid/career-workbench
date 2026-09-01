@@ -1,5 +1,9 @@
 # Milestone 4 evidence
 
+Status: **partial.** The native lifecycle below passes, but the milestone's
+required regression proving that a failed child cannot erase already accepted
+candidate evidence has not yet been executed.
+
 Milestone 4 implements native DSH continuable children without a second Agent
 loop. Canonical operation state distinguishes queued admission, inbox-accepted
 start, selected report, assistant message, exact follow-up, cancellation

@@ -28,6 +28,12 @@ aliases disabled during materialization, a bounded allowlist, and the exact
 Career Ops `tracker-aliases.json`/`templates/states.yml` behavior observed at
 the pinned revision. Other observed Career Ops versions produce a visible
 compatibility warning; the importer never silently substitutes contracts.
+Version equality is not treated as revision equality: the current
+`career-ops-hq/career-ops` default branch was inspected on 2026-09-01 at
+`42e6769f45becfaa28f1bd1c8922478b22260748` and still declares `1.31.0` despite
+differing from the pin. Import preview therefore warns that an observed package
+version cannot by itself prove the supported source revision. The current
+feature comparison is recorded in `docs/qa/CAREER_OPS_FEATURE_GAP_REVIEW.md`.
 
 The native plugin pins these published peer packages exactly: `dsh-agent`,
 `dsh-llm`, `dsh-system-prompt`, `dsh-tools`, `dsh-session`, `dsh-subagent`,
@@ -51,8 +57,9 @@ byte-identically from `0e9f0303…` because the preview packages are not publish
 to npm. `provenance/deepseek-rlm-files.json` records and verifies every file.
 The workspace also applies three reproducible pnpm package adaptations to the
 published DSH layouts. They are mechanically built from the verified source
-patches: `dsh-session` patch 0003
-(`29ca46973e6c36b39df9dbc62cd4b8ad1dbdb61dc9427a93a86e83d4dc273601`),
+patches: `dsh-session` patch 0003 plus the generated event-catalog entry
+introduced by the companion deletion seam
+(`afad70d894a0f6fe7d41a9d5a16a9ac4a1f079b3ee92522a2526868df8c56572`),
 `dsh-subagent` patch 0002
 (`00d8bc7b92e96d534261b93e5ed6188e20751b1f7ada6d2d34722b9837e875c9`), and
 `dsh-llm-pi-ai` patch 0004

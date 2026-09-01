@@ -1,0 +1,17 @@
+{
+  "$id": "TriageDiscoveryLeadBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["expectedRevision", "decision"],
+  "properties": {
+    "expectedRevision": { "minimum": 1, "type": "integer" },
+    "decision": {
+      "anyOf": [
+        { "const": "new", "type": "string" },
+        { "const": "shortlisted", "type": "string" },
+        { "const": "dismissed", "type": "string" }
+      ]
+    },
+    "note": { "minLength": 1, "maxLength": 1000, "type": "string" }
+  }
+}

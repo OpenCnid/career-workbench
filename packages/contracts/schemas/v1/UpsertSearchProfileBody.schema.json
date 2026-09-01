@@ -1,0 +1,82 @@
+{
+  "$id": "UpsertSearchProfileBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "targetRoles",
+    "seniority",
+    "locations",
+    "workArrangements",
+    "priorities",
+    "exclusions",
+    "active"
+  ],
+  "properties": {
+    "expectedRevision": { "minimum": 1, "type": "integer" },
+    "targetRoles": {
+      "minItems": 1,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "type": "array",
+      "items": { "minLength": 1, "maxLength": 160, "type": "string" }
+    },
+    "seniority": {
+      "minItems": 1,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          { "const": "entry", "type": "string" },
+          { "const": "mid", "type": "string" },
+          { "const": "senior", "type": "string" },
+          { "const": "staff", "type": "string" },
+          { "const": "principal", "type": "string" },
+          { "const": "lead", "type": "string" },
+          { "const": "manager", "type": "string" },
+          { "const": "director", "type": "string" },
+          { "const": "flexible", "type": "string" }
+        ]
+      }
+    },
+    "locations": {
+      "maxItems": 12,
+      "uniqueItems": true,
+      "type": "array",
+      "items": { "minLength": 1, "maxLength": 160, "type": "string" }
+    },
+    "workArrangements": {
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          { "const": "remote", "type": "string" },
+          { "const": "hybrid", "type": "string" },
+          { "const": "onsite", "type": "string" }
+        ]
+      }
+    },
+    "minimumCompensation": {
+      "minimum": 0,
+      "maximum": 10000000,
+      "type": "integer"
+    },
+    "compensationCurrency": { "pattern": "^[A-Z]{3}$", "type": "string" },
+    "aiFocus": { "minLength": 1, "maxLength": 1000, "type": "string" },
+    "priorities": {
+      "maxItems": 12,
+      "uniqueItems": true,
+      "type": "array",
+      "items": { "minLength": 1, "maxLength": 300, "type": "string" }
+    },
+    "exclusions": {
+      "maxItems": 12,
+      "uniqueItems": true,
+      "type": "array",
+      "items": { "minLength": 1, "maxLength": 300, "type": "string" }
+    },
+    "active": { "type": "boolean" }
+  }
+}

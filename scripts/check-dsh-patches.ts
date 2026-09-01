@@ -31,6 +31,25 @@ for (const [name, digest] of expected) {
   }
 }
 
+const adaptedSessionPatch = await readFile(
+  join(
+    "provenance",
+    "patches",
+    "npm",
+    "@deepseek-ai__dsh-session@0.1.2-alpha.3.patch",
+  ),
+  "utf8",
+);
+if (
+  !adaptedSessionPatch.includes("appendIgnorable") ||
+  !adaptedSessionPatch.includes('+\t"subagent/deleted"') ||
+  !adaptedSessionPatch.includes("+    'subagent/deleted'")
+) {
+  throw new Error(
+    "Published session adaptation is missing the public ignorable seam or regenerated deletion-event catalog.",
+  );
+}
+
 console.log(
   `validated ${String(expected.size)} byte-identical native RLM DSH patches`,
 );

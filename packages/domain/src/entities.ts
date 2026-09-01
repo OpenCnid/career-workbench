@@ -73,6 +73,62 @@ export interface ProfileFact extends EntityBase {
   readonly supersedesFactId: EntityId | null;
 }
 
+export type SearchSeniority =
+  | "entry"
+  | "mid"
+  | "senior"
+  | "staff"
+  | "principal"
+  | "lead"
+  | "manager"
+  | "director"
+  | "flexible";
+export type WorkArrangement = "remote" | "hybrid" | "onsite";
+
+/** User-owned criteria that bound DSH job discovery. */
+export interface SearchProfile extends EntityBase {
+  readonly targetRoles: readonly string[];
+  readonly seniority: readonly SearchSeniority[];
+  readonly locations: readonly string[];
+  readonly workArrangements: readonly WorkArrangement[];
+  readonly minimumCompensation: number | null;
+  readonly compensationCurrency: string | null;
+  readonly aiFocus: string | null;
+  readonly priorities: readonly string[];
+  readonly exclusions: readonly string[];
+  readonly active: boolean;
+}
+
+export type DiscoveryLeadState = "new" | "shortlisted" | "dismissed";
+
+/**
+ * One untrusted listing proposed by an authenticated DSH discovery operation.
+ * It is deliberately not an Opportunity until a user explicitly shortlists it.
+ */
+export interface DiscoveryLead extends EntityBase {
+  readonly sourceDocumentId: EntityId;
+  readonly sourceContentDigest: Digest;
+  readonly searchProfileId: EntityId;
+  readonly searchProfileRevision: number;
+  readonly searchCriteriaDigest: Digest;
+  readonly operationId: EntityId;
+  readonly organization: string;
+  readonly roleTitle: string;
+  readonly originalUrl: string;
+  readonly normalizedUrl: string;
+  readonly location: string | null;
+  readonly workArrangement: string | null;
+  readonly advertisedCompensation: string | null;
+  readonly requisitionId: string | null;
+  readonly whyFound: readonly string[];
+  readonly matchedCriteria: readonly string[];
+  readonly gaps: readonly string[];
+  readonly risks: readonly string[];
+  readonly state: DiscoveryLeadState;
+  readonly triageNote: string | null;
+  readonly resultOpportunityId: EntityId | null;
+}
+
 export type SourceStatus = "unknown" | "active" | "expired" | "unavailable";
 export type LegitimacyStatus =
   "unknown" | "high_confidence" | "needs_review" | "concern";
@@ -313,6 +369,10 @@ export type OperationState =
 export interface Operation extends EntityBase {
   readonly kind: string;
   readonly inputIdentity: EntityId | null;
+  /** Exact user-owned input admitted for this operation. */
+  readonly inputRevision: number | null;
+  readonly inputDigest: Digest | null;
+  readonly resourceLimits: Readonly<Record<string, number>>;
   readonly requestedCapabilities: readonly string[];
   readonly dshSessionId: string | null;
   readonly parentOperationId: EntityId | null;
@@ -330,8 +390,13 @@ export interface Operation extends EntityBase {
 
 export type ApprovalState =
   "pending" | "approved" | "denied" | "expired" | "consumed";
+export type ApprovalEffectKind =
+  "comparison.accept" | "artifact.review" | "application.transition";
 export interface Approval extends EntityBase {
   readonly commandId: EntityId;
+  readonly effectKind: ApprovalEffectKind;
+  readonly targetId: EntityId;
+  readonly effectDigest: Digest;
   readonly summary: string;
   readonly effectDescription: string;
   readonly expectedRevisions: Readonly<Record<string, number>>;

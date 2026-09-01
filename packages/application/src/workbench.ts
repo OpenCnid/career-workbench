@@ -4,16 +4,22 @@ import {
   assertDomain,
   calculateScore,
   canonicalJson,
+  evidenceRejectionIdentity,
   renderProfileFactClaim,
+  requireApprovalTransition,
   requireApplicationTransition,
+  requireOperationTransition,
   validateEvidenceForAcceptance,
   validateRubric,
   validateSourceLocator,
   type Application,
+  type Approval,
+  type ApprovalEffectKind,
   type Artifact,
   type CommandContext,
   type Comparison,
   type ComparisonScenarioResult,
+  type DiscoveryLead,
   type DimensionInput,
   type EntityId,
   type Evaluation,
@@ -32,13 +38,17 @@ import {
   type ProposedBy,
   type Rubric,
   type RubricDimension,
+  type SearchProfile,
+  type SearchSeniority,
   type SourceDocument,
   type SourceKind,
   type SourceStatus,
   type SourceLocator,
   type TrustClass,
+  type UtcTimestamp,
   type Workspace,
   type WorkspaceId,
+  type WorkArrangement,
 } from "@career-workbench/domain";
 import type { Clock, IdFactory } from "./ids.js";
 import type {
@@ -49,9 +59,25 @@ import type {
 } from "./ports.js";
 
 const MAX_INLINE_SOURCE_BYTES = 1024 * 1024;
+const MAX_DISCOVERY_LEADS_PER_OPERATION = 64;
+const MAX_DISCOVERY_LEADS_PER_HOST = 20;
+const MAX_DISCOVERY_LEADS_PER_WORKSPACE = 512;
+const MAX_DISCOVERY_BYTES_PER_OPERATION = 8 * 1024 * 1024;
+const MAX_DISCOVERY_BYTES_PER_WORKSPACE = 32 * 1024 * 1024;
+const SENSITIVE_URL_PARAMETER =
+  /^(?:access[_-]?token|api[_-]?key|auth|authorization|code|credential|jwt|key|password|secret|session|signature|sig|token)$/iu;
+const RESTART_RECOVERY_CATEGORY = "backend_restart_without_terminal";
+const RESTART_RECOVERY_MESSAGE =
+  "Operation became indeterminate during backend restart because no trusted terminal was recorded. No work was replayed.";
 
 export interface CreateWorkspaceInput {
   readonly displayName: string;
+  readonly candidateName?: string;
+  readonly targetRole?: string;
+  readonly targetPriorities?: string;
+  readonly locationPreference?: string;
+  readonly deferTargetPreferences?: boolean;
+  readonly rubricPreset?: "balanced_fit";
   readonly locale: string;
   readonly timezone: string;
 }
@@ -73,6 +99,14 @@ export interface ProposeFactInput {
   readonly proposedBy: ProposedBy;
 }
 
+export interface AddCareerHistoryEntryInput {
+  readonly personName: string;
+  readonly roleTitle: string;
+  readonly organization: string;
+  readonly dateRange: string;
+  readonly achievements: readonly string[];
+}
+
 export interface CaptureOpportunityInput {
   readonly sourceDocumentId: EntityId;
   readonly organization: string;
@@ -82,6 +116,46 @@ export interface CaptureOpportunityInput {
   readonly workArrangement?: string;
   readonly advertisedCompensation?: string;
   readonly requisitionId?: string;
+}
+
+export interface UpsertSearchProfileInput {
+  readonly expectedRevision?: number;
+  readonly targetRoles: readonly string[];
+  readonly seniority: readonly SearchSeniority[];
+  readonly locations: readonly string[];
+  readonly workArrangements: readonly WorkArrangement[];
+  readonly minimumCompensation?: number;
+  readonly compensationCurrency?: string;
+  readonly aiFocus?: string;
+  readonly priorities: readonly string[];
+  readonly exclusions: readonly string[];
+  readonly active: boolean;
+}
+
+export interface RecordDiscoveryLeadInput {
+  readonly organization: string;
+  readonly roleTitle: string;
+  readonly originalUrl: string;
+  readonly postingText: string;
+  readonly location?: string;
+  readonly workArrangement?: string;
+  readonly advertisedCompensation?: string;
+  readonly requisitionId?: string;
+  readonly whyFound: readonly string[];
+  readonly matchedCriteria: readonly string[];
+  readonly gaps: readonly string[];
+  readonly risks: readonly string[];
+}
+
+export interface TriageDiscoveryLeadInput {
+  readonly expectedRevision: number;
+  readonly decision: "new" | "shortlisted" | "dismissed";
+  readonly note?: string;
+}
+
+export interface TriagedDiscoveryLead {
+  readonly lead: DiscoveryLead;
+  readonly opportunity: Opportunity | null;
 }
 
 export interface ProposeEvidenceInput {
@@ -204,6 +278,28 @@ export interface CreateCandidateArtifactInput {
   readonly styleNote?: string;
 }
 
+export interface RequestApprovalInput {
+  readonly effectKind: ApprovalEffectKind;
+  readonly targetId: EntityId;
+  readonly expectedRevision: number;
+  readonly expiresInSeconds?: number;
+  readonly applicationTransition?: Omit<
+    TransitionApplicationInput,
+    "expectedRevision"
+  >;
+}
+
+export interface DecideApprovalInput {
+  readonly expectedRevision: number;
+  readonly decision: "approved" | "denied";
+  readonly interactionId: string;
+}
+
+export interface ApprovalConsumption {
+  readonly approvalId?: EntityId;
+  readonly expectedApprovalRevision?: number;
+}
+
 export interface CareerOpsImportFileInput {
   readonly relativePath: string;
   readonly mediaType: string;
@@ -299,6 +395,90 @@ function updated<
   };
 }
 
+function approvalEffectDigest(
+  effectKind: ApprovalEffectKind,
+  targetId: EntityId,
+  targetRevision: number,
+  effectDetails: Readonly<Record<string, unknown>> = {},
+): Digest {
+  return createHash("sha256")
+    .update(
+      canonicalJson({ effectKind, targetId, targetRevision, effectDetails }),
+      "utf8",
+    )
+    .digest("hex") as Digest;
+}
+
+function boundedUniqueText(
+  values: readonly string[],
+  maximumItems: number,
+  maximumLength: number,
+  label: string,
+): string[] {
+  const normalized = values.map((value) => value.trim()).filter(Boolean);
+  assertDomain(
+    normalized.length <= maximumItems &&
+      normalized.every((value) => value.length <= maximumLength),
+    "invalid_request",
+    `${label} exceeds its supported bounds.`,
+  );
+  return [...new Set(normalized)];
+}
+
+function normalizeDiscoveryUrl(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new DomainError("invalid_request", "Discovery URL is invalid.");
+  }
+  assertDomain(
+    parsed.protocol === "https:" || parsed.protocol === "http:",
+    "invalid_request",
+    "Discovery URL must use HTTP or HTTPS.",
+  );
+  assertDomain(
+    parsed.username.length === 0 && parsed.password.length === 0,
+    "invalid_request",
+    "Discovery URL must not contain credentials.",
+  );
+  parsed.hash = "";
+  for (const key of [...parsed.searchParams.keys()]) {
+    assertDomain(
+      !SENSITIVE_URL_PARAMETER.test(key),
+      "invalid_request",
+      "Discovery URL must not contain credential-like query parameters.",
+    );
+    if (/^(?:utm_.+|ref|referrer|source)$/iu.test(key)) {
+      parsed.searchParams.delete(key);
+    }
+  }
+  parsed.searchParams.sort();
+  if (parsed.pathname.length > 1) {
+    parsed.pathname = parsed.pathname.replace(/\/+$/u, "");
+  }
+  return parsed.toString();
+}
+
+function scrubCredentialBearingExportValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => scrubCredentialBearingExportValue(item));
+  }
+  if (typeof value !== "object" || value === null) return value;
+  const scrubbed: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (
+      /^(?:originalLocator|originalUrl|normalizedUrl)$/u.test(key) ||
+      /(?:authorization|cookie|credential|password|secret|token)$/iu.test(key)
+    ) {
+      scrubbed[key] = null;
+    } else {
+      scrubbed[key] = scrubCredentialBearingExportValue(item);
+    }
+  }
+  return scrubbed;
+}
+
 export class WorkbenchService {
   public constructor(
     public readonly workspaceId: WorkspaceId,
@@ -327,29 +507,245 @@ export class WorkbenchService {
       "invalid_request",
       "Workspace timezone is invalid.",
     );
+    const guidedSetup =
+      input.candidateName !== undefined ||
+      input.targetRole !== undefined ||
+      input.targetPriorities !== undefined ||
+      input.locationPreference !== undefined ||
+      input.deferTargetPreferences !== undefined ||
+      input.rubricPreset !== undefined;
+    const candidateName = input.candidateName?.trim() ?? "";
+    const targetRole = input.targetRole?.trim() ?? "";
+    const targetPriorities = input.targetPriorities?.trim() ?? "";
+    const locationPreference = input.locationPreference?.trim() ?? "";
+    const deferred = input.deferTargetPreferences === true;
+    if (guidedSetup) {
+      assertDomain(
+        candidateName.length > 0 && candidateName.length <= 300,
+        "invalid_request",
+        "Guided setup requires the candidate's name.",
+      );
+      assertDomain(
+        deferred || (targetRole.length > 0 && targetRole.length <= 500),
+        "invalid_request",
+        "Choose a target role or explicitly defer target preferences.",
+      );
+      assertDomain(
+        deferred || input.rubricPreset === "balanced_fit",
+        "invalid_request",
+        "Guided setup requires a supported evaluation approach.",
+      );
+      assertDomain(
+        targetPriorities.length <= 2_000 && locationPreference.length <= 300,
+        "invalid_request",
+        "Target preferences exceed the supported setup limits.",
+      );
+    }
     const now = this.clock.now();
+    const rubric: Rubric | null =
+      input.rubricPreset === "balanced_fit"
+        ? {
+            id: this.ids.entity("rubric"),
+            workspaceId: this.workspaceId,
+            createdAt: now,
+            updatedAt: now,
+            revision: 1,
+            semanticVersion: "1.0.0",
+            name: "Balanced fit",
+            dimensions: [
+              {
+                key: "skills",
+                label: "Skills evidence",
+                weightBasisPoints: 7_000,
+                missingInput: "block",
+                criticalMinimumBasisPoints: null,
+              },
+              {
+                key: "preferences",
+                label: "Target preferences",
+                weightBasisPoints: 3_000,
+                missingInput: "neutral",
+                criticalMinimumBasisPoints: null,
+              },
+            ],
+            thresholds: { strong: 7_500 },
+            displayScale: 100,
+            usedAt: null,
+          }
+        : null;
+    if (rubric !== null) validateRubric(rubric);
     const workspace: Workspace = {
       id: this.workspaceId,
       displayName: input.displayName.trim(),
       schemaVersion: 1,
       policyVersion: "v1",
-      defaultRubricId: null,
+      defaultRubricId: rubric?.id ?? null,
       locale: input.locale,
       timezone: input.timezone,
       createdAt: now,
       updatedAt: now,
       revision: 1,
     };
+    const specifications = guidedSetup
+      ? [
+          {
+            factType: "identity",
+            subject: "Candidate",
+            predicate: "is",
+            value: candidateName,
+          },
+          ...(deferred
+            ? [
+                {
+                  factType: "preference",
+                  subject: candidateName,
+                  predicate: "deferred",
+                  value: "target role preferences",
+                },
+              ]
+            : [
+                {
+                  factType: "preference",
+                  subject: candidateName,
+                  predicate: "targets",
+                  value: targetRole,
+                },
+                ...(targetPriorities.length > 0
+                  ? [
+                      {
+                        factType: "preference",
+                        subject: candidateName,
+                        predicate: "prioritizes",
+                        value: targetPriorities,
+                      },
+                    ]
+                  : []),
+                ...(locationPreference.length > 0
+                  ? [
+                      {
+                        factType: "preference",
+                        subject: candidateName,
+                        predicate: "prefers",
+                        value: locationPreference,
+                      },
+                    ]
+                  : []),
+              ]),
+        ]
+      : [];
+    const claims = specifications.map(
+      (item) => `${item.subject} ${item.predicate} ${item.value}`,
+    );
+    const sourceText = claims.join("\n");
+    const sourceBytes = new TextEncoder().encode(sourceText);
+    const source: SourceDocument | null =
+      specifications.length > 0
+        ? {
+            id: this.ids.entity("source"),
+            workspaceId: this.workspaceId,
+            createdAt: now,
+            updatedAt: now,
+            revision: 1,
+            kind: "candidate",
+            trustClass: "candidate_primary",
+            mediaType: "text/plain",
+            contentDigest: createHash("sha256")
+              .update(sourceBytes)
+              .digest("hex") as SourceDocument["contentDigest"],
+            byteLength: sourceBytes.byteLength,
+            originalLocator: "user-entry://onboarding/preferences",
+            capturedAt: now,
+            supersedesSourceId: null,
+            inlineText: sourceText,
+            artifactId: null,
+          }
+        : null;
+    let sourceOffset = 0;
+    const facts = specifications.map((item, index): ProfileFact => {
+      const claim = claims[index] ?? "";
+      const locator: SourceLocator = {
+        sourceId: source?.id ?? this.ids.entity("source"),
+        start: sourceOffset,
+        end: sourceOffset + claim.length,
+        quote: claim,
+      };
+      sourceOffset += claim.length + 1;
+      return {
+        id: this.ids.entity("fact"),
+        workspaceId: this.workspaceId,
+        createdAt: now,
+        updatedAt: now,
+        revision: 1,
+        factType: item.factType,
+        subject: item.subject,
+        predicate: item.predicate,
+        value: item.value,
+        status: "verified",
+        sourceLocators: [locator],
+        proposedBy: "user",
+        confirmedByUserAt: now,
+        supersedesFactId: null,
+      };
+    });
     return this.repository.commit({
       workspaceId: this.workspaceId,
       context,
       command: { kind: "workspace.create", input },
-      mutations: [{ action: "insert", kind: "workspace", entity: workspace }],
+      mutations: [
+        { action: "insert", kind: "workspace", entity: workspace },
+        ...(source === null
+          ? []
+          : [
+              {
+                action: "insert" as const,
+                kind: "source" as const,
+                entity: source,
+              },
+            ]),
+        ...facts.map((fact) => ({
+          action: "insert" as const,
+          kind: "profileFact" as const,
+          entity: fact,
+        })),
+        ...(rubric === null
+          ? []
+          : [
+              {
+                action: "insert" as const,
+                kind: "rubric" as const,
+                entity: rubric,
+              },
+            ]),
+      ],
       events: [
         event(context, now, "workspace.created", workspace.id, 1, {
           schemaVersion: 1,
           policyVersion: "v1",
+          defaultRubricId: workspace.defaultRubricId,
         }),
+        ...(source === null
+          ? []
+          : [
+              event(context, now, "source.captured", source.id, 1, {
+                kind: source.kind,
+                trustClass: source.trustClass,
+                contentDigest: source.contentDigest,
+                byteLength: source.byteLength,
+              }),
+            ]),
+        ...facts.map((fact) =>
+          event(context, now, "profile_fact.confirmed", fact.id, 1, {
+            factType: fact.factType,
+            status: fact.status,
+          }),
+        ),
+        ...(rubric === null
+          ? []
+          : [
+              event(context, now, "rubric.created", rubric.id, 1, {
+                semanticVersion: rubric.semanticVersion,
+              }),
+            ]),
       ],
       result: workspace,
     });
@@ -417,6 +813,146 @@ export class WorkbenchService {
         byteLength: source.byteLength,
       },
     );
+  }
+
+  public async addCareerHistoryEntry(
+    input: AddCareerHistoryEntryInput,
+    context: CommandContext,
+  ): Promise<{
+    readonly source: SourceDocument;
+    readonly facts: readonly ProfileFact[];
+  }> {
+    const personName = input.personName.trim();
+    const roleTitle = input.roleTitle.trim();
+    const organization = input.organization.trim();
+    const dateRange = input.dateRange.trim();
+    const achievements = input.achievements.map((item) => item.trim());
+    assertDomain(
+      personName.length > 0 &&
+        personName.length <= 300 &&
+        roleTitle.length > 0 &&
+        roleTitle.length <= 300 &&
+        organization.length > 0 &&
+        organization.length <= 300 &&
+        dateRange.length > 0 &&
+        dateRange.length <= 200,
+      "invalid_request",
+      "Career history identity, role, organization, and dates are required.",
+    );
+    assertDomain(
+      achievements.length <= 8 &&
+        achievements.every(
+          (item) =>
+            item.length > 0 &&
+            item.length <= 2_000 &&
+            item.split(/\s+/u).length >= 2,
+        ),
+      "invalid_request",
+      "Each achievement must begin with an action and include its result.",
+    );
+
+    const specifications = [
+      {
+        factType: "experience",
+        predicate: "worked as",
+        value: `${roleTitle} at ${organization} from ${dateRange}`,
+      },
+      ...achievements.map((achievement) => {
+        const [predicate = "", ...value] = achievement.split(/\s+/u);
+        return {
+          factType: "achievement",
+          predicate,
+          value: value.join(" "),
+        };
+      }),
+    ] as const;
+    const claims = specifications.map(
+      (item) => `${personName} ${item.predicate} ${item.value}`,
+    );
+    const text = claims.join("\n");
+    const bytes = new TextEncoder().encode(text);
+    assertDomain(
+      bytes.byteLength > 0 && bytes.byteLength <= MAX_INLINE_SOURCE_BYTES,
+      "invalid_request",
+      "Career history entry exceeds the inline source limit.",
+    );
+
+    const now = this.clock.now();
+    const source: SourceDocument = {
+      id: this.ids.entity("source"),
+      workspaceId: this.workspaceId,
+      createdAt: now,
+      updatedAt: now,
+      revision: 1,
+      kind: "candidate",
+      trustClass: "candidate_primary",
+      mediaType: "text/plain",
+      contentDigest: createHash("sha256")
+        .update(bytes)
+        .digest("hex") as SourceDocument["contentDigest"],
+      byteLength: bytes.byteLength,
+      originalLocator: "user-entry://career-history/manual",
+      capturedAt: now,
+      supersedesSourceId: null,
+      inlineText: text,
+      artifactId: null,
+    };
+    let offset = 0;
+    const facts = specifications.map((item, index): ProfileFact => {
+      const claim = claims[index] ?? "";
+      const locator: SourceLocator = {
+        sourceId: source.id,
+        start: offset,
+        end: offset + claim.length,
+        quote: claim,
+      };
+      offset += claim.length + 1;
+      return {
+        id: this.ids.entity("fact"),
+        workspaceId: this.workspaceId,
+        createdAt: now,
+        updatedAt: now,
+        revision: 1,
+        factType: item.factType,
+        subject: personName,
+        predicate: item.predicate,
+        value: item.value,
+        status: "proposed",
+        sourceLocators: [locator],
+        proposedBy: "user",
+        confirmedByUserAt: null,
+        supersedesFactId: null,
+      };
+    });
+    const result = { source, facts } as const;
+    return this.repository.commit({
+      workspaceId: this.workspaceId,
+      context,
+      command: { kind: "career_history.add_entry", input },
+      mutations: [
+        { action: "insert", kind: "source", entity: source },
+        ...facts.map((fact) => ({
+          action: "insert" as const,
+          kind: "profileFact" as const,
+          entity: fact,
+        })),
+      ],
+      events: [
+        event(context, now, "source.captured", source.id, 1, {
+          kind: source.kind,
+          trustClass: source.trustClass,
+          contentDigest: source.contentDigest,
+          byteLength: source.byteLength,
+        }),
+        ...facts.map((fact) =>
+          event(context, now, "profile_fact.proposed", fact.id, 1, {
+            factType: fact.factType,
+            status: fact.status,
+          }),
+        ),
+      ],
+      result,
+    });
   }
 
   public async proposeProfileFact(
@@ -598,6 +1134,533 @@ export class WorkbenchService {
     });
   }
 
+  public async upsertSearchProfile(
+    input: UpsertSearchProfileInput,
+    context: CommandContext,
+  ): Promise<SearchProfile> {
+    assertDomain(
+      context.actor === "browser" || context.actor === "user",
+      "approval_denied",
+      "Only a direct user interaction may change search criteria.",
+    );
+    const targetRoles = boundedUniqueText(
+      input.targetRoles,
+      12,
+      160,
+      "Target roles",
+    );
+    assertDomain(
+      targetRoles.length > 0,
+      "invalid_request",
+      "At least one target role is required.",
+    );
+    const seniority = [...new Set(input.seniority)];
+    const workArrangements = [...new Set(input.workArrangements)];
+    assertDomain(
+      seniority.length > 0 &&
+        seniority.length <= 9 &&
+        seniority.every((value) =>
+          [
+            "entry",
+            "mid",
+            "senior",
+            "staff",
+            "principal",
+            "lead",
+            "manager",
+            "director",
+            "flexible",
+          ].includes(value),
+        ) &&
+        workArrangements.length > 0 &&
+        workArrangements.length <= 3 &&
+        workArrangements.every((value) =>
+          ["remote", "hybrid", "onsite"].includes(value),
+        ),
+      "invalid_request",
+      "Seniority and work arrangements are invalid.",
+    );
+    const locations = boundedUniqueText(input.locations, 12, 160, "Locations");
+    const priorities = boundedUniqueText(
+      input.priorities,
+      12,
+      300,
+      "Search priorities",
+    );
+    const exclusions = boundedUniqueText(
+      input.exclusions,
+      12,
+      300,
+      "Search exclusions",
+    );
+    const minimumCompensation = input.minimumCompensation ?? null;
+    const compensationCurrency =
+      input.compensationCurrency?.trim().toUpperCase() ?? null;
+    assertDomain(
+      (minimumCompensation === null ||
+        (Number.isSafeInteger(minimumCompensation) &&
+          minimumCompensation >= 0 &&
+          minimumCompensation <= 10_000_000)) &&
+        (compensationCurrency === null ||
+          /^[A-Z]{3}$/u.test(compensationCurrency)) &&
+        (minimumCompensation === null) === (compensationCurrency === null),
+      "invalid_request",
+      "Compensation requires a whole annual amount and three-letter currency.",
+    );
+    const aiFocus = input.aiFocus?.trim() ?? null;
+    assertDomain(
+      aiFocus === null || (aiFocus.length > 0 && aiFocus.length <= 1_000),
+      "invalid_request",
+      "AI focus exceeds its supported bound.",
+    );
+    const existing = (
+      await this.repository.list("searchProfile", this.workspaceId)
+    )[0];
+    const now = this.clock.now();
+    const common = {
+      targetRoles,
+      seniority,
+      locations,
+      workArrangements,
+      minimumCompensation,
+      compensationCurrency,
+      aiFocus,
+      priorities,
+      exclusions,
+      active: input.active,
+    } as const;
+    if (existing === undefined) {
+      assertDomain(
+        input.expectedRevision === undefined,
+        "revision_conflict",
+        "Search criteria do not exist yet.",
+      );
+      const profile: SearchProfile = {
+        id: this.ids.entity("search_profile"),
+        workspaceId: this.workspaceId,
+        createdAt: now,
+        updatedAt: now,
+        revision: 1,
+        ...common,
+      };
+      return this.repository.commit({
+        workspaceId: this.workspaceId,
+        context,
+        command: { kind: "search_profile.create", input },
+        mutations: [
+          { action: "insert", kind: "searchProfile", entity: profile },
+        ],
+        events: [
+          event(context, now, "search_profile.created", profile.id, 1, {
+            active: profile.active,
+            targetRoleCount: profile.targetRoles.length,
+          }),
+        ],
+        result: profile,
+      });
+    }
+    assertDomain(
+      input.expectedRevision === existing.revision,
+      "revision_conflict",
+      "Search criteria changed before this save.",
+    );
+    const profile = updated(existing, now, common);
+    return this.repository.commit({
+      workspaceId: this.workspaceId,
+      context,
+      command: { kind: "search_profile.update", input },
+      mutations: [
+        {
+          action: "update",
+          kind: "searchProfile",
+          entity: profile,
+          expectedRevision: existing.revision,
+        },
+      ],
+      events: [
+        event(
+          context,
+          now,
+          "search_profile.updated",
+          profile.id,
+          profile.revision,
+          {
+            active: profile.active,
+            targetRoleCount: profile.targetRoles.length,
+          },
+        ),
+      ],
+      result: profile,
+    });
+  }
+
+  public async recordDiscoveryLead(
+    input: RecordDiscoveryLeadInput,
+    context: CommandContext,
+  ): Promise<DiscoveryLead> {
+    assertDomain(
+      context.operationId !== undefined,
+      "approval_required",
+      "Discovery ingestion requires an authenticated DSH operation.",
+    );
+    const operation = await this.authorizeOperation(
+      context.operationId,
+      context,
+    );
+    assertDomain(
+      operation.kind === "job_discovery" && operation.state === "running",
+      "invalid_transition",
+      "Listings can only be recorded by a running job discovery operation.",
+    );
+    assertDomain(
+      operation.cancellationRequestedAt === null,
+      "invalid_transition",
+      "Canceled discovery cannot record more listings.",
+    );
+    assertDomain(
+      operation.inputIdentity !== null &&
+        operation.inputRevision !== null &&
+        operation.inputDigest !== null,
+      "invalid_transition",
+      "Discovery operation is missing its admitted search criteria.",
+    );
+    const searchProfile = await this.repository.get(
+      "searchProfile",
+      operation.inputIdentity,
+    );
+    assertDomain(
+      searchProfile.active &&
+        searchProfile.revision === operation.inputRevision &&
+        createHash("sha256")
+          .update(canonicalJson(searchProfile))
+          .digest("hex") === operation.inputDigest,
+      "revision_conflict",
+      "Search criteria changed or were paused after discovery started.",
+    );
+    const bytes = new TextEncoder().encode(input.postingText);
+    assertDomain(
+      bytes.byteLength > 0 && bytes.byteLength <= MAX_INLINE_SOURCE_BYTES,
+      "invalid_request",
+      "Posting content is empty or exceeds the inline source limit.",
+    );
+    const organization = input.organization.trim();
+    const roleTitle = input.roleTitle.trim();
+    assertDomain(
+      organization.length > 0 &&
+        organization.length <= 300 &&
+        roleTitle.length > 0 &&
+        roleTitle.length <= 300,
+      "invalid_request",
+      "Discovery organization and role are required.",
+    );
+    const originalUrl = input.originalUrl.trim();
+    const normalizedUrl = normalizeDiscoveryUrl(originalUrl);
+    const existing = await this.repository.list(
+      "discoveryLead",
+      this.workspaceId,
+    );
+    const contentDigest = createHash("sha256")
+      .update(bytes)
+      .digest("hex") as Digest;
+    const priorLead = existing.find(
+      (lead) => lead.normalizedUrl === normalizedUrl,
+    );
+    assertDomain(
+      priorLead === undefined ||
+        (priorLead.sourceContentDigest !== contentDigest &&
+          priorLead.state !== "shortlisted" &&
+          priorLead.operationId !== operation.id),
+      "duplicate_identity",
+      priorLead?.state === "shortlisted"
+        ? "A shortlisted listing must be reviewed through its canonical opportunity."
+        : "A changed listing can be rediscovered only in a later discovery run.",
+    );
+    const operationLeads = existing.filter(
+      (lead) => lead.operationId === operation.id && lead.id !== priorLead?.id,
+    );
+    const normalizedHost = new URL(normalizedUrl).host;
+    const hostLeads = operationLeads.filter(
+      (lead) => new URL(lead.normalizedUrl).host === normalizedHost,
+    );
+    assertDomain(
+      operationLeads.length < MAX_DISCOVERY_LEADS_PER_OPERATION &&
+        hostLeads.length < MAX_DISCOVERY_LEADS_PER_HOST &&
+        (existing.length < MAX_DISCOVERY_LEADS_PER_WORKSPACE ||
+          priorLead !== undefined),
+      "invalid_request",
+      "Discovery lead limit reached; finish and triage this bounded result set.",
+    );
+    const sources = await this.repository.list("source", this.workspaceId);
+    const sourceBytes = new Map(
+      sources.map((source) => [source.id, source.byteLength] as const),
+    );
+    const operationBytes = operationLeads.reduce(
+      (total, lead) => total + (sourceBytes.get(lead.sourceDocumentId) ?? 0),
+      0,
+    );
+    const workspaceBytes = sources
+      .filter(
+        (source) =>
+          source.kind === "opportunity" && source.trustClass === "external",
+      )
+      .reduce((total, source) => total + source.byteLength, 0);
+    assertDomain(
+      operationBytes + bytes.byteLength <= MAX_DISCOVERY_BYTES_PER_OPERATION &&
+        workspaceBytes + bytes.byteLength <= MAX_DISCOVERY_BYTES_PER_WORKSPACE,
+      "invalid_request",
+      "Discovery source-byte limit reached; finish and triage this bounded result set.",
+    );
+    const boundedOptional = (value: string | undefined, label: string) => {
+      const normalized = value?.trim() ?? null;
+      assertDomain(
+        normalized === null ||
+          (normalized.length > 0 && normalized.length <= 300),
+        "invalid_request",
+        `${label} exceeds its supported bound.`,
+      );
+      return normalized;
+    };
+    const now = this.clock.now();
+    const source: SourceDocument = {
+      id: this.ids.entity("source"),
+      workspaceId: this.workspaceId,
+      createdAt: now,
+      updatedAt: now,
+      revision: 1,
+      kind: "opportunity",
+      trustClass: "external",
+      mediaType: "text/plain",
+      contentDigest,
+      byteLength: bytes.byteLength,
+      originalLocator: originalUrl,
+      capturedAt: now,
+      supersedesSourceId: priorLead?.sourceDocumentId ?? null,
+      inlineText: input.postingText,
+      artifactId: null,
+    };
+    const leadFields = {
+      sourceDocumentId: source.id,
+      sourceContentDigest: source.contentDigest,
+      searchProfileId: searchProfile.id,
+      searchProfileRevision: searchProfile.revision,
+      searchCriteriaDigest: operation.inputDigest,
+      operationId: operation.id,
+      organization,
+      roleTitle,
+      originalUrl,
+      normalizedUrl,
+      location: boundedOptional(input.location, "Location"),
+      workArrangement: boundedOptional(
+        input.workArrangement,
+        "Work arrangement",
+      ),
+      advertisedCompensation: boundedOptional(
+        input.advertisedCompensation,
+        "Advertised compensation",
+      ),
+      requisitionId: boundedOptional(input.requisitionId, "Requisition ID"),
+      whyFound: boundedUniqueText(input.whyFound, 8, 500, "Discovery reasons"),
+      matchedCriteria: boundedUniqueText(
+        input.matchedCriteria,
+        12,
+        300,
+        "Matched criteria",
+      ),
+      gaps: boundedUniqueText(input.gaps, 12, 500, "Discovery gaps"),
+      risks: boundedUniqueText(input.risks, 12, 500, "Discovery risks"),
+      state: "new",
+      triageNote: null,
+      resultOpportunityId: null,
+    } as const;
+    const lead: DiscoveryLead =
+      priorLead === undefined
+        ? {
+            id: this.ids.entity("discovery_lead"),
+            workspaceId: this.workspaceId,
+            createdAt: now,
+            updatedAt: now,
+            revision: 1,
+            ...leadFields,
+          }
+        : updated(priorLead, now, leadFields);
+    return this.repository.commit({
+      workspaceId: this.workspaceId,
+      context,
+      command: { kind: "discovery_lead.record", input },
+      mutations: [
+        { action: "insert", kind: "source", entity: source },
+        priorLead === undefined
+          ? { action: "insert", kind: "discoveryLead", entity: lead }
+          : {
+              action: "update",
+              kind: "discoveryLead",
+              entity: lead,
+              expectedRevision: priorLead.revision,
+            },
+      ],
+      events: [
+        event(context, now, "source.captured", source.id, 1, {
+          kind: source.kind,
+          trustClass: source.trustClass,
+          contentDigest: source.contentDigest,
+          byteLength: source.byteLength,
+        }),
+        event(
+          context,
+          now,
+          priorLead === undefined
+            ? "discovery_lead.recorded"
+            : "discovery_lead.rediscovered",
+          lead.id,
+          lead.revision,
+          {
+            operationId: operation.id,
+            sourceDocumentId: source.id,
+            normalizedUrl,
+            ...(priorLead === undefined
+              ? {}
+              : { supersededSourceId: priorLead.sourceDocumentId }),
+          },
+        ),
+      ],
+      result: lead,
+    });
+  }
+
+  public async triageDiscoveryLead(
+    leadId: EntityId,
+    input: TriageDiscoveryLeadInput,
+    context: CommandContext,
+  ): Promise<TriagedDiscoveryLead> {
+    assertDomain(
+      context.actor === "browser" || context.actor === "user",
+      "approval_denied",
+      "Only a direct user interaction may triage a discovered listing.",
+    );
+    const lead = await this.repository.get("discoveryLead", leadId);
+    assertDomain(
+      lead.revision === input.expectedRevision,
+      "revision_conflict",
+      "Discovery lead changed before this decision.",
+    );
+    if (input.decision === "new") {
+      assertDomain(
+        lead.state === "dismissed",
+        "invalid_transition",
+        "Only a dismissed discovery lead can return to the inbox.",
+      );
+    } else {
+      assertDomain(
+        lead.state === "new",
+        "invalid_transition",
+        "Only a new discovery lead can be shortlisted or dismissed.",
+      );
+    }
+    const note = input.note?.trim() ?? null;
+    assertDomain(
+      note === null || (note.length > 0 && note.length <= 1_000),
+      "invalid_request",
+      "Triage note exceeds its supported bound.",
+    );
+    const now = this.clock.now();
+    let opportunity: Opportunity | null = null;
+    let createdOpportunity = false;
+    const mutations: Mutation[] = [];
+    if (input.decision === "shortlisted") {
+      const opportunities = await this.repository.list(
+        "opportunity",
+        this.workspaceId,
+      );
+      opportunity =
+        opportunities.find((item) => {
+          const sameRequisition =
+            lead.requisitionId !== null &&
+            item.requisitionId === lead.requisitionId &&
+            item.organization.toLowerCase() === lead.organization.toLowerCase();
+          if (sameRequisition) return true;
+          if (item.originalUrl === null) return false;
+          try {
+            return (
+              normalizeDiscoveryUrl(item.originalUrl) === lead.normalizedUrl
+            );
+          } catch {
+            return false;
+          }
+        }) ?? null;
+      if (opportunity === null) {
+        createdOpportunity = true;
+        opportunity = {
+          id: this.ids.entity("opportunity"),
+          workspaceId: this.workspaceId,
+          createdAt: now,
+          updatedAt: now,
+          revision: 1,
+          sourceDocumentId: lead.sourceDocumentId,
+          organization: lead.organization,
+          roleTitle: lead.roleTitle,
+          originalUrl: lead.originalUrl,
+          location: lead.location,
+          workArrangement: lead.workArrangement,
+          advertisedCompensation: lead.advertisedCompensation,
+          requisitionId: lead.requisitionId,
+          sourceStatus: "unknown",
+          legitimacyStatus: "unknown",
+          workflowState: "shortlisted",
+          sourceContentDigest: lead.sourceContentDigest,
+        };
+        mutations.push({
+          action: "insert",
+          kind: "opportunity",
+          entity: opportunity,
+        });
+      }
+    }
+    const decided = updated(lead, now, {
+      state: input.decision,
+      triageNote: note,
+      resultOpportunityId: opportunity?.id ?? null,
+    });
+    mutations.unshift({
+      action: "update",
+      kind: "discoveryLead",
+      entity: decided,
+      expectedRevision: lead.revision,
+    });
+    return this.repository.commit({
+      workspaceId: this.workspaceId,
+      context,
+      command: { kind: "discovery_lead.triage", leadId, input },
+      mutations,
+      events: [
+        event(
+          context,
+          now,
+          `discovery_lead.${input.decision}`,
+          lead.id,
+          decided.revision,
+          { resultOpportunityId: opportunity?.id ?? null },
+        ),
+        ...(opportunity !== null && createdOpportunity
+          ? [
+              event(
+                context,
+                now,
+                "opportunity.captured",
+                opportunity.id,
+                opportunity.revision,
+                {
+                  sourceDocumentId: opportunity.sourceDocumentId,
+                  sourceContentDigest: opportunity.sourceContentDigest,
+                  discoveryLeadId: lead.id,
+                },
+              ),
+            ]
+          : []),
+      ],
+      result: { lead: decided, opportunity },
+    });
+  }
+
   public async captureOpportunity(
     input: CaptureOpportunityInput,
     context: CommandContext,
@@ -772,6 +1835,7 @@ export class WorkbenchService {
         : await this.repository.get("profileFact", evidence.candidateFactId);
     if (decision === "accepted") {
       validateEvidenceForAcceptance(evidence, source, fact);
+      await this.assertRejectedEvidenceNotRevived(evidence, source, fact);
     } else {
       assertDomain(
         evidence.decision === "proposed",
@@ -812,6 +1876,65 @@ export class WorkbenchService {
       ],
       result: decided,
     });
+  }
+
+  private async assertRejectedEvidenceNotRevived(
+    evidence: EvidenceItem,
+    source: SourceDocument | null,
+    candidateFact: ProfileFact | null,
+  ): Promise<void> {
+    const identity = evidenceRejectionIdentity(evidence, source);
+    const rejectedEvidence = (
+      await this.repository.list("evidence", this.workspaceId)
+    ).filter((item) => item.decision === "rejected");
+    for (const rejected of rejectedEvidence) {
+      const rejectedSource =
+        rejected.sourceId === null
+          ? null
+          : await this.repository.get("source", rejected.sourceId);
+      if (evidenceRejectionIdentity(rejected, rejectedSource) !== identity) {
+        continue;
+      }
+      if (
+        evidence.classification === "candidate_fact" &&
+        rejected.classification === "candidate_fact" &&
+        (await this.isUserCorrectionDescendant(
+          candidateFact,
+          rejected.candidateFactId,
+        ))
+      ) {
+        continue;
+      }
+      throw new DomainError(
+        "evidence_unsupported",
+        "Rejected evidence identity cannot be accepted again without a genuinely new source or linked user correction.",
+        false,
+        { rejectedEvidenceId: rejected.id },
+      );
+    }
+  }
+
+  private async isUserCorrectionDescendant(
+    candidateFact: ProfileFact | null,
+    rejectedFactId: EntityId | null,
+  ): Promise<boolean> {
+    if (candidateFact === null || rejectedFactId === null) return false;
+    let cursor = candidateFact;
+    let includesUserCorrection = false;
+    const seen = new Set<EntityId>();
+    while (cursor.supersedesFactId !== null && !seen.has(cursor.id)) {
+      seen.add(cursor.id);
+      includesUserCorrection ||=
+        cursor.proposedBy === "user" && cursor.confirmedByUserAt !== null;
+      if (cursor.supersedesFactId === rejectedFactId) {
+        return includesUserCorrection;
+      }
+      cursor = await this.repository.get(
+        "profileFact",
+        cursor.supersedesFactId,
+      );
+    }
+    return false;
   }
 
   public async createRubric(
@@ -920,6 +2043,11 @@ export class WorkbenchService {
             revision: 1,
             kind: "evaluation",
             inputIdentity: opportunity.id,
+            inputRevision: opportunity.revision,
+            inputDigest: createHash("sha256")
+              .update(canonicalJson(opportunity))
+              .digest("hex") as Digest,
+            resourceLimits: {},
             requestedCapabilities: [],
             dshSessionId: null,
             parentOperationId: null,
@@ -1192,7 +2320,32 @@ export class WorkbenchService {
       "invalid_request",
       "Requested capabilities are invalid.",
     );
-    await this.repository.get("opportunity", input.inputIdentity);
+    let inputRevision: number;
+    let inputDigest: Digest;
+    if (input.kind === "job_discovery") {
+      const searchProfile = await this.repository.get(
+        "searchProfile",
+        input.inputIdentity,
+      );
+      assertDomain(
+        searchProfile.active,
+        "invalid_transition",
+        "Job discovery requires active search criteria.",
+      );
+      inputRevision = searchProfile.revision;
+      inputDigest = createHash("sha256")
+        .update(canonicalJson(searchProfile))
+        .digest("hex") as Digest;
+    } else {
+      const opportunity = await this.repository.get(
+        "opportunity",
+        input.inputIdentity,
+      );
+      inputRevision = opportunity.revision;
+      inputDigest = createHash("sha256")
+        .update(canonicalJson(opportunity))
+        .digest("hex") as Digest;
+    }
     const parentOperation =
       input.parentOperationId === undefined
         ? null
@@ -1228,6 +2381,16 @@ export class WorkbenchService {
       revision: 1,
       kind: input.kind,
       inputIdentity: input.inputIdentity,
+      inputRevision,
+      inputDigest,
+      resourceLimits:
+        input.kind === "job_discovery"
+          ? {
+              maximumLeads: MAX_DISCOVERY_LEADS_PER_OPERATION,
+              maximumLeadsPerHost: MAX_DISCOVERY_LEADS_PER_HOST,
+              maximumSourceBytes: MAX_DISCOVERY_BYTES_PER_OPERATION,
+            }
+          : {},
       requestedCapabilities: [...input.requestedCapabilities],
       dshSessionId: input.dshSessionId,
       parentOperationId: input.parentOperationId ?? null,
@@ -1264,6 +2427,9 @@ export class WorkbenchService {
           {
             route: operation.route,
             dshSessionId: operation.dshSessionId,
+            inputRevision: operation.inputRevision,
+            inputDigest: operation.inputDigest,
+            resourceLimits: operation.resourceLimits,
             provider: input.provider,
             model: input.model,
             ...(input.reasoningEffort === undefined
@@ -1384,6 +2550,89 @@ export class WorkbenchService {
     });
   }
 
+  public async reconcileInterruptedOperations(
+    context: CommandContext,
+  ): Promise<readonly Operation[]> {
+    assertDomain(
+      context.actor === "system",
+      "approval_denied",
+      "Only backend startup may reconcile interrupted operations.",
+    );
+    const recoverable = (
+      await this.repository.list("operation", this.workspaceId)
+    )
+      .filter((operation) =>
+        ["queued", "running", "waiting_for_user"].includes(operation.state),
+      )
+      .sort((left, right) => left.id.localeCompare(right.id));
+    if (recoverable.length === 0) return [];
+
+    for (const operation of recoverable) {
+      requireOperationTransition(operation.state, "indeterminate");
+    }
+    const recoveredAt = this.clock.now();
+    const recoveries = recoverable.map((original) => ({
+      original,
+      terminal: updated(original, recoveredAt, {
+        state: "indeterminate" as const,
+        lastActivityAt: recoveredAt,
+        terminalAt: recoveredAt,
+        terminalCategory: RESTART_RECOVERY_CATEGORY,
+        terminalMessage: RESTART_RECOVERY_MESSAGE,
+      }),
+    }));
+    const recoveryIdentity = createHash("sha256")
+      .update(
+        canonicalJson(
+          recoverable.map(({ id, revision, state }) => ({
+            id,
+            revision,
+            state,
+          })),
+        ),
+      )
+      .digest("hex");
+    const recoveryContext: CommandContext = {
+      ...context,
+      idempotencyKey: `startup-recovery:${recoveryIdentity}`,
+    };
+    return this.repository.commit({
+      workspaceId: this.workspaceId,
+      context: recoveryContext,
+      command: {
+        kind: "operation.reconcile_after_restart",
+        operations: recoverable.map(({ id, revision, state }) => ({
+          id,
+          revision,
+          state,
+        })),
+        replayed: false,
+      },
+      mutations: recoveries.map(({ original, terminal }): Mutation => ({
+        action: "update",
+        kind: "operation",
+        entity: terminal,
+        expectedRevision: original.revision,
+      })),
+      events: recoveries.map(({ original, terminal }) =>
+        event(
+          { ...recoveryContext, operationId: terminal.id },
+          recoveredAt,
+          "operation.terminal",
+          terminal.id,
+          terminal.revision,
+          {
+            state: terminal.state,
+            category: RESTART_RECOVERY_CATEGORY,
+            previousState: original.state,
+            replayed: false,
+          },
+        ),
+      ),
+      result: recoveries.map(({ terminal }) => terminal),
+    });
+  }
+
   public async terminateOperation(
     operationId: EntityId,
     input: TerminalOperationInput,
@@ -1412,6 +2661,21 @@ export class WorkbenchService {
       "invalid_request",
       "Operation terminal payload exceeds the supported bound.",
     );
+    if (operation.kind === "job_discovery") {
+      for (const resultId of input.resultIds) {
+        const lead = await this.repository.get("discoveryLead", resultId);
+        assertDomain(
+          lead.operationId === operation.id,
+          "invalid_request",
+          "A discovery terminal may reference only leads from this operation.",
+        );
+      }
+      assertDomain(
+        input.artifactIds.length === 0,
+        "invalid_request",
+        "Job discovery does not produce artifacts.",
+      );
+    }
     const now = this.clock.now();
     const terminal = updated(operation, now, {
       state: input.state,
@@ -2026,6 +3290,24 @@ export class WorkbenchService {
       "invalid_transition",
       "Comparison inputs must be current completed evaluations.",
     );
+    const operations: (Operation | null)[] = [];
+    for (const evaluation of evaluations) {
+      operations.push(
+        evaluation.operationId === null
+          ? null
+          : await this.repository.get("operation", evaluation.operationId),
+      );
+    }
+    assertDomain(
+      operations.every(
+        (operation) =>
+          operation !== null &&
+          operation.route !== "deterministic" &&
+          operation.dshSessionId !== null,
+      ),
+      "invalid_transition",
+      "Comparison inputs must come from DSH semantic evaluations; local evidence demonstrations are not fit recommendations.",
+    );
     const keys = evaluations[0]?.dimensionScores
       .map((score) => score.dimensionKey)
       .sort();
@@ -2174,21 +3456,394 @@ export class WorkbenchService {
     });
   }
 
+  public async listApprovals(): Promise<Approval[]> {
+    return this.repository.list("approval", this.workspaceId);
+  }
+
+  public async requestApproval(
+    input: RequestApprovalInput,
+    context: CommandContext,
+  ): Promise<Approval> {
+    assertDomain(
+      context.actor === "browser" || context.actor === "user",
+      "approval_required",
+      "A direct user interaction is required to request approval.",
+    );
+    const expiresInSeconds = input.expiresInSeconds ?? 300;
+    assertDomain(
+      Number.isInteger(expiresInSeconds) &&
+        expiresInSeconds >= 1 &&
+        expiresInSeconds <= 3_600,
+      "invalid_request",
+      "Approval expiry must be between 1 and 3600 seconds.",
+    );
+
+    let summary: string;
+    let effectDescription: string;
+    let effectDetails: Readonly<Record<string, unknown>>;
+    if (input.effectKind === "comparison.accept") {
+      assertDomain(
+        input.applicationTransition === undefined,
+        "invalid_request",
+        "Comparison approval cannot include application transition details.",
+      );
+      const comparison = await this.repository.get(
+        "comparison",
+        input.targetId,
+      );
+      assertDomain(
+        comparison.revision === input.expectedRevision,
+        "revision_conflict",
+        "Comparison revision changed before approval was requested.",
+      );
+      assertDomain(
+        comparison.state === "proposed",
+        "invalid_transition",
+        "Only a proposed comparison can be submitted for approval.",
+      );
+      summary = "Accept the proposed comparison";
+      effectDescription = `Accept comparison ${comparison.id} at revision ${String(comparison.revision)} using policy ${comparison.policyVersion}.`;
+      effectDetails = {};
+    } else if (input.effectKind === "artifact.review") {
+      assertDomain(
+        input.applicationTransition === undefined,
+        "invalid_request",
+        "Artifact approval cannot include application transition details.",
+      );
+      const artifact = await this.repository.get("artifact", input.targetId);
+      assertDomain(
+        artifact.revision === input.expectedRevision,
+        "revision_conflict",
+        "Artifact revision changed before approval was requested.",
+      );
+      assertDomain(
+        artifact.state === "staged" && artifact.kind.startsWith("draft_"),
+        "invalid_transition",
+        "Only a staged candidate draft can be submitted for approval.",
+      );
+      summary = "Review and seal the candidate artifact";
+      effectDescription = `Seal ${artifact.kind} artifact ${artifact.id} at revision ${String(artifact.revision)} with content digest ${artifact.contentDigest}.`;
+      effectDetails = {};
+    } else {
+      const requested = input.applicationTransition;
+      assertDomain(
+        requested !== undefined,
+        "invalid_request",
+        "Application transition approval requires the exact displayed transition.",
+      );
+      const application = await this.repository.get(
+        "application",
+        input.targetId,
+      );
+      assertDomain(
+        application.revision === input.expectedRevision,
+        "revision_conflict",
+        "Application revision changed before approval was requested.",
+      );
+      assertDomain(
+        /^\d{4}-\d{2}-\d{2}$/u.test(requested.effectiveDate),
+        "invalid_request",
+        "Application effective date must use YYYY-MM-DD.",
+      );
+      assertDomain(
+        requested.note === undefined || requested.note.length <= 2_000,
+        "invalid_request",
+        "Application note exceeds the supported limit.",
+      );
+      requireApplicationTransition(application.state, requested.state);
+      const trimmedNote = requested.note?.trim();
+      const normalizedNote =
+        trimmedNote === undefined || trimmedNote.length === 0
+          ? null
+          : trimmedNote;
+      summary = `Move application from ${application.state} to ${requested.state}`;
+      effectDescription = `Transition application ${application.id} at revision ${String(application.revision)} to ${requested.state}, effective ${requested.effectiveDate}, with note ${normalizedNote === null ? "(none)" : JSON.stringify(normalizedNote)}.`;
+      effectDetails = {
+        state: requested.state,
+        effectiveDate: requested.effectiveDate,
+        note: normalizedNote,
+      };
+    }
+
+    const now = this.clock.now();
+    const approval: Approval = {
+      id: this.ids.entity("approval"),
+      workspaceId: this.workspaceId,
+      createdAt: now,
+      updatedAt: now,
+      revision: 1,
+      commandId: this.ids.entity("command"),
+      effectKind: input.effectKind,
+      targetId: input.targetId,
+      effectDigest: approvalEffectDigest(
+        input.effectKind,
+        input.targetId,
+        input.expectedRevision,
+        effectDetails,
+      ),
+      summary,
+      effectDescription,
+      expectedRevisions: { [input.targetId]: input.expectedRevision },
+      state: "pending",
+      expiresAt: new Date(
+        Date.parse(now) + expiresInSeconds * 1_000,
+      ).toISOString() as UtcTimestamp,
+      approvingInteractionId: null,
+    };
+    return this.repository.commit({
+      workspaceId: this.workspaceId,
+      context,
+      command: { kind: "approval.request", input },
+      mutations: [{ action: "insert", kind: "approval", entity: approval }],
+      events: [
+        event(context, now, "approval.requested", approval.id, 1, {
+          effectKind: approval.effectKind,
+          targetId: approval.targetId,
+          effectDigest: approval.effectDigest,
+          expectedRevisions: approval.expectedRevisions,
+          expiresAt: approval.expiresAt,
+        }),
+      ],
+      result: approval,
+    });
+  }
+
+  public async decideApproval(
+    approvalId: EntityId,
+    input: DecideApprovalInput,
+    context: CommandContext,
+  ): Promise<Approval> {
+    assertDomain(
+      context.actor === "browser" || context.actor === "user",
+      "approval_required",
+      "A direct user interaction is required to decide approval.",
+    );
+    assertDomain(
+      /^[A-Za-z0-9_.:-]{1,200}$/u.test(input.interactionId),
+      "invalid_request",
+      "Approval interaction identity is invalid.",
+    );
+    const approval = await this.repository.get("approval", approvalId);
+    if (approval.state === "denied") {
+      throw new DomainError("approval_denied", "The approval was denied.");
+    }
+    if (
+      this.approvalExpired(approval) &&
+      (approval.state === "pending" || approval.state === "approved")
+    ) {
+      await this.expireApproval(approval, context);
+      throw new DomainError(
+        "approval_stale",
+        "The approval expired before it was decided.",
+      );
+    }
+    assertDomain(
+      approval.state === "pending",
+      "approval_stale",
+      "The approval can no longer be decided.",
+    );
+    assertDomain(
+      approval.revision === input.expectedRevision,
+      "approval_stale",
+      "The approval revision changed before the decision.",
+    );
+    requireApprovalTransition(approval.state, input.decision);
+    const now = this.clock.now();
+    const decided = updated(approval, now, {
+      state: input.decision,
+      approvingInteractionId:
+        input.decision === "approved" ? input.interactionId : null,
+    });
+    return this.repository.commit({
+      workspaceId: this.workspaceId,
+      context,
+      command: {
+        kind: `approval.${input.decision}`,
+        approvalId,
+        expectedRevision: input.expectedRevision,
+        interactionId: input.interactionId,
+      },
+      mutations: [
+        {
+          action: "update",
+          kind: "approval",
+          entity: decided,
+          expectedRevision: approval.revision,
+        },
+      ],
+      events: [
+        event(
+          context,
+          now,
+          `approval.${input.decision}`,
+          approval.id,
+          decided.revision,
+          {
+            effectKind: approval.effectKind,
+            targetId: approval.targetId,
+            effectDigest: approval.effectDigest,
+            interactionId: input.interactionId,
+          },
+        ),
+      ],
+      result: decided,
+    });
+  }
+
+  private approvalExpired(approval: Approval): boolean {
+    return Date.parse(approval.expiresAt) <= Date.parse(this.clock.now());
+  }
+
+  private async expireApproval(
+    approval: Approval,
+    context: CommandContext,
+  ): Promise<Approval> {
+    requireApprovalTransition(approval.state, "expired");
+    const now = this.clock.now();
+    const expired = updated(approval, now, { state: "expired" as const });
+    try {
+      return await this.repository.commit({
+        workspaceId: this.workspaceId,
+        context: {
+          ...context,
+          commandId: this.ids.entity("command"),
+          idempotencyKey: `${context.idempotencyKey}:expire:${approval.id}:${String(approval.revision)}`,
+        },
+        command: {
+          kind: "approval.expire",
+          approvalId: approval.id,
+          expectedRevision: approval.revision,
+        },
+        mutations: [
+          {
+            action: "update",
+            kind: "approval",
+            entity: expired,
+            expectedRevision: approval.revision,
+          },
+        ],
+        events: [
+          event(
+            context,
+            now,
+            "approval.expired",
+            approval.id,
+            expired.revision,
+            {
+              effectKind: approval.effectKind,
+              targetId: approval.targetId,
+              effectDigest: approval.effectDigest,
+            },
+          ),
+        ],
+        result: expired,
+      });
+    } catch (error: unknown) {
+      if (error instanceof DomainError && error.code === "revision_conflict") {
+        throw new DomainError(
+          "approval_stale",
+          "The approval changed while expiry was recorded.",
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async requireApprovedEffect(
+    effectKind: ApprovalEffectKind,
+    targetId: EntityId,
+    targetRevision: number,
+    consumption: ApprovalConsumption,
+    context: CommandContext,
+    effectDetails: Readonly<Record<string, unknown>> = {},
+  ): Promise<Approval> {
+    assertDomain(
+      consumption.approvalId !== undefined &&
+        consumption.expectedApprovalRevision !== undefined,
+      "approval_required",
+      "An approved, revision-bound user approval is required.",
+    );
+    let approval: Approval;
+    try {
+      approval = await this.repository.get("approval", consumption.approvalId);
+    } catch (error: unknown) {
+      if (error instanceof DomainError && error.code === "entity_not_found") {
+        throw new DomainError(
+          "approval_stale",
+          "The supplied approval does not exist.",
+        );
+      }
+      throw error;
+    }
+    if (approval.state === "denied") {
+      throw new DomainError("approval_denied", "The approval was denied.");
+    }
+    if (this.approvalExpired(approval)) {
+      if (approval.state === "pending" || approval.state === "approved") {
+        await this.expireApproval(approval, context);
+      }
+      throw new DomainError("approval_stale", "The approval has expired.");
+    }
+    if (approval.state === "pending") {
+      throw new DomainError(
+        "approval_required",
+        "The approval is still pending a user decision.",
+      );
+    }
+    assertDomain(
+      approval.state === "approved",
+      "approval_stale",
+      "The approval was already consumed or is no longer usable.",
+    );
+    assertDomain(
+      approval.revision === consumption.expectedApprovalRevision,
+      "approval_stale",
+      "The approval revision changed before consumption.",
+    );
+    const expectedEntries = Object.entries(approval.expectedRevisions);
+    assertDomain(
+      approval.effectKind === effectKind &&
+        approval.targetId === targetId &&
+        expectedEntries.length === 1 &&
+        expectedEntries[0]?.[0] === targetId &&
+        expectedEntries[0][1] === targetRevision &&
+        approval.effectDigest ===
+          approvalEffectDigest(
+            effectKind,
+            targetId,
+            targetRevision,
+            effectDetails,
+          ) &&
+        approval.approvingInteractionId !== null,
+      "approval_stale",
+      "The approval is not bound to this exact effect and revision.",
+    );
+    return approval;
+  }
+
   public async acceptComparison(
     comparisonId: EntityId,
     expectedRevision: number,
     context: CommandContext,
+    consumption: ApprovalConsumption = {},
   ): Promise<Comparison> {
     assertDomain(
       context.actor === "browser" || context.actor === "user",
       "approval_required",
       "A user interaction is required to accept a comparison.",
     );
+    const approval = await this.requireApprovedEffect(
+      "comparison.accept",
+      comparisonId,
+      expectedRevision,
+      consumption,
+      context,
+    );
     const comparison = await this.repository.get("comparison", comparisonId);
     assertDomain(
       comparison.revision === expectedRevision,
-      "revision_conflict",
-      "Comparison revision changed before acceptance.",
+      "approval_stale",
+      "The approved comparison revision is no longer current.",
     );
     assertDomain(
       comparison.state === "proposed",
@@ -2204,24 +3859,38 @@ export class WorkbenchService {
           current.evaluationRevision ===
           comparison.evaluationInputs[index]?.evaluationRevision,
       ),
-      "revision_conflict",
-      "A comparison input changed before acceptance.",
+      "approval_stale",
+      "A comparison input changed after approval.",
     );
     const now = this.clock.now();
     const accepted = updated(comparison, now, {
       state: "accepted" as const,
       acceptedAt: now,
     });
+    requireApprovalTransition(approval.state, "consumed");
+    const consumed = updated(approval, now, { state: "consumed" as const });
     return this.repository.commit({
       workspaceId: this.workspaceId,
-      context,
-      command: { kind: "comparison.accept", comparisonId, expectedRevision },
+      context: { ...context, commandId: approval.commandId },
+      command: {
+        kind: "comparison.accept",
+        comparisonId,
+        expectedRevision,
+        approvalId: approval.id,
+        expectedApprovalRevision: approval.revision,
+      },
       mutations: [
         {
           action: "update",
           kind: "comparison",
           entity: accepted,
           expectedRevision,
+        },
+        {
+          action: "update",
+          kind: "approval",
+          entity: consumed,
+          expectedRevision: approval.revision,
         },
       ],
       events: [
@@ -2232,6 +3901,19 @@ export class WorkbenchService {
           comparisonId,
           accepted.revision,
           { operationId: comparison.operationId },
+        ),
+        event(
+          context,
+          now,
+          "approval.consumed",
+          approval.id,
+          consumed.revision,
+          {
+            effectKind: approval.effectKind,
+            targetId: approval.targetId,
+            targetRevision: expectedRevision,
+            effectDigest: approval.effectDigest,
+          },
         ),
       ],
       result: accepted,
@@ -2302,13 +3984,8 @@ export class WorkbenchService {
     applicationId: EntityId,
     input: TransitionApplicationInput,
     context: CommandContext,
+    consumption: ApprovalConsumption = {},
   ): Promise<Application> {
-    const application = await this.repository.get("application", applicationId);
-    assertDomain(
-      application.revision === input.expectedRevision,
-      "revision_conflict",
-      "Application revision is stale.",
-    );
     assertDomain(
       /^\d{4}-\d{2}-\d{2}$/u.test(input.effectiveDate),
       "invalid_request",
@@ -2319,42 +3996,114 @@ export class WorkbenchService {
       "invalid_request",
       "Application note exceeds the supported limit.",
     );
+    const trimmedNote = input.note?.trim();
+    const normalizedNote =
+      trimmedNote === undefined || trimmedNote.length === 0
+        ? null
+        : trimmedNote;
+    const approvalRequired =
+      context.actor !== "browser" && context.actor !== "user";
+    const approvalSupplied =
+      consumption.approvalId !== undefined ||
+      consumption.expectedApprovalRevision !== undefined;
+    const approval =
+      approvalRequired || approvalSupplied
+        ? await this.requireApprovedEffect(
+            "application.transition",
+            applicationId,
+            input.expectedRevision,
+            consumption,
+            context,
+            {
+              state: input.state,
+              effectiveDate: input.effectiveDate,
+              note: normalizedNote,
+            },
+          )
+        : null;
+    const application = await this.repository.get("application", applicationId);
+    assertDomain(
+      application.revision === input.expectedRevision,
+      approval === null ? "revision_conflict" : "approval_stale",
+      approval === null
+        ? "Application revision is stale."
+        : "The approved application revision is no longer current.",
+    );
     requireApplicationTransition(application.state, input.state);
     const now = this.clock.now();
-    const note = input.note?.trim();
     const transitioned = updated(application, now, {
       state: input.state,
       stateRevision: application.stateRevision + 1,
       effectiveDate: input.effectiveDate,
-      note: note === undefined || note.length === 0 ? null : note,
+      note: normalizedNote,
     });
-    return this.repository.commit({
-      workspaceId: this.workspaceId,
-      context,
-      command: { kind: "application.transition", applicationId, input },
-      mutations: [
+    const mutations: Mutation[] = [
+      {
+        action: "update",
+        kind: "application",
+        entity: transitioned,
+        expectedRevision: input.expectedRevision,
+      },
+    ];
+    const events: EventToAppend[] = [
+      event(
+        context,
+        now,
+        "application.transitioned",
+        application.id,
+        transitioned.revision,
         {
-          action: "update",
-          kind: "application",
-          entity: transitioned,
-          expectedRevision: input.expectedRevision,
+          from: application.state,
+          to: transitioned.state,
+          stateRevision: transitioned.stateRevision,
+          effectiveDate: transitioned.effectiveDate,
         },
-      ],
-      events: [
+      ),
+    ];
+    if (approval !== null) {
+      requireApprovalTransition(approval.state, "consumed");
+      const consumed = updated(approval, now, { state: "consumed" as const });
+      mutations.push({
+        action: "update",
+        kind: "approval",
+        entity: consumed,
+        expectedRevision: approval.revision,
+      });
+      events.push(
         event(
           context,
           now,
-          "application.transitioned",
-          application.id,
-          transitioned.revision,
+          "approval.consumed",
+          approval.id,
+          consumed.revision,
           {
-            from: application.state,
-            to: transitioned.state,
-            stateRevision: transitioned.stateRevision,
-            effectiveDate: transitioned.effectiveDate,
+            effectKind: approval.effectKind,
+            targetId: approval.targetId,
+            targetRevision: input.expectedRevision,
+            effectDigest: approval.effectDigest,
           },
         ),
-      ],
+      );
+    }
+    return this.repository.commit({
+      workspaceId: this.workspaceId,
+      context:
+        approval === null
+          ? context
+          : { ...context, commandId: approval.commandId },
+      command: {
+        kind: "application.transition",
+        applicationId,
+        input,
+        ...(approval === null
+          ? {}
+          : {
+              approvalId: approval.id,
+              expectedApprovalRevision: approval.revision,
+            }),
+      },
+      mutations,
+      events,
       result: transitioned,
     });
   }
@@ -2555,30 +4304,57 @@ export class WorkbenchService {
     artifactId: EntityId,
     expectedRevision: number,
     context: CommandContext,
+    consumption: ApprovalConsumption = {},
   ): Promise<Artifact> {
+    assertDomain(
+      context.actor === "browser" || context.actor === "user",
+      "approval_required",
+      "A user interaction is required to review a candidate artifact.",
+    );
+    const approval = await this.requireApprovedEffect(
+      "artifact.review",
+      artifactId,
+      expectedRevision,
+      consumption,
+      context,
+    );
     const artifact = await this.repository.get("artifact", artifactId);
+    assertDomain(
+      artifact.revision === expectedRevision,
+      "approval_stale",
+      "The approved artifact revision is no longer current.",
+    );
     assertDomain(
       artifact.state === "staged" && artifact.kind.startsWith("draft_"),
       "invalid_transition",
       "Only a staged candidate draft can be marked reviewed.",
     );
-    assertDomain(
-      artifact.revision === expectedRevision,
-      "revision_conflict",
-      "Artifact revision is stale.",
-    );
     const now = this.clock.now();
     const reviewed = updated(artifact, now, { state: "sealed" as const });
+    requireApprovalTransition(approval.state, "consumed");
+    const consumed = updated(approval, now, { state: "consumed" as const });
     return this.repository.commit({
       workspaceId: this.workspaceId,
-      context,
-      command: { kind: "artifact.review", artifactId, expectedRevision },
+      context: { ...context, commandId: approval.commandId },
+      command: {
+        kind: "artifact.review",
+        artifactId,
+        expectedRevision,
+        approvalId: approval.id,
+        expectedApprovalRevision: approval.revision,
+      },
       mutations: [
         {
           action: "update",
           kind: "artifact",
           entity: reviewed,
           expectedRevision,
+        },
+        {
+          action: "update",
+          kind: "approval",
+          entity: consumed,
+          expectedRevision: approval.revision,
         },
       ],
       events: [
@@ -2592,6 +4368,19 @@ export class WorkbenchService {
             contentDigest: reviewed.contentDigest,
             factIds: reviewed.factIds,
             evidenceIds: reviewed.evidenceIds,
+          },
+        ),
+        event(
+          context,
+          now,
+          "approval.consumed",
+          approval.id,
+          consumed.revision,
+          {
+            effectKind: approval.effectKind,
+            targetId: approval.targetId,
+            targetRevision: expectedRevision,
+            effectDigest: approval.effectDigest,
           },
         ),
       ],
@@ -3023,11 +4812,11 @@ export class WorkbenchService {
         };
       });
     }
-    const normalizedBody = {
+    const normalizedBody = scrubCredentialBearingExportValue({
       schemaVersion: rawNormalized["schemaVersion"],
       records,
       events: rawNormalized["events"],
-    };
+    }) as Readonly<Record<string, unknown>>;
     const normalized = {
       ...normalizedBody,
       manifest: {

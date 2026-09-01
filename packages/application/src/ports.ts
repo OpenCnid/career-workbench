@@ -5,6 +5,7 @@ import type {
   Artifact,
   CommandContext,
   Comparison,
+  DiscoveryLead,
   Digest,
   DomainEvent,
   EntityId,
@@ -15,6 +16,7 @@ import type {
   Operation,
   ProfileFact,
   Rubric,
+  SearchProfile,
   SourceDocument,
   UtcTimestamp,
   Workspace,
@@ -25,6 +27,8 @@ export interface EntityByKind {
   workspace: Workspace;
   source: SourceDocument;
   profileFact: ProfileFact;
+  searchProfile: SearchProfile;
+  discoveryLead: DiscoveryLead;
   opportunity: Opportunity;
   evidence: EvidenceItem;
   rubric: Rubric;
@@ -82,6 +86,15 @@ export interface WorkspaceRepository {
     workspaceId: WorkspaceId,
   ): Promise<EntityByKind[Kind][]>;
   eventsAfter(
+    workspaceId: WorkspaceId,
+    sequence: number,
+    limit?: number,
+  ): Promise<DomainEvent[]>;
+  recentEvents(
+    workspaceId: WorkspaceId,
+    limit?: number,
+  ): Promise<DomainEvent[]>;
+  eventsBefore(
     workspaceId: WorkspaceId,
     sequence: number,
     limit?: number,

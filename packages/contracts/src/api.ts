@@ -1,5 +1,5 @@
 import { Type, type Static } from "@sinclair/typebox";
-import { RevisionSchema } from "./schemas.js";
+import { ErrorCodeSchema, RevisionSchema } from "./schemas.js";
 
 const BoundedText = (maximum = 2000) =>
   Type.String({ minLength: 1, maxLength: maximum });
@@ -24,6 +24,12 @@ export const SourceLocatorSchema = Type.Object(
 export const CreateWorkspaceBodySchema = Type.Object(
   {
     displayName: BoundedText(120),
+    candidateName: Type.Optional(BoundedText(300)),
+    targetRole: Type.Optional(BoundedText(500)),
+    targetPriorities: Type.Optional(BoundedText(2000)),
+    locationPreference: Type.Optional(BoundedText(300)),
+    deferTargetPreferences: Type.Optional(Type.Boolean()),
+    rubricPreset: Type.Optional(Type.Literal("balanced_fit")),
     locale: Type.String({
       pattern: "^[a-z]{2,3}(?:-[A-Z]{2})?$",
       maxLength: 10,
@@ -79,6 +85,19 @@ export const ProposeProfileFactBodySchema = Type.Object(
   { $id: "ProposeProfileFactBody", additionalProperties: false },
 );
 
+export const AddCareerHistoryEntryBodySchema = Type.Object(
+  {
+    personName: BoundedText(300),
+    roleTitle: BoundedText(300),
+    organization: BoundedText(300),
+    dateRange: BoundedText(200),
+    achievements: Type.Array(BoundedText(2_000), {
+      maxItems: 8,
+    }),
+  },
+  { $id: "AddCareerHistoryEntryBody", additionalProperties: false },
+);
+
 export const ConfirmProfileFactBodySchema = Type.Object(
   {
     expectedRevision: RevisionSchema,
@@ -125,6 +144,99 @@ export const CaptureOpportunityBodySchema = Type.Object(
     requisitionId: OptionalText(200),
   },
   { $id: "CaptureOpportunityBody", additionalProperties: false },
+);
+
+const SearchSenioritySchema = Type.Union(
+  [
+    "entry",
+    "mid",
+    "senior",
+    "staff",
+    "principal",
+    "lead",
+    "manager",
+    "director",
+    "flexible",
+  ].map((value) => Type.Literal(value)),
+);
+
+const WorkArrangementSchema = Type.Union(
+  ["remote", "hybrid", "onsite"].map((value) => Type.Literal(value)),
+);
+
+export const UpsertSearchProfileBodySchema = Type.Object(
+  {
+    expectedRevision: Type.Optional(RevisionSchema),
+    targetRoles: Type.Array(BoundedText(160), {
+      minItems: 1,
+      maxItems: 12,
+      uniqueItems: true,
+    }),
+    seniority: Type.Array(SearchSenioritySchema, {
+      minItems: 1,
+      maxItems: 9,
+      uniqueItems: true,
+    }),
+    locations: Type.Array(BoundedText(160), {
+      maxItems: 12,
+      uniqueItems: true,
+    }),
+    workArrangements: Type.Array(WorkArrangementSchema, {
+      minItems: 1,
+      maxItems: 3,
+      uniqueItems: true,
+    }),
+    minimumCompensation: Type.Optional(
+      Type.Integer({ minimum: 0, maximum: 10_000_000 }),
+    ),
+    compensationCurrency: Type.Optional(Type.String({ pattern: "^[A-Z]{3}$" })),
+    aiFocus: OptionalText(1_000),
+    priorities: Type.Array(BoundedText(300), {
+      maxItems: 12,
+      uniqueItems: true,
+    }),
+    exclusions: Type.Array(BoundedText(300), {
+      maxItems: 12,
+      uniqueItems: true,
+    }),
+    active: Type.Boolean(),
+  },
+  { $id: "UpsertSearchProfileBody", additionalProperties: false },
+);
+
+export const RecordDiscoveryLeadBodySchema = Type.Object(
+  {
+    organization: BoundedText(300),
+    roleTitle: BoundedText(300),
+    originalUrl: Type.String({
+      minLength: 1,
+      maxLength: 2048,
+      pattern: "^https?://",
+    }),
+    postingText: BoundedText(1_048_576),
+    location: OptionalText(300),
+    workArrangement: OptionalText(300),
+    advertisedCompensation: OptionalText(300),
+    requisitionId: OptionalText(300),
+    whyFound: Type.Array(BoundedText(500), { maxItems: 8 }),
+    matchedCriteria: Type.Array(BoundedText(300), { maxItems: 12 }),
+    gaps: Type.Array(BoundedText(500), { maxItems: 12 }),
+    risks: Type.Array(BoundedText(500), { maxItems: 12 }),
+  },
+  { $id: "RecordDiscoveryLeadBody", additionalProperties: false },
+);
+
+export const TriageDiscoveryLeadBodySchema = Type.Object(
+  {
+    expectedRevision: RevisionSchema,
+    decision: Type.Union([
+      Type.Literal("new"),
+      Type.Literal("shortlisted"),
+      Type.Literal("dismissed"),
+    ]),
+    note: OptionalText(1_000),
+  },
+  { $id: "TriageDiscoveryLeadBody", additionalProperties: false },
 );
 
 export const ProposeEvidenceBodySchema = Type.Object(
@@ -373,8 +485,70 @@ export const ProposeComparisonBodySchema = Type.Object(
 );
 
 export const AcceptComparisonBodySchema = Type.Object(
-  { expectedRevision: RevisionSchema },
+  {
+    expectedRevision: RevisionSchema,
+    approvalId: Type.Optional(EmbeddedEntityIdSchema),
+    expectedApprovalRevision: Type.Optional(RevisionSchema),
+  },
   { $id: "AcceptComparisonBody", additionalProperties: false },
+);
+
+export const RequestApprovalBodySchema = Type.Object(
+  {
+    effectKind: Type.Union([
+      Type.Literal("comparison.accept"),
+      Type.Literal("artifact.review"),
+      Type.Literal("application.transition"),
+    ]),
+    targetId: EmbeddedEntityIdSchema,
+    expectedRevision: RevisionSchema,
+    expiresInSeconds: Type.Optional(
+      Type.Integer({ minimum: 1, maximum: 3_600 }),
+    ),
+    applicationTransition: Type.Optional(
+      Type.Object(
+        {
+          state: Type.Union(
+            [
+              "considering",
+              "preparing",
+              "ready_for_review",
+              "applied",
+              "responded",
+              "interview",
+              "offer",
+              "hired",
+              "rejected",
+              "withdrawn",
+              "closed",
+            ].map((value) => Type.Literal(value)),
+          ),
+          effectiveDate: Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+          note: OptionalText(2_000),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+  },
+  { $id: "RequestApprovalBody", additionalProperties: false },
+);
+
+export const DecideApprovalBodySchema = Type.Object(
+  {
+    expectedRevision: RevisionSchema,
+    decision: Type.Union([Type.Literal("approved"), Type.Literal("denied")]),
+  },
+  { $id: "DecideApprovalBody", additionalProperties: false },
+);
+
+export const ExportWorkspaceBodySchema = Type.Object(
+  {
+    selectedArtifactIds: Type.Array(EmbeddedEntityIdSchema, {
+      maxItems: 64,
+      uniqueItems: true,
+    }),
+  },
+  { $id: "ExportWorkspaceBody", additionalProperties: false },
 );
 
 export const PreviewCareerOpsImportBodySchema = Type.Object(
@@ -388,6 +562,12 @@ export const ApplyCareerOpsImportBodySchema = Type.Object(
   {
     sourceFingerprint: Type.String({ pattern: "^[0-9a-f]{64}$" }),
     confirm: Type.Literal(true),
+    selectedMappingIds: Type.Optional(
+      Type.Array(BoundedText(500), {
+        maxItems: 512,
+        uniqueItems: true,
+      }),
+    ),
   },
   { $id: "ApplyCareerOpsImportBody", additionalProperties: false },
 );
@@ -421,6 +601,8 @@ export const TransitionApplicationBodySchema = Type.Object(
     ),
     effectiveDate: Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
     note: OptionalText(2_000),
+    approvalId: Type.Optional(EmbeddedEntityIdSchema),
+    expectedApprovalRevision: Type.Optional(RevisionSchema),
   },
   { $id: "TransitionApplicationBody", additionalProperties: false },
 );
@@ -464,7 +646,11 @@ export const CreateCandidateArtifactBodySchema = Type.Object(
 );
 
 export const ReviewArtifactBodySchema = Type.Object(
-  { expectedRevision: RevisionSchema },
+  {
+    expectedRevision: RevisionSchema,
+    approvalId: Type.Optional(EmbeddedEntityIdSchema),
+    expectedApprovalRevision: Type.Optional(RevisionSchema),
+  },
   { $id: "ReviewArtifactBody", additionalProperties: false },
 );
 
@@ -478,11 +664,23 @@ export type CaptureSourceBody = Static<typeof CaptureSourceBodySchema>;
 export type ProposeProfileFactBody = Static<
   typeof ProposeProfileFactBodySchema
 >;
+export type AddCareerHistoryEntryBody = Static<
+  typeof AddCareerHistoryEntryBodySchema
+>;
 export type ConfirmProfileFactBody = Static<
   typeof ConfirmProfileFactBodySchema
 >;
 export type CaptureOpportunityBody = Static<
   typeof CaptureOpportunityBodySchema
+>;
+export type UpsertSearchProfileBody = Static<
+  typeof UpsertSearchProfileBodySchema
+>;
+export type RecordDiscoveryLeadBody = Static<
+  typeof RecordDiscoveryLeadBodySchema
+>;
+export type TriageDiscoveryLeadBody = Static<
+  typeof TriageDiscoveryLeadBodySchema
 >;
 export type ProposeEvidenceBody = Static<typeof ProposeEvidenceBodySchema>;
 export type DecideEvidenceBody = Static<typeof DecideEvidenceBodySchema>;
@@ -501,6 +699,9 @@ export type ComparisonProjectionBody = Static<
 >;
 export type ProposeComparisonBody = Static<typeof ProposeComparisonBodySchema>;
 export type AcceptComparisonBody = Static<typeof AcceptComparisonBodySchema>;
+export type RequestApprovalBody = Static<typeof RequestApprovalBodySchema>;
+export type DecideApprovalBody = Static<typeof DecideApprovalBodySchema>;
+export type ExportWorkspaceBody = Static<typeof ExportWorkspaceBodySchema>;
 export type PreviewCareerOpsImportBody = Static<
   typeof PreviewCareerOpsImportBodySchema
 >;
@@ -519,6 +720,27 @@ export type CreateCandidateArtifactBody = Static<
 >;
 export type ReviewArtifactBody = Static<typeof ReviewArtifactBodySchema>;
 
+export interface ApprovalView {
+  readonly id: string;
+  readonly revision: number;
+  readonly commandId: string;
+  readonly effectKind:
+    "comparison.accept" | "artifact.review" | "application.transition";
+  readonly targetId: string;
+  readonly effectDigest: string;
+  readonly summary: string;
+  readonly effectDescription: string;
+  readonly expectedRevisions: Readonly<Record<string, number>>;
+  readonly state: "pending" | "approved" | "denied" | "expired" | "consumed";
+  readonly expiresAt: string;
+  readonly approvingInteractionId: string | null;
+}
+
+export interface ApprovalListResponse {
+  readonly contractVersion: "v1";
+  readonly approvals: readonly ApprovalView[];
+}
+
 export interface WorkspaceView {
   readonly id: string;
   readonly displayName: string;
@@ -531,6 +753,7 @@ export interface WorkspaceView {
 export interface SourceView {
   readonly id: string;
   readonly revision: number;
+  readonly createdAt: string;
   readonly kind: string;
   readonly trustClass: string;
   readonly contentDigest: string;
@@ -559,9 +782,53 @@ export interface OpportunityView {
   readonly originalUrl: string | null;
   readonly location: string | null;
   readonly workArrangement: string | null;
+  readonly advertisedCompensation: string | null;
+  readonly requisitionId: string | null;
   readonly sourceStatus: string;
   readonly legitimacyStatus: string;
   readonly workflowState: string;
+}
+
+export interface SearchProfileView {
+  readonly id: string;
+  readonly revision: number;
+  readonly targetRoles: readonly string[];
+  readonly seniority: readonly string[];
+  readonly locations: readonly string[];
+  readonly workArrangements: readonly string[];
+  readonly minimumCompensation: number | null;
+  readonly compensationCurrency: string | null;
+  readonly aiFocus: string | null;
+  readonly priorities: readonly string[];
+  readonly exclusions: readonly string[];
+  readonly active: boolean;
+}
+
+export interface DiscoveryLeadView {
+  readonly id: string;
+  readonly revision: number;
+  readonly createdAt: string;
+  readonly sourceDocumentId: string;
+  readonly sourceContentDigest: string;
+  readonly searchProfileId: string;
+  readonly searchProfileRevision: number;
+  readonly searchCriteriaDigest: string;
+  readonly operationId: string;
+  readonly organization: string;
+  readonly roleTitle: string;
+  readonly originalUrl: string;
+  readonly normalizedUrl: string;
+  readonly location: string | null;
+  readonly workArrangement: string | null;
+  readonly advertisedCompensation: string | null;
+  readonly requisitionId: string | null;
+  readonly whyFound: readonly string[];
+  readonly matchedCriteria: readonly string[];
+  readonly gaps: readonly string[];
+  readonly risks: readonly string[];
+  readonly state: "new" | "shortlisted" | "dismissed";
+  readonly triageNote: string | null;
+  readonly resultOpportunityId: string | null;
 }
 
 export interface EvidenceView {
@@ -622,6 +889,9 @@ export interface OperationView {
   readonly state: string;
   readonly route: string;
   readonly inputIdentity: string | null;
+  readonly inputRevision: number | null;
+  readonly inputDigest: string | null;
+  readonly resourceLimits: Readonly<Record<string, number>>;
   readonly requestedCapabilities: readonly string[];
   readonly dshSessionId: string | null;
   readonly parentOperationId: string | null;
@@ -688,6 +958,8 @@ export interface SnapshotResponse {
   readonly workspace: WorkspaceView | null;
   readonly sources: readonly SourceView[];
   readonly profileFacts: readonly ProfileFactView[];
+  readonly searchProfiles: readonly SearchProfileView[];
+  readonly discoveryLeads: readonly DiscoveryLeadView[];
   readonly opportunities: readonly OpportunityView[];
   readonly evidence: readonly EvidenceView[];
   readonly rubrics: readonly Readonly<Record<string, unknown>>[];
@@ -700,23 +972,130 @@ export interface SnapshotResponse {
   readonly events: readonly DomainEventView[];
 }
 
-export interface DiagnosticsResponse {
-  readonly contractVersion: "v1";
-  readonly version: string;
-  readonly workspaceConfigured: boolean;
-  readonly schemaVersion: number;
-  readonly storage: string;
-  readonly journalMode: string;
-  readonly capabilities: Readonly<Record<string, boolean>>;
-  readonly security: Readonly<Record<string, boolean>>;
-}
+const CompatibilityStateSchema = Type.Union([
+  Type.Literal("ready"),
+  Type.Literal("mismatch"),
+]);
+
+const VersionCompatibilitySchema = Type.Object(
+  {
+    expected: BoundedText(100),
+    resolved: BoundedText(100),
+    state: CompatibilityStateSchema,
+  },
+  { additionalProperties: false },
+);
+
+const UpstreamCompatibilitySchema = Type.Object(
+  {
+    expected: Type.Object(
+      {
+        revision: Type.String({ pattern: "^[0-9a-f]{40}$" }),
+        tag: Type.Union([BoundedText(100), Type.Null()]),
+        version: BoundedText(100),
+      },
+      { additionalProperties: false },
+    ),
+    resolved: Type.Object(
+      {
+        revision: Type.String({ pattern: "^[0-9a-f]{40}$" }),
+        tag: Type.Union([BoundedText(100), Type.Null()]),
+        version: BoundedText(100),
+      },
+      { additionalProperties: false },
+    ),
+    state: CompatibilityStateSchema,
+  },
+  { additionalProperties: false },
+);
+
+const PatchCompatibilitySchema = Type.Object(
+  {
+    identity: Type.String({
+      minLength: 1,
+      maxLength: 100,
+      pattern: "^[0-9]{4}-[a-z0-9-]+\\.patch$",
+    }),
+    sha256: Type.String({ pattern: "^[0-9a-f]{64}$" }),
+    resolvedSha256: Type.String({ pattern: "^[0-9a-f]{64}$" }),
+    application: Type.Union([
+      Type.Literal("runtime_package"),
+      Type.Literal("bundle_host"),
+    ]),
+    state: CompatibilityStateSchema,
+  },
+  { additionalProperties: false },
+);
+
+export const DiagnosticsResponseSchema = Type.Object(
+  {
+    contractVersion: Type.Literal("v1"),
+    version: BoundedText(100),
+    workspaceConfigured: Type.Boolean(),
+    schemaVersion: Type.Integer({ minimum: 1 }),
+    storage: BoundedText(100),
+    journalMode: BoundedText(100),
+    capabilities: Type.Record(
+      Type.String({ minLength: 1, maxLength: 80 }),
+      Type.Boolean(),
+      { maxProperties: 32 },
+    ),
+    security: Type.Record(
+      Type.String({ minLength: 1, maxLength: 80 }),
+      Type.Boolean(),
+      { maxProperties: 32 },
+    ),
+    runtimeVersions: Type.Object(
+      {
+        node: VersionCompatibilitySchema,
+        pnpm: VersionCompatibilitySchema,
+        typescript: VersionCompatibilitySchema,
+        careerWorkbench: VersionCompatibilitySchema,
+      },
+      { additionalProperties: false },
+    ),
+    compatibility: Type.Object(
+      {
+        state: CompatibilityStateSchema,
+        mismatches: Type.Array(
+          Type.String({
+            minLength: 1,
+            maxLength: 160,
+            pattern: "^[A-Za-z0-9_.-]+$",
+          }),
+          { maxItems: 32, uniqueItems: true },
+        ),
+        deepSeekHarness: UpstreamCompatibilitySchema,
+        nativeRlm: UpstreamCompatibilitySchema,
+        careerOps: UpstreamCompatibilitySchema,
+        cordis: VersionCompatibilitySchema,
+        patches: Type.Array(PatchCompatibilitySchema, {
+          minItems: 4,
+          maxItems: 4,
+        }),
+      },
+      { additionalProperties: false },
+    ),
+    recentErrorCategories: Type.Array(ErrorCodeSchema, {
+      maxItems: 16,
+      uniqueItems: true,
+    }),
+  },
+  { $id: "DiagnosticsResponse", additionalProperties: false },
+);
+
+export type DiagnosticsResponse = Static<typeof DiagnosticsResponseSchema>;
 
 export const API_SCHEMAS = [
   CreateWorkspaceBodySchema,
   CaptureSourceBodySchema,
   ProposeProfileFactBodySchema,
+  AddCareerHistoryEntryBodySchema,
   ConfirmProfileFactBodySchema,
   CaptureOpportunityBodySchema,
+  UpsertSearchProfileBodySchema,
+  RecordDiscoveryLeadBodySchema,
+  TriageDiscoveryLeadBodySchema,
   ProposeEvidenceBodySchema,
   DecideEvidenceBodySchema,
   CreateRubricBodySchema,
@@ -724,6 +1103,9 @@ export const API_SCHEMAS = [
   ComparisonProjectionBodySchema,
   ProposeComparisonBodySchema,
   AcceptComparisonBodySchema,
+  RequestApprovalBodySchema,
+  DecideApprovalBodySchema,
+  ExportWorkspaceBodySchema,
   PreviewCareerOpsImportBodySchema,
   ApplyCareerOpsImportBodySchema,
   CreateApplicationBodySchema,
@@ -737,4 +1119,5 @@ export const API_SCHEMAS = [
   CancelOperationBodySchema,
   RequestChildFollowupBodySchema,
   CorrectFactBodySchema,
+  DiagnosticsResponseSchema,
 ] as const;

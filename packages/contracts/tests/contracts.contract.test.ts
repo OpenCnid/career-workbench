@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  AddCareerHistoryEntryBodySchema,
   CommandEnvelopeSchema,
+  CreateWorkspaceBodySchema,
   parseContract,
   parseJsonWithoutDuplicateKeys,
 } from "../src/index.js";
@@ -35,5 +37,47 @@ describe("public command contract", () => {
     expect(() =>
       parseJsonWithoutDuplicateKeys('{"payload":{},"payload":{}}'),
     ).toThrow(/duplicate/);
+  });
+
+  it("accepts only the closed guided career-history shape", () => {
+    const entry = {
+      personName: "Avery Example",
+      roleTitle: "Software Engineer",
+      organization: "Synthetic Systems",
+      dateRange: "2021 to 2024",
+      achievements: ["built TypeScript services"],
+    };
+    expect(
+      parseContract(AddCareerHistoryEntryBodySchema, JSON.stringify(entry)),
+    ).toEqual(entry);
+    expect(() =>
+      parseContract(
+        AddCareerHistoryEntryBodySchema,
+        JSON.stringify({ ...entry, autoVerify: true }),
+      ),
+    ).toThrow(/does not match/u);
+  });
+
+  it("accepts a closed guided workspace setup", () => {
+    const setup = {
+      displayName: "AI Engineering Search",
+      candidateName: "Morgan Example",
+      targetRole: "Senior Software Engineer focused on AI platforms",
+      targetPriorities: "Hands-on AI systems and strong engineering culture",
+      locationPreference: "Remote in the United States",
+      deferTargetPreferences: false,
+      rubricPreset: "balanced_fit",
+      locale: "en-US",
+      timezone: "America/Chicago",
+    } as const;
+    expect(
+      parseContract(CreateWorkspaceBodySchema, JSON.stringify(setup)),
+    ).toEqual(setup);
+    expect(() =>
+      parseContract(
+        CreateWorkspaceBodySchema,
+        JSON.stringify({ ...setup, rubricPreset: "model_decides" }),
+      ),
+    ).toThrow(/does not match/u);
   });
 });

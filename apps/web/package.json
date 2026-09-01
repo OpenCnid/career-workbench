@@ -4,6 +4,12 @@
   "private": true,
   "type": "module",
   "license": "MIT",
+  "exports": {
+    "./dist/*": "./dist/*"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "vite build",
     "dev": "vite",

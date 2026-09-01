@@ -28,6 +28,18 @@ replace review or OS access control.
 No v0.1 capability submits forms or applications, sends email or messages,
 purchases, accepts, rejects, withdraws, or posts publicly.
 
+Read-only job discovery runs only through the authenticated owning DSH Agent.
+The backend binds each run and each resulting lead to the exact active search
+profile revision and SHA-256 digest; a profile edit, pause, or cancellation
+request fences later writes. External posting text is preserved as untrusted
+source data and DSH match reasons are labeled as unverified analysis. URL user
+information and credential-like query parameters are rejected, normalized URLs
+are unique per workspace, and all source locators and listing URLs are removed
+from exports. One run is bounded to 64 leads, 20 per host, and 8 MiB; the
+workspace discovery inbox is bounded to 512 leads and 32 MiB. Only a direct
+same-origin user action can shortlist or dismiss a lead, and neither action
+performs an external consequence.
+
 The native DSH adapter uses a separate local service token supplied to both the
 server and owning DSH runtime. The token is never accepted in a URL or browser
 request and must not be written into a patch file. Each request also carries the
@@ -86,8 +98,11 @@ bounded and labeled non-factual. Draft creation is not review: staged bytes
 become reviewed/sealed only through a separate revision-checked browser command.
 No artifact route has an external destination.
 
-The default workspace export clears every source `inlineText` and
-`originalLocator`, excludes artifact bytes unless a future explicitly selected
-export path requests them, and recomputes both normalized and outer manifest
-digests after scrubbing. It remains career data intended for the local user and
-must still be protected as sensitive personal information.
+The default workspace export clears every source `inlineText`, source locator,
+and opportunity/discovery URL and excludes artifact bytes. Event payloads are
+recursively scrubbed for locator and credential-bearing field names. The
+Overview export includes sealed artifact bytes only when the user explicitly
+selects the exact artifacts before downloading. Both paths recompute normalized
+and outer manifest digests after scrubbing. The result remains career data
+intended for the local user and must still be protected as sensitive personal
+information.

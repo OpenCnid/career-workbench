@@ -3,7 +3,7 @@
 ## Health and shutdown
 
 Diagnostics must report SQLite `wal`, foreign keys enabled, integrity `ok`,
-schema `4`, the exact compatibility pins, and only configured capabilities. Stop
+schema `6`, the exact compatibility pins, and only configured capabilities. Stop
 with Ctrl+C and wait for the loopback port to close. Do not kill the process
 during a database migration or artifact seal.
 
@@ -47,9 +47,13 @@ restore, use the reported `pre-restore-*` label with the same command.
 5. Verify diagnostics, source/artifact inspection, event ordering, and export.
 
 Migration 4 adds independent opportunity legitimacy status as `unknown` to old
-rows without changing entity revision. A failed migration does not commit its
-schema row. Destructive/reinterpreting future migrations must first create and
-verify a workspace-local backup or refuse to proceed.
+rows. Migration 5 adds search-profile and discovery-lead tables. Migration 6
+binds operations and legacy leads to their input revision/digest, adds database
+uniqueness fences, and synchronizes `config.toml` with the canonical schema
+version. These migrations do not change domain entity revisions. A failed
+migration does not commit its schema row. Destructive/reinterpreting future
+migrations must first create and verify a workspace-local backup or refuse to
+proceed.
 
 ## Import and export
 
@@ -57,8 +61,9 @@ Career Ops import is discovery → preview → explicit confirmation. Preview
 expires after 15 minutes; changed bytes require a new preview. Identical bytes
 return the same manifest. The source is never modified. Default JSON export is
 downloaded from Overview and scrubs source text and original locators. It still
-contains sensitive career state and must be protected. Artifact bytes are not
-included unless explicitly selected by a future supported export path.
+contains sensitive career state and must be protected. Artifact bytes are
+included only when the user explicitly selects the exact sealed artifacts in the
+Overview export controls.
 
 ## Troubleshooting
 

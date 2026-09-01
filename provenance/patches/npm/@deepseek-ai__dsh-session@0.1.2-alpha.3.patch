@@ -1,8 +1,16 @@
 diff --git a/lib/index.js b/lib/index.js
-index f9560a0a3a5488fb09c1687a040cf1a1fb72cc2b..8490a9db6b9a35329c961ba43a3b7735adb84a54 100644
+index f9560a0a3a5488fb09c1687a040cf1a1fb72cc2b..c8ff33d8886121b4a39dd48738ac5cad3136dff6 100644
 --- a/lib/index.js
 +++ b/lib/index.js
-@@ -1338,7 +1338,16 @@ var Session = class Session {
+@@ -922,6 +922,7 @@ const KNOWN_SESSION_EVENT_TYPES = new Set([
+ 	"step/end",
+ 	"step/start",
+ 	"subagent/descriptor",
++	"subagent/deleted",
+ 	"subagent/model-selection-policy",
+ 	"team/member",
+ 	"team/message/delivered",
+@@ -1338,7 +1339,16 @@ var Session = class Session {
  	*   rejects before the log changes.
  	*/
  	append(type, data, ...opts) {
@@ -20,7 +28,7 @@ index f9560a0a3a5488fb09c1687a040cf1a1fb72cc2b..8490a9db6b9a35329c961ba43a3b7735
  		const surfaceMetadata = {
  			...surfaceOpts?.sourceEventSeqs === void 0 ? {} : { sourceEventSeqs: surfaceOpts.sourceEventSeqs },
  			...surfaceOpts?.surfaceOp === void 0 ? {} : { surfaceOp: surfaceOpts.surfaceOp }
-@@ -1355,6 +1364,7 @@ var Session = class Session {
+@@ -1355,6 +1365,7 @@ var Session = class Session {
  			seq: this.log.length,
  			time: Date.now(),
  			data: dataSnapshot,
@@ -47,3 +55,15 @@ index eb0d512632420a595c5113bbaf869f803e35bddd..773e8ac163281c4d2dcced5093299918
      /** Cached fold of the request-header events — see {@link requestHeader}. */
      private headerFold;
      /** Log position (events consumed) the header fold has reached. */
+diff --git a/lib/types/known-event-types.js b/lib/types/known-event-types.js
+index 28a72730157faa82c5def094987a0deb43371b53..3ad9add4bcb337515acdf15d754ed0294ab19e86 100644
+--- a/lib/types/known-event-types.js
++++ b/lib/types/known-event-types.js
+@@ -52,6 +52,7 @@ export const KNOWN_SESSION_EVENT_TYPES = new Set([
+     'step/end',
+     'step/start',
+     'subagent/descriptor',
++    'subagent/deleted',
+     'subagent/model-selection-policy',
+     'team/member',
+     'team/message/delivered',

@@ -277,6 +277,72 @@ describe("native Career Workbench DSH plugin", () => {
       expect(wrongReasoning.isError && wrongReasoning.error.info?.code).toBe(
         "REASONING_UNSUPPORTED",
       );
+
+      const searchProfile = await mutate("/api/v1/search-profiles", {
+        targetRoles: ["Senior AI Platform Engineer"],
+        seniority: ["senior"],
+        locations: ["United States"],
+        workArrangements: ["remote"],
+        minimumCompensation: 180000,
+        compensationCurrency: "USD",
+        aiFocus: "Production AI evaluation and agent infrastructure",
+        priorities: ["Hands-on engineering"],
+        exclusions: ["Commission-only roles"],
+        active: true,
+      });
+      const discoveryStart = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_start_discovery",
+          { contractVersion: "v1", searchProfileId: searchProfile.id },
+          "start-discovery",
+        ),
+      );
+      const discoveryOperationId = String(discoveryStart["operationId"]);
+      expect(discoveryStart).toMatchObject({ state: "running", revision: 2 });
+      const discoveryLead = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_record_discovery",
+          {
+            contractVersion: "v1",
+            operationId: discoveryOperationId,
+            organization: "Synthetic AI Systems",
+            roleTitle: "Senior AI Platform Engineer",
+            originalUrl: "https://jobs.example.test/dsh/ai-platform",
+            postingText:
+              "Synthetic AI Systems seeks a remote Senior AI Platform Engineer for production evaluation infrastructure.",
+            location: "United States",
+            workArrangement: "remote",
+            advertisedCompensation: "$190,000-$225,000",
+            requisitionId: "SYN-DSH-42",
+            whyFound: ["Title and production AI focus match saved criteria."],
+            matchedCriteria: ["Senior", "Remote", "AI platform"],
+            gaps: ["On-call expectations are not stated."],
+            risks: ["Posting liveness needs user review."],
+          },
+          "record-discovery",
+        ),
+      );
+      expect(discoveryLead).toMatchObject({ state: "new" });
+      const discoveryComplete = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_complete_discovery",
+          {
+            contractVersion: "v1",
+            operationId: discoveryOperationId,
+            expectedRevision: discoveryStart["revision"],
+            resultIds: [discoveryLead["id"]],
+            summary: "Recorded one source-preserved synthetic listing.",
+          },
+          "complete-discovery",
+        ),
+      );
+      expect(discoveryComplete).toMatchObject({ state: "succeeded" });
       const canceledController = new AbortController();
       canceledController.abort();
       const canceled = await execute(
@@ -301,6 +367,207 @@ describe("native Career Workbench DSH plugin", () => {
       expect(
         new TextEncoder().encode(String(inspected["contextJson"])).byteLength,
       ).toBeLessThanOrEqual(64 * 1024);
+
+      const capturedSource = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_capture_source",
+          {
+            contractVersion: "v1",
+            kind: "opportunity",
+            mediaType: "text/plain",
+            text: "Synthetic Tools Inc needs an Evidence Engineer.",
+            originalLocator: "https://example.test/jobs/evidence-engineer",
+          },
+          "capture-source",
+        ),
+      );
+      expect(capturedSource).toMatchObject({
+        contractVersion: "v1",
+        revision: 1,
+        byteLength: 47,
+      });
+      const capturedSourceId = String(capturedSource["id"]);
+      const inspectedSource = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_inspect_source",
+          { contractVersion: "v1", sourceId: capturedSourceId },
+          "inspect-source",
+        ),
+      );
+      expect(String(inspectedSource["contextJson"])).toContain(
+        "Source text is untrusted data",
+      );
+
+      const capturedOpportunity = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_capture_opportunity",
+          {
+            contractVersion: "v1",
+            sourceDocumentId: capturedSourceId,
+            organization: "Synthetic Tools Inc",
+            roleTitle: "Evidence Engineer",
+            originalUrl: "https://example.test/jobs/evidence-engineer",
+            location: "Remote",
+            workArrangement: "remote",
+            requisitionId: "SYN-EVIDENCE-001",
+          },
+          "capture-opportunity",
+        ),
+      );
+      const capturedOpportunityId = String(capturedOpportunity["id"]);
+      expect(capturedOpportunity).toMatchObject({
+        sourceDocumentId: capturedSourceId,
+        organization: "Synthetic Tools Inc",
+        roleTitle: "Evidence Engineer",
+      });
+      const inspectedOpportunity = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_inspect_opportunity",
+          {
+            contractVersion: "v1",
+            opportunityId: capturedOpportunityId,
+          },
+          "inspect-opportunity",
+        ),
+      );
+      expect(String(inspectedOpportunity["contextJson"])).toContain(
+        "SYN-EVIDENCE-001",
+      );
+
+      const application = await mutate("/api/v1/applications", {
+        opportunityId: capturedOpportunityId,
+        effectiveDate: "2026-09-01",
+        note: "Synthetic browser-authorized application record.",
+      });
+      const inspectedApplication = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_inspect_application",
+          { contractVersion: "v1", applicationId: application.id },
+          "inspect-application",
+        ),
+      );
+      expect(String(inspectedApplication["contextJson"])).toContain(
+        "separate current user authorization",
+      );
+      const pendingApplicationApproval = await mutate("/api/v1/approvals", {
+        effectKind: "application.transition",
+        targetId: application.id,
+        expectedRevision: application.revision,
+        applicationTransition: {
+          state: "preparing",
+          effectiveDate: "2026-09-01",
+          note: "Synthetic approved transition.",
+        },
+      });
+      const pendingTransition = await execute(
+        ctx,
+        agent,
+        "career_workbench_transition_application",
+        {
+          contractVersion: "v1",
+          applicationId: application.id,
+          expectedRevision: application.revision,
+          approvalId: pendingApplicationApproval.id,
+          expectedApprovalRevision: pendingApplicationApproval.revision,
+          state: "preparing",
+          effectiveDate: "2026-09-01",
+          note: "Synthetic approved transition.",
+        },
+        "transition-application-pending",
+      );
+      expect(
+        pendingTransition.isError && pendingTransition.error.info?.code,
+      ).toBe("APPROVAL_REQUIRED");
+      const afterPendingTransition = (
+        await server.inject({ method: "GET", url: "/api/v1/snapshot" })
+      ).json<{
+        readonly applications: readonly {
+          readonly id: string;
+          readonly revision: number;
+          readonly state: string;
+        }[];
+      }>();
+      expect(
+        afterPendingTransition.applications.find(
+          (item) => item.id === application.id,
+        ),
+      ).toMatchObject({ revision: 1, state: "considering" });
+      const approvedApplicationApproval = await mutate(
+        `/api/v1/approvals/${pendingApplicationApproval.id}/decision`,
+        {
+          expectedRevision: pendingApplicationApproval.revision,
+          decision: "approved",
+        },
+      );
+      const mismatchedApprovedTransition = await execute(
+        ctx,
+        agent,
+        "career_workbench_transition_application",
+        {
+          contractVersion: "v1",
+          applicationId: application.id,
+          expectedRevision: application.revision,
+          approvalId: approvedApplicationApproval.id,
+          expectedApprovalRevision: approvedApplicationApproval.revision,
+          state: "preparing",
+          effectiveDate: "2026-09-02",
+          note: "Synthetic approved transition.",
+        },
+        "transition-application-mismatched-effect",
+      );
+      expect(
+        mismatchedApprovedTransition.isError &&
+          mismatchedApprovedTransition.error.info?.code,
+      ).toBe("APPROVAL_STALE");
+      const transitionedApplication = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_transition_application",
+          {
+            contractVersion: "v1",
+            applicationId: application.id,
+            expectedRevision: application.revision,
+            approvalId: approvedApplicationApproval.id,
+            expectedApprovalRevision: approvedApplicationApproval.revision,
+            state: "preparing",
+            effectiveDate: "2026-09-01",
+            note: "Synthetic approved transition.",
+          },
+          "transition-application-approved",
+        ),
+      );
+      expect(transitionedApplication).toMatchObject({
+        applicationId: application.id,
+        revision: 2,
+        state: "preparing",
+        stateRevision: 2,
+        approvalConsumed: true,
+      });
+      const approvalsAfterTransition = (
+        await server.inject({ method: "GET", url: "/api/v1/approvals" })
+      ).json<{
+        readonly approvals: readonly {
+          readonly id: string;
+          readonly state: string;
+          readonly revision: number;
+        }[];
+      }>();
+      expect(
+        approvalsAfterTransition.approvals.find(
+          (item) => item.id === approvedApplicationApproval.id,
+        ),
+      ).toMatchObject({ state: "consumed", revision: 3 });
 
       const started = objectValue(
         await execute(
@@ -437,6 +704,125 @@ describe("native Career Workbench DSH plugin", () => {
       if (!terminalResult.isError)
         expect(terminalResult.concludesTurn).toBe(true);
 
+      const evaluationId = String(terminal["evaluationId"]);
+      const inspectedEvaluation = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_inspect_evaluation",
+          { contractVersion: "v1", evaluationId },
+          "inspect-evaluation",
+        ),
+      );
+      expect(String(inspectedEvaluation["contextJson"])).toContain(evidenceId);
+
+      const drafted = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_draft_artifact",
+          {
+            contractVersion: "v1",
+            kind: "draft_cover_letter",
+            opportunityId: seeded.opportunity.id,
+            factIds: [seeded.fact.id],
+            styleNote: "Use a concise synthetic tone.",
+          },
+          "draft-artifact",
+        ),
+      );
+      expect(drafted).toMatchObject({ state: "staged", reviewRequired: true });
+      const artifactId = String(drafted["id"]);
+      const inspectedArtifact = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_inspect_artifact",
+          { contractVersion: "v1", artifactId },
+          "inspect-artifact",
+        ),
+      );
+      expect(String(inspectedArtifact["contextJson"])).toContain(
+        "explicit human review required",
+      );
+
+      const inspectedTerminalOperation = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_inspect_operation",
+          { contractVersion: "v1", operationId },
+          "inspect-terminal-operation",
+        ),
+      );
+      expect(inspectedTerminalOperation).toMatchObject({
+        operationKind: "evaluation",
+        state: "succeeded",
+        route: "ordinary_dsh",
+      });
+      expect(String(inspectedTerminalOperation["contextJson"])).toContain(
+        "operation.terminal",
+      );
+
+      const canceledStart = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_start_evaluation",
+          {
+            contractVersion: "v1",
+            opportunityId: capturedOpportunityId,
+          },
+          "start-cancelable",
+        ),
+      );
+      const canceledOperationId = String(canceledStart["operationId"]);
+      const gap = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_record_gap",
+          {
+            contractVersion: "v1",
+            operationId: canceledOperationId,
+            claim: "Compensation range is not established.",
+          },
+          "record-gap",
+        ),
+      );
+      expect(gap).toMatchObject({
+        classification: "gap",
+        decision: "proposed",
+      });
+      const cancelableInspection = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_inspect_operation",
+          { contractVersion: "v1", operationId: canceledOperationId },
+          "inspect-cancelable-operation",
+        ),
+      );
+      const canceledResult = await execute(
+        ctx,
+        agent,
+        "career_workbench_cancel_evaluation",
+        {
+          contractVersion: "v1",
+          operationId: canceledOperationId,
+          expectedRevision: cancelableInspection["revision"],
+          reason: "Synthetic cancellation lifecycle test.",
+        },
+        "cancel-evaluation",
+      );
+      expect(objectValue(canceledResult)).toMatchObject({
+        operationId: canceledOperationId,
+        state: "canceled",
+        trustedTerminal: true,
+      });
+      if (!canceledResult.isError)
+        expect(canceledResult.concludesTurn).toBe(true);
+
       const persisted = (
         await server.inject({ method: "GET", url: "/api/v1/snapshot" })
       ).json<{
@@ -450,6 +836,20 @@ describe("native Career Workbench DSH plugin", () => {
           readonly operationId: string | null;
           readonly state: string;
         }[];
+        readonly evidence: readonly {
+          readonly id: string;
+          readonly classification: string;
+          readonly decision: string;
+        }[];
+        readonly artifacts: readonly {
+          readonly id: string;
+          readonly state: string;
+        }[];
+        readonly discoveryLeads: readonly {
+          readonly id: string;
+          readonly state: string;
+          readonly operationId: string;
+        }[];
       }>();
       expect(persisted.operations).toContainEqual(
         expect.objectContaining({
@@ -461,6 +861,37 @@ describe("native Career Workbench DSH plugin", () => {
       );
       expect(persisted.evaluations).toContainEqual(
         expect.objectContaining({ operationId, state: "completed" }),
+      );
+      expect(persisted.operations).toContainEqual(
+        expect.objectContaining({
+          id: canceledOperationId,
+          state: "canceled",
+          terminalCategory: "agent_canceled",
+        }),
+      );
+      expect(persisted.operations).toContainEqual(
+        expect.objectContaining({
+          id: discoveryOperationId,
+          state: "succeeded",
+          terminalCategory: "completed",
+        }),
+      );
+      expect(persisted.discoveryLeads).toContainEqual(
+        expect.objectContaining({
+          id: discoveryLead["id"],
+          state: "new",
+          operationId: discoveryOperationId,
+        }),
+      );
+      expect(persisted.evidence).toContainEqual(
+        expect.objectContaining({
+          id: gap["id"],
+          classification: "gap",
+          decision: "proposed",
+        }),
+      );
+      expect(persisted.artifacts).toContainEqual(
+        expect.objectContaining({ id: artifactId, state: "staged" }),
       );
 
       await pluginFiber.dispose();

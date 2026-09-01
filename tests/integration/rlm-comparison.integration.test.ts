@@ -141,6 +141,29 @@ describe("native RLM comparison workflow", () => {
     return response.json<Identified>();
   }
 
+  async function mutateAsDsh(
+    url: string,
+    body: Readonly<Record<string, unknown>>,
+    operationId?: string,
+  ): Promise<Identified> {
+    serial += 1;
+    const response = await server.inject({
+      method: "POST",
+      url,
+      headers: {
+        host: HOST,
+        authorization: `CW-DSH ${DSH_TOKEN}`,
+        "content-type": "application/json",
+        "x-cw-dsh-session": "00000000-0000-4000-8000-000000000051",
+        "x-idempotency-key": `synthetic-rlm-dsh-${String(serial).padStart(4, "0")}`,
+        ...(operationId === undefined ? {} : { "x-cw-operation": operationId }),
+      },
+      payload: body,
+    });
+    expect(response.statusCode, `${url}: ${response.body}`).toBeLessThan(300);
+    return response.json<Identified>();
+  }
+
   async function seedEvaluations(): Promise<Identified[]> {
     await mutate("/api/v1/workspaces", {
       displayName: "Synthetic RLM Workspace",
@@ -225,11 +248,23 @@ describe("native RLM comparison workflow", () => {
       [6_000, 7_000],
     ] as const;
     return await Promise.all(
-      opportunities.map(
-        async (opportunity, index) =>
-          await mutate("/api/v1/evaluations", {
+      opportunities.map(async (opportunity, index) => {
+        const operation = await mutateAsDsh("/api/v1/operations", {
+          kind: "evaluation",
+          inputIdentity: opportunity.id,
+          requestedCapabilities: ["evaluation.complete"],
+          dshSessionId: "00000000-0000-4000-8000-000000000051",
+          provider: PROVIDER,
+          model: MODEL,
+          reasoningEffort: "high",
+          route: "ordinary_dsh",
+        });
+        return await mutateAsDsh(
+          "/api/v1/evaluations",
+          {
             opportunityId: opportunity.id,
             rubricId: rubric.id,
+            operationId: operation.id,
             dimensionInputs: [
               {
                 dimensionKey: "skills",
@@ -244,8 +279,10 @@ describe("native RLM comparison workflow", () => {
                 disposition: null,
               },
             ],
-          }),
-      ),
+          },
+          operation.id,
+        );
+      }),
     );
   }
 
@@ -466,11 +503,38 @@ describe("native RLM comparison workflow", () => {
 
       const comparisonId = String(proposed["comparisonId"]);
       const comparisonRevision = Number(proposed["comparisonRevision"]);
+      const requestedApproval = await server.inject({
+        method: "POST",
+        url: "/api/v1/approvals",
+        headers: browserHeaders(),
+        payload: {
+          effectKind: "comparison.accept",
+          targetId: comparisonId,
+          expectedRevision: comparisonRevision,
+        },
+      });
+      expect(requestedApproval.statusCode, requestedApproval.body).toBe(201);
+      const pendingApproval = requestedApproval.json<Identified>();
+      const decisionResponse = await server.inject({
+        method: "POST",
+        url: `/api/v1/approvals/${pendingApproval.id}/decision`,
+        headers: browserHeaders(),
+        payload: {
+          expectedRevision: pendingApproval.revision,
+          decision: "approved",
+        },
+      });
+      expect(decisionResponse.statusCode, decisionResponse.body).toBe(200);
+      const approvedApproval = decisionResponse.json<Identified>();
       const acceptedResponse = await server.inject({
         method: "POST",
         url: `/api/v1/comparisons/${comparisonId}/accept`,
         headers: browserHeaders(),
-        payload: { expectedRevision: comparisonRevision },
+        payload: {
+          expectedRevision: comparisonRevision,
+          approvalId: approvedApproval.id,
+          expectedApprovalRevision: approvedApproval.revision,
+        },
       });
       expect(acceptedResponse.statusCode, acceptedResponse.body).toBe(200);
       expect(acceptedResponse.json()).toMatchObject({

@@ -6,18 +6,38 @@ evidence admission, state transitions, rubric arithmetic, SQLite state, and
 sealed artifacts. DeepSeek Harness is the sole model harness and remains an
 optional outer capability; the deterministic core has no provider dependency.
 
+The primary product journey is:
+
+1. create one private local workbench;
+2. add résumé/CV or structured career history and confirm source-backed facts;
+3. save editable role, location, compensation, AI-focus, priority, and exclusion
+   criteria;
+4. ask the configured DSH Agent to discover current listings into a
+   deduplicated, source-preserved review inbox;
+5. shortlist or dismiss each lead yourself, evaluate the roles worth deeper
+   work, and explicitly compare your finalists; and
+6. prepare reviewed materials and track the application without any automatic
+   submission or messaging.
+
+The browser never calls an LLM provider or authorizes a discovered listing as an
+opportunity. DSH discovery needs a configured research capability; without one,
+users can still capture opportunities manually.
+
 ## Status
 
-The preview implements Milestones 0–7 and the safe engineering work for
-Milestones 8–9: deterministic SQLite/filesystem state, the protected browser
-workbench, native Cordis/DSH tools and continuable children, persistent native
-RLM/Jupyter comparison with no-replay restore, read-only Career Ops import, the
-application/review workflow, release packages, SBOM, checksums, backup/restore,
-and a passing hosted Windows/Ubuntu/macOS clean-install and full-check matrix.
-The independent three-person qualitative study remains an explicit unmet
-external gate. The authenticated DSH ordinary/child/RLM acceptance profile has
-passed on Windows with scrubbed evidence retained. See
-`docs/qa/ACCEPTANCE_MATRIX.md`.
+This repository is an engineering preview, not a completed v0.1 release.
+Substantial deterministic, DSH, child, RLM/Jupyter, import, browser, packaging,
+and recovery behavior exists, but the Definition of Done remains open. In
+particular, the browser uses a copyable DSH discovery/evaluation handoff rather
+than an embedded DSH conversation, browser cancellation intent is not yet
+dispatched to the owning runtime, application transition execution still depends
+on the exact originating DSH conversation, and the independent three-person
+qualitative study has not happened. Comparison and artifact approvals are
+completed in the browser. Local evidence demonstrations are explicitly excluded
+from fit and comparison readiness; only DSH semantic evaluations count. The
+exact current pass/partial/unmet record is maintained in
+`docs/qa/ACCEPTANCE_MATRIX.md`; no milestone is considered complete merely
+because a fixture or earlier candidate passed.
 
 ## Development
 

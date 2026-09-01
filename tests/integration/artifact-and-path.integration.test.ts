@@ -59,6 +59,20 @@ describe("workspace and artifact safety", () => {
     ).resolves.toBe(join(canonicalParent, "workspace"));
   });
 
+  it("creates a workspace beneath a missing application-data parent", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "career-workbench-parent-"));
+    roots.push(parent);
+    const root = join(parent, "missing-parent", "workspace");
+    const store = await SqliteWorkspaceStore.create(
+      root,
+      "2026-01-15T12:00:00.000Z" as UtcTimestamp,
+    );
+    await store.close();
+    await expect(
+      readFile(join(root, "config.toml"), "utf8"),
+    ).resolves.toContain('contract_version = "v1"');
+  });
+
   it("rejects a linked workspace ancestor where the OS exposes it", async () => {
     const parent = await mkdtemp(join(tmpdir(), "career-workbench-link-"));
     roots.push(parent);

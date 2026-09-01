@@ -1,0 +1,377 @@
+{
+  "$id": "DiagnosticsResponse",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "contractVersion",
+    "version",
+    "workspaceConfigured",
+    "schemaVersion",
+    "storage",
+    "journalMode",
+    "capabilities",
+    "security",
+    "runtimeVersions",
+    "compatibility",
+    "recentErrorCategories"
+  ],
+  "properties": {
+    "contractVersion": { "const": "v1", "type": "string" },
+    "version": { "minLength": 1, "maxLength": 100, "type": "string" },
+    "workspaceConfigured": { "type": "boolean" },
+    "schemaVersion": { "minimum": 1, "type": "integer" },
+    "storage": { "minLength": 1, "maxLength": 100, "type": "string" },
+    "journalMode": { "minLength": 1, "maxLength": 100, "type": "string" },
+    "capabilities": {
+      "maxProperties": 32,
+      "type": "object",
+      "patternProperties": { "^(.*)$": { "type": "boolean" } }
+    },
+    "security": {
+      "maxProperties": 32,
+      "type": "object",
+      "patternProperties": { "^(.*)$": { "type": "boolean" } }
+    },
+    "runtimeVersions": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": ["node", "pnpm", "typescript", "careerWorkbench"],
+      "properties": {
+        "node": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": ["expected", "resolved", "state"],
+          "properties": {
+            "expected": { "minLength": 1, "maxLength": 100, "type": "string" },
+            "resolved": { "minLength": 1, "maxLength": 100, "type": "string" },
+            "state": {
+              "anyOf": [
+                { "const": "ready", "type": "string" },
+                { "const": "mismatch", "type": "string" }
+              ]
+            }
+          }
+        },
+        "pnpm": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": ["expected", "resolved", "state"],
+          "properties": {
+            "expected": { "minLength": 1, "maxLength": 100, "type": "string" },
+            "resolved": { "minLength": 1, "maxLength": 100, "type": "string" },
+            "state": {
+              "anyOf": [
+                { "const": "ready", "type": "string" },
+                { "const": "mismatch", "type": "string" }
+              ]
+            }
+          }
+        },
+        "typescript": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": ["expected", "resolved", "state"],
+          "properties": {
+            "expected": { "minLength": 1, "maxLength": 100, "type": "string" },
+            "resolved": { "minLength": 1, "maxLength": 100, "type": "string" },
+            "state": {
+              "anyOf": [
+                { "const": "ready", "type": "string" },
+                { "const": "mismatch", "type": "string" }
+              ]
+            }
+          }
+        },
+        "careerWorkbench": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": ["expected", "resolved", "state"],
+          "properties": {
+            "expected": { "minLength": 1, "maxLength": 100, "type": "string" },
+            "resolved": { "minLength": 1, "maxLength": 100, "type": "string" },
+            "state": {
+              "anyOf": [
+                { "const": "ready", "type": "string" },
+                { "const": "mismatch", "type": "string" }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "compatibility": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "state",
+        "mismatches",
+        "deepSeekHarness",
+        "nativeRlm",
+        "careerOps",
+        "cordis",
+        "patches"
+      ],
+      "properties": {
+        "state": {
+          "anyOf": [
+            { "const": "ready", "type": "string" },
+            { "const": "mismatch", "type": "string" }
+          ]
+        },
+        "mismatches": {
+          "maxItems": 32,
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "minLength": 1,
+            "maxLength": 160,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "type": "string"
+          }
+        },
+        "deepSeekHarness": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": ["expected", "resolved", "state"],
+          "properties": {
+            "expected": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": ["revision", "tag", "version"],
+              "properties": {
+                "revision": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+                "tag": {
+                  "anyOf": [
+                    { "minLength": 1, "maxLength": 100, "type": "string" },
+                    { "type": "null" }
+                  ]
+                },
+                "version": {
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "type": "string"
+                }
+              }
+            },
+            "resolved": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": ["revision", "tag", "version"],
+              "properties": {
+                "revision": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+                "tag": {
+                  "anyOf": [
+                    { "minLength": 1, "maxLength": 100, "type": "string" },
+                    { "type": "null" }
+                  ]
+                },
+                "version": {
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "type": "string"
+                }
+              }
+            },
+            "state": {
+              "anyOf": [
+                { "const": "ready", "type": "string" },
+                { "const": "mismatch", "type": "string" }
+              ]
+            }
+          }
+        },
+        "nativeRlm": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": ["expected", "resolved", "state"],
+          "properties": {
+            "expected": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": ["revision", "tag", "version"],
+              "properties": {
+                "revision": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+                "tag": {
+                  "anyOf": [
+                    { "minLength": 1, "maxLength": 100, "type": "string" },
+                    { "type": "null" }
+                  ]
+                },
+                "version": {
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "type": "string"
+                }
+              }
+            },
+            "resolved": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": ["revision", "tag", "version"],
+              "properties": {
+                "revision": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+                "tag": {
+                  "anyOf": [
+                    { "minLength": 1, "maxLength": 100, "type": "string" },
+                    { "type": "null" }
+                  ]
+                },
+                "version": {
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "type": "string"
+                }
+              }
+            },
+            "state": {
+              "anyOf": [
+                { "const": "ready", "type": "string" },
+                { "const": "mismatch", "type": "string" }
+              ]
+            }
+          }
+        },
+        "careerOps": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": ["expected", "resolved", "state"],
+          "properties": {
+            "expected": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": ["revision", "tag", "version"],
+              "properties": {
+                "revision": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+                "tag": {
+                  "anyOf": [
+                    { "minLength": 1, "maxLength": 100, "type": "string" },
+                    { "type": "null" }
+                  ]
+                },
+                "version": {
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "type": "string"
+                }
+              }
+            },
+            "resolved": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": ["revision", "tag", "version"],
+              "properties": {
+                "revision": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+                "tag": {
+                  "anyOf": [
+                    { "minLength": 1, "maxLength": 100, "type": "string" },
+                    { "type": "null" }
+                  ]
+                },
+                "version": {
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "type": "string"
+                }
+              }
+            },
+            "state": {
+              "anyOf": [
+                { "const": "ready", "type": "string" },
+                { "const": "mismatch", "type": "string" }
+              ]
+            }
+          }
+        },
+        "cordis": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": ["expected", "resolved", "state"],
+          "properties": {
+            "expected": { "minLength": 1, "maxLength": 100, "type": "string" },
+            "resolved": { "minLength": 1, "maxLength": 100, "type": "string" },
+            "state": {
+              "anyOf": [
+                { "const": "ready", "type": "string" },
+                { "const": "mismatch", "type": "string" }
+              ]
+            }
+          }
+        },
+        "patches": {
+          "minItems": 4,
+          "maxItems": 4,
+          "type": "array",
+          "items": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "identity",
+              "sha256",
+              "resolvedSha256",
+              "application",
+              "state"
+            ],
+            "properties": {
+              "identity": {
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "^[0-9]{4}-[a-z0-9-]+\\.patch$",
+                "type": "string"
+              },
+              "sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+              "resolvedSha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "application": {
+                "anyOf": [
+                  { "const": "runtime_package", "type": "string" },
+                  { "const": "bundle_host", "type": "string" }
+                ]
+              },
+              "state": {
+                "anyOf": [
+                  { "const": "ready", "type": "string" },
+                  { "const": "mismatch", "type": "string" }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "recentErrorCategories": {
+      "maxItems": 16,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "$id": "ErrorCode",
+        "anyOf": [
+          { "const": "invalid_request", "type": "string" },
+          { "const": "unsupported_contract_version", "type": "string" },
+          { "const": "workspace_not_found", "type": "string" },
+          { "const": "workspace_unsafe", "type": "string" },
+          { "const": "entity_not_found", "type": "string" },
+          { "const": "revision_conflict", "type": "string" },
+          { "const": "duplicate_identity", "type": "string" },
+          { "const": "invalid_transition", "type": "string" },
+          { "const": "evidence_unsupported", "type": "string" },
+          { "const": "evidence_locator_invalid", "type": "string" },
+          { "const": "artifact_unsealed", "type": "string" },
+          { "const": "artifact_limit_exceeded", "type": "string" },
+          { "const": "approval_required", "type": "string" },
+          { "const": "approval_stale", "type": "string" },
+          { "const": "approval_denied", "type": "string" },
+          { "const": "capability_unavailable", "type": "string" },
+          { "const": "model_unsupported", "type": "string" },
+          { "const": "reasoning_unsupported", "type": "string" },
+          { "const": "operation_canceled", "type": "string" },
+          { "const": "operation_indeterminate", "type": "string" },
+          { "const": "import_unsupported", "type": "string" },
+          { "const": "external_content_rejected", "type": "string" },
+          { "const": "internal_error", "type": "string" }
+        ]
+      }
+    }
+  }
+}

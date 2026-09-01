@@ -35,6 +35,7 @@ const headerAliases: Readonly<Record<string, string>> = {
   "#": "num",
   num: "num",
   date: "date",
+  fecha: "date",
   company: "company",
   empresa: "company",
   via: "via",
@@ -77,6 +78,7 @@ export interface CareerOpsPreviewFile {
 
 export interface CareerOpsPreviewApplication {
   readonly sourceIdentity: string;
+  readonly sourceRelativePath: string;
   readonly organization: string;
   readonly roleTitle: string;
   readonly originalStatus: string;
@@ -92,11 +94,14 @@ export interface CareerOpsImportPreview {
   readonly sourceFingerprint: string;
   readonly files: readonly CareerOpsPreviewFile[];
   readonly profileFacts: readonly {
+    readonly sourceIdentity: string;
+    readonly sourceRelativePath: string;
     readonly predicate: string;
     readonly value: string | number | boolean | null;
     readonly confirmationRequired: true;
   }[];
   readonly applications: readonly CareerOpsPreviewApplication[];
+  readonly passiveMappings: readonly CareerOpsPassiveMappingInput[];
   readonly warnings: readonly string[];
   readonly unsupported: readonly string[];
 }
@@ -458,8 +463,13 @@ function safeUrl(value: string): string | null {
   }
 }
 
-function effectiveDate(value: string): string {
-  return /^\d{4}-\d{2}-\d{2}$/u.test(value) ? value : "1970-01-01";
+function effectiveDate(value: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(parsed.valueOf()) ||
+    parsed.toISOString().slice(0, 10) !== value
+    ? null
+    : value;
 }
 
 function scalarFacts(
@@ -682,6 +692,10 @@ export async function discoverCareerOps(
     warnings.push(
       `Observed Career Ops ${observedVersion}; compatibility is pinned to ${CAREER_OPS_OBSERVED_VERSION}.`,
     );
+  } else if (observedVersion === CAREER_OPS_OBSERVED_VERSION) {
+    warnings.push(
+      `Package version ${observedVersion} matches the compatibility profile, but a package version does not prove the pinned source revision ${CAREER_OPS_REVISION}. Parsed files are still validated against the supported import contract.`,
+    );
   }
 
   const byPath = new Map(files.map((file) => [file.relativePath, file]));
@@ -703,6 +717,13 @@ export async function discoverCareerOps(
           );
           continue;
         }
+        const parsedEffectiveDate = effectiveDate(row.date);
+        if (parsedEffectiveDate === null) {
+          warnings.push(
+            `Tracker row ${String(row.num)} has an invalid or missing date “${row.date}” and was not imported.`,
+          );
+          continue;
+        }
         const reportRelativePath = reportPathFromCell(trackerPath, row.report);
         if (reportRelativePath !== null && !byPath.has(reportRelativePath)) {
           warnings.push(
@@ -717,7 +738,7 @@ export async function discoverCareerOps(
           originalUrl: safeUrl(row.url),
           location: row.location.length === 0 ? null : row.location,
           state,
-          effectiveDate: effectiveDate(row.date),
+          effectiveDate: parsedEffectiveDate,
           note: row.notes.length === 0 ? null : row.notes,
           reportRelativePath:
             reportRelativePath !== null && byPath.has(reportRelativePath)
@@ -850,18 +871,22 @@ export async function discoverCareerOps(
         purpose: file.purpose,
       })),
       profileFacts: profileFacts.map((fact) => ({
+        sourceIdentity: `${fact.sourceRelativePath}:${fact.predicate}`,
+        sourceRelativePath: fact.sourceRelativePath,
         predicate: fact.predicate,
         value: fact.value,
         confirmationRequired: true,
       })),
       applications: applications.map((application) => ({
         sourceIdentity: application.sourceIdentity,
+        sourceRelativePath: application.sourceRelativePath,
         organization: application.organization,
         roleTitle: application.roleTitle,
         originalStatus: application.originalStatus,
         mappedState: application.state,
         originalScore: application.originalScore,
       })),
+      passiveMappings,
       warnings: plan.warnings,
       unsupported,
     },

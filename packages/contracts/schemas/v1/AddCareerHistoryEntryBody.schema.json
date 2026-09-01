@@ -1,0 +1,23 @@
+{
+  "$id": "AddCareerHistoryEntryBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "personName",
+    "roleTitle",
+    "organization",
+    "dateRange",
+    "achievements"
+  ],
+  "properties": {
+    "personName": { "minLength": 1, "maxLength": 300, "type": "string" },
+    "roleTitle": { "minLength": 1, "maxLength": 300, "type": "string" },
+    "organization": { "minLength": 1, "maxLength": 300, "type": "string" },
+    "dateRange": { "minLength": 1, "maxLength": 200, "type": "string" },
+    "achievements": {
+      "maxItems": 8,
+      "type": "array",
+      "items": { "minLength": 1, "maxLength": 2000, "type": "string" }
+    }
+  }
+}
