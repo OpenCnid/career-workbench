@@ -61,7 +61,12 @@ async function main(): Promise<void> {
   process.once("SIGTERM", () => void shutdown());
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+const invokedEntrypoint = process.argv[1];
+if (
+  invokedEntrypoint !== undefined &&
+  (await realpath(invokedEntrypoint)) ===
+    (await realpath(fileURLToPath(import.meta.url)))
+) {
   await main();
 }
 
