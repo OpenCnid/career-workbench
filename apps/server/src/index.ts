@@ -1,4 +1,4 @@
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, realpath, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,7 +23,9 @@ async function main(): Promise<void> {
   if (configuredRoot !== undefined) {
     workspaceRoot = configuredRoot;
   } else if (testMode) {
-    cleanupRoot = await mkdtemp(join(tmpdir(), "career-workbench-e2e-"));
+    cleanupRoot = await realpath(
+      await mkdtemp(join(tmpdir(), "career-workbench-e2e-")),
+    );
     workspaceRoot = join(cleanupRoot, "workspace");
   } else {
     workspaceRoot = join(homedir(), ".career-workbench", "default");

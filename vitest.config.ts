@@ -1,4 +1,13 @@
+import { realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { defineConfig } from "vitest/config";
+
+// macOS exposes its temporary directory through /var, a system symlink to
+// /private/var. Keep the production guard strict and give every test worker the
+// canonical spelling before it creates a workspace beneath that directory.
+if (process.platform === "darwin") {
+  process.env["TMPDIR"] = realpathSync(tmpdir());
+}
 
 const include = (kind: string) => [
   `**/*.${kind}.test.ts`,

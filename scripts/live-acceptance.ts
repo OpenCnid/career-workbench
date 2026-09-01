@@ -1,5 +1,5 @@
 import { createConnection } from "node:net";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { Context } from "@deepseek-ai/cordis";
@@ -219,7 +219,9 @@ async function captureLiveActivity(port: number): Promise<void> {
   }
 }
 
-const root = await mkdtemp(join(tmpdir(), "career-workbench-live-"));
+const root = await realpath(
+  await mkdtemp(join(tmpdir(), "career-workbench-live-")),
+);
 const workspaceRoot = join(root, "workspace");
 let server = await createServer({
   workspaceRoot,
