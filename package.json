@@ -17,7 +17,7 @@
     "dsh:authorize": "tsx scripts/authorize-openai-codex.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint .",
+    "lint": "tsc -b --pretty false && eslint .",
     "typecheck": "tsc -b --pretty false && tsc -p tsconfig.tools.json --pretty false",
     "test": "vitest run --project unit --project contract",
     "test:unit": "vitest run --project unit",
