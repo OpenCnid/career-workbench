@@ -1,0 +1,15 @@
+{
+  "$id": "CreateWorkspaceBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["displayName", "locale", "timezone"],
+  "properties": {
+    "displayName": { "minLength": 1, "maxLength": 120, "type": "string" },
+    "locale": {
+      "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$",
+      "maxLength": 10,
+      "type": "string"
+    },
+    "timezone": { "minLength": 1, "maxLength": 100, "type": "string" }
+  }
+}

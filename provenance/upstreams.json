@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "runtime": {
+    "node": "24.19.0",
+    "pnpm": "11.24.0",
+    "typescript": "6.0.3"
+  },
+  "upstreams": [
+    {
+      "name": "career-ops",
+      "repository": "https://github.com/santifer/career-ops",
+      "revision": "3a067ee580b7982cf5dd6edf7895112e4e99600b",
+      "tag": null,
+      "version": "1.31.0",
+      "license": "MIT",
+      "usage": "Read-only import and behavior reference",
+      "adaptedFiles": []
+    },
+    {
+      "name": "deepseek-harness",
+      "repository": "https://github.com/deepseek-ai/deepseek-harness.git",
+      "revision": "dd6322d604e00eec1ba5e0c8541159906a21094a",
+      "tag": "dsh-v0.1.2-alpha.3",
+      "version": "0.1.2-alpha.3",
+      "license": "MIT",
+      "usage": "Sole harness and Agent orchestrator",
+      "adaptedFiles": [
+        {
+          "source": "packages/subagent/subagent/src/projection.ts",
+          "destination": "packages/dsh-plugin/src/dsh-projection-compat.ts",
+          "modifications": "Original minimal declaration augmentation for an alpha.3 package-entrypoint omission; no runtime implementation copied.",
+          "license": "MIT",
+          "sha256": "1b34061d95112c5dd5cae1a598edba930666299ed78254c4b1f9a4a39f62c470"
+        },
+        {
+          "source": "packages/core/session/src/index.ts (public seam patch 0003)",
+          "destination": "provenance/patches/npm/@deepseek-ai__dsh-session@0.1.2-alpha.3.patch",
+          "modifications": "Mechanically adapted the exact public appendIgnorable source seam to the published JavaScript and declaration layout so the pinned workspace exercises persisted ignorable RLM events.",
+          "license": "MIT",
+          "sha256": "29ca46973e6c36b39df9dbc62cd4b8ad1dbdb61dc9427a93a86e83d4dc273601"
+        },
+        {
+          "source": "packages/subagent/subagent (public seam patch 0002)",
+          "destination": "provenance/patches/npm/@deepseek-ai__dsh-subagent@0.1.2-alpha.3.patch",
+          "modifications": "Mechanically adapted the exact continuable-child deletion seam to the published JavaScript, generated host/remote bindings, and declarations so clean installs expose public deletion.",
+          "license": "MIT",
+          "sha256": "00d8bc7b92e96d534261b93e5ed6188e20751b1f7ada6d2d34722b9837e875c9"
+        },
+        {
+          "source": "packages/llm/llm-pi-ai (public lifecycle patch 0004)",
+          "destination": "provenance/patches/npm/@deepseek-ai__dsh-llm-pi-ai@0.1.2-alpha.3.patch",
+          "modifications": "Mechanically adapted the exact Agent-scoped pi-ai session cleanup lifecycle and peer declarations to the published package layout.",
+          "license": "MIT",
+          "sha256": "9fe9532e3da4d7ece2a7345c9269dedb940d70e876646d818a7a06466f1c2899"
+        }
+      ]
+    },
+    {
+      "name": "deepseek-rlm",
+      "repository": "https://github.com/OpenCnid/deepseek-rlm",
+      "revision": "0e9f030300f9e5b37b76cdcd3d39bc490a251e79",
+      "tag": null,
+      "version": "0.1.0-preview.0",
+      "license": "MIT",
+      "usage": "Native RLM bundle; no kernel or bridge reimplementation",
+      "adaptedFiles": [
+        {
+          "source": "patches/deepseek-harness/0002-continuable-child-deletion.patch",
+          "destination": "provenance/patches/deepseek-harness/0002-continuable-child-deletion.patch",
+          "modifications": "None; byte-identical Git blob.",
+          "license": "MIT",
+          "sha256": "fd1e5d51155e0c0490fe2f3ca94de5b77843f931e32014fc803fdebfe0f74811"
+        },
+        {
+          "source": "patches/deepseek-harness/0003-public-ignorable-session-events.patch",
+          "destination": "provenance/patches/deepseek-harness/0003-public-ignorable-session-events.patch",
+          "modifications": "None; byte-identical Git blob.",
+          "license": "MIT",
+          "sha256": "a9635b96a31800631812e26c4e358e734f5cbf4282c69dff380f4d704d68705e"
+        },
+        {
+          "source": "patches/deepseek-harness/0004-pi-ai-agent-session-cleanup.patch",
+          "destination": "provenance/patches/deepseek-harness/0004-pi-ai-agent-session-cleanup.patch",
+          "modifications": "None; byte-identical Git blob.",
+          "license": "MIT",
+          "sha256": "e4bc34169b5fa63c069c4a07c33f05d1c8703ea05ff09a47fecf47264d387efa"
+        },
+        {
+          "source": "patches/deepseek-harness/0005-bounded-process-shutdown.patch",
+          "destination": "provenance/patches/deepseek-harness/0005-bounded-process-shutdown.patch",
+          "modifications": "None; byte-identical Git blob.",
+          "license": "MIT",
+          "sha256": "affef51d328b06c8e723054676d73741ea6b93910f9d5dfcad56c2b521babfb0"
+        }
+      ]
+    }
+  ],
+  "patches": [
+    "0002-continuable-child-deletion.patch",
+    "0003-public-ignorable-session-events.patch",
+    "0004-pi-ai-agent-session-cleanup.patch",
+    "0005-bounded-process-shutdown.patch"
+  ]
+}

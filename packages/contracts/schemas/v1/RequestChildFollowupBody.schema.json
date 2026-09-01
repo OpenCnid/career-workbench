@@ -1,0 +1,10 @@
+{
+  "$id": "RequestChildFollowupBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["expectedRevision", "message"],
+  "properties": {
+    "expectedRevision": { "minimum": 1, "type": "integer" },
+    "message": { "minLength": 1, "maxLength": 8000, "type": "string" }
+  }
+}

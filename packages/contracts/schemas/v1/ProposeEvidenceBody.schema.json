@@ -1,0 +1,55 @@
+{
+  "$id": "ProposeEvidenceBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["classification", "claim"],
+  "properties": {
+    "classification": {
+      "anyOf": [
+        { "const": "candidate_fact", "type": "string" },
+        { "const": "opportunity_fact", "type": "string" },
+        { "const": "company_fact", "type": "string" },
+        { "const": "market_fact", "type": "string" },
+        { "const": "inference", "type": "string" },
+        { "const": "computation", "type": "string" },
+        { "const": "contradiction", "type": "string" },
+        { "const": "gap", "type": "string" }
+      ]
+    },
+    "claim": { "minLength": 1, "maxLength": 2000, "type": "string" },
+    "sourceId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    },
+    "locator": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": ["sourceId", "start", "end", "quote"],
+      "properties": {
+        "sourceId": {
+          "minLength": 10,
+          "maxLength": 80,
+          "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+          "type": "string"
+        },
+        "start": { "minimum": 0, "maximum": 1048576, "type": "integer" },
+        "end": { "minimum": 1, "maximum": 1048576, "type": "integer" },
+        "quote": { "minLength": 1, "maxLength": 10000, "type": "string" }
+      }
+    },
+    "candidateFactId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    },
+    "proposedByOperationId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    }
+  }
+}

@@ -4,23 +4,24 @@ Status: Draft v0.1
 
 Purpose: Define the first complete, testable Career Workbench product contract.
 
-This specification is normative for implementations that claim Career
-Workbench v0.1 compatibility. `ARCHITECTURE.md` explains where the major parts
-belong. `MILESTONES.md` sequences implementation and evidence. `VISION.md`
-describes the product direction without weakening this contract.
+This specification is normative for implementations that claim Career Workbench
+v0.1 compatibility. `ARCHITECTURE.md` explains where the major parts belong.
+`MILESTONES.md` sequences implementation and evidence. `VISION.md` describes the
+product direction without weakening this contract.
 
 ## Normative language
 
 The key words `MUST`, `MUST NOT`, `REQUIRED`, `SHOULD`, `SHOULD NOT`,
-`RECOMMENDED`, `MAY`, and `OPTIONAL` are to be interpreted as described in RFC 2119.
+`RECOMMENDED`, `MAY`, and `OPTIONAL` are to be interpreted as described in
+RFC 2119.
 
 `Implementation-defined` means an implementation may choose the behavior, but
 the selected behavior becomes part of its documented and tested contract.
 
 ## 1. Product definition
 
-Career Workbench is a local-first career intelligence and application
-operations product with four cooperating surfaces:
+Career Workbench is a local-first career intelligence and application operations
+product with four cooperating surfaces:
 
 1. a deterministic career-domain backend;
 2. a purpose-built web frontend;
@@ -56,9 +57,9 @@ A conforming implementation MUST preserve all of the following:
 
 1. DSH remains the only harness and agent loop.
 2. No Career Workbench or Python component calls an LLM provider directly.
-3. No production path launches `prime-agent`, instantiates Prime
-   `AgentSession`, wraps Prime ACP, or launches an agent CLI such as
-   `codex exec`, `claude -p`, or `opencode run`.
+3. No production path launches `prime-agent`, instantiates Prime `AgentSession`,
+   wraps Prime ACP, or launches an agent CLI such as `codex exec`, `claude -p`,
+   or `opencode run`.
 4. Provider calls requested from Python cross the public DSH host bridge and
    retain the exact originating Agent as authority.
 5. Unsupported model, reasoning, recursion, timeout, or tool options fail
@@ -72,8 +73,8 @@ A conforming implementation MUST preserve all of the following:
     path is part of v0.1.
 11. IPython is operating-system-authority code execution, not a sandbox.
 12. Secrets and complete environment values never enter domain events,
-    artifacts, exports, snapshots, fixtures, screenshots, or model-visible
-    error messages.
+    artifacts, exports, snapshots, fixtures, screenshots, or model-visible error
+    messages.
 
 ## 2. Goals and non-goals
 
@@ -120,16 +121,15 @@ Career Workbench v0.1 is not:
 - `Workspace`: one local Career Workbench data root and database.
 - `Candidate source`: user-approved material permitted to support personal
   facts, such as an imported CV or a confirmed profile entry.
-- `External source`: a job description, company page, message, market source,
-  or other material not authored or approved as candidate truth.
-- `Fact`: an assertion intended to be treated as true within its declared
-  scope.
+- `External source`: a job description, company page, message, market source, or
+  other material not authored or approved as candidate truth.
+- `Fact`: an assertion intended to be treated as true within its declared scope.
 - `Evidence`: a source-bound item proposed to support a fact, inference,
   computation, contradiction, or gap.
 - `Primary evidence`: evidence permitted by policy to authorize the associated
   fact class.
-- `Inference`: a conclusion derived from accepted facts but not directly
-  stated by a source.
+- `Inference`: a conclusion derived from accepted facts but not directly stated
+  by a source.
 - `Gap`: required or useful information that has not been established.
 - `Rubric`: a versioned, deterministic definition of evaluation dimensions,
   semantic input constraints, weights, thresholds, and display mapping.
@@ -138,10 +138,10 @@ Career Workbench v0.1 is not:
   objective.
 - `Native child`: a DSH continuable subagent with DSH-owned lineage and
   lifecycle.
-- `RLM`: the native DSH persistent-kernel capability exposed through
-  `ctx.rlm` and the exclusive `ipython` tool.
-- `Artifact`: a sealed output such as a report, comparison, CV, cover letter,
-  or export.
+- `RLM`: the native DSH persistent-kernel capability exposed through `ctx.rlm`
+  and the exclusive `ipython` tool.
+- `Artifact`: a sealed output such as a report, comparison, CV, cover letter, or
+  export.
 - `External action`: an operation that changes a third-party system or
   communicates with another person.
 
@@ -162,14 +162,14 @@ forging an approval identifier.
 ### 4.3 Career Workbench backend
 
 The backend is authoritative for domain validation and persistence. It MUST
-reject invalid commands even when they originate from a trusted DSH Agent or
-the local frontend.
+reject invalid commands even when they originate from a trusted DSH Agent or the
+local frontend.
 
 ### 4.4 DSH Agent
 
-The active DSH Agent interprets user intent and coordinates model-mediated
-work. Agent self-report is not evidence of domain persistence, child
-completion, approval, or artifact publication.
+The active DSH Agent interprets user intent and coordinates model-mediated work.
+Agent self-report is not evidence of domain persistence, child completion,
+approval, or artifact publication.
 
 ### 4.5 Native children
 
@@ -253,8 +253,8 @@ Required logical fields:
 - `subject`
 - `predicate`
 - typed `value`
-- `status`: `proposed`, `verified`, `derived_unverified`,
-  `user_cannot_confirm`, `rejected`, or `superseded`
+- `status`: `proposed`, `verified`, `derived_unverified`, `user_cannot_confirm`,
+  `rejected`, or `superseded`
 - one or more source locators for `verified` facts
 - `proposed_by`: `user`, `import`, `agent`, or `system`
 - `confirmed_by_user_at` when user-confirmed
@@ -322,9 +322,9 @@ Required logical fields:
 
 Rubrics MUST be immutable after use. Changes create a new version.
 
-Scores are stored as integers in basis points from `0` through `10000`.
-Display scales such as `0–100` or `1–5` are pure rubric-defined projections.
-Models do not calculate or persist the aggregate score.
+Scores are stored as integers in basis points from `0` through `10000`. Display
+scales such as `0–100` or `1–5` are pure rubric-defined projections. Models do
+not calculate or persist the aggregate score.
 
 ### 5.7 Evaluation
 
@@ -397,9 +397,9 @@ An `Operation` has:
 - terminal category and message
 - result and artifact identities when present
 
-Exactly one terminal record exists per operation. An operation with a
-provider- or worker-reachable dispatch but no trusted terminal becomes
-`indeterminate`; it is not silently replayed.
+Exactly one terminal record exists per operation. An operation with a provider-
+or worker-reachable dispatch but no trusted terminal becomes `indeterminate`; it
+is not silently replayed.
 
 ### 5.11 Approval
 
@@ -414,8 +414,8 @@ Required logical fields:
 - expiry
 - approving user interaction identity
 
-Approval is single-use and bound to the displayed effect. It cannot authorize
-a different revision, recipient, artifact, destination, or amount.
+Approval is single-use and bound to the displayed effect. It cannot authorize a
+different revision, recipient, artifact, destination, or amount.
 
 ### 5.12 DomainEvent
 
@@ -453,13 +453,13 @@ profile root, repository root, DSH home, Codex home, browser-profile directory,
 or credential directory.
 
 The implementation MUST reject path escape through `..`, symbolic links,
-junctions, alternate streams, or replacement after validation where the host
-OS exposes those conditions.
+junctions, alternate streams, or replacement after validation where the host OS
+exposes those conditions.
 
 ### 6.2 Canonical storage
 
-SQLite is canonical for structured v0.1 domain state. The artifact directory
-is canonical for sealed large bytes. Markdown, JSON, TSV, and PDF are import or
+SQLite is canonical for structured v0.1 domain state. The artifact directory is
+canonical for sealed large bytes. Markdown, JSON, TSV, and PDF are import or
 export representations unless registered as sealed artifacts.
 
 The database MUST:
@@ -492,9 +492,8 @@ record whose bytes cannot be resolved by digest fails inspection.
 Before a migration that can destroy or reinterpret user data, the application
 MUST create and verify a workspace-local backup or refuse the migration.
 
-Migration failure leaves the previous version usable or reports a blocked
-state with the backup location. It MUST NOT partially advance the schema
-version.
+Migration failure leaves the previous version usable or reports a blocked state
+with the backup location. It MUST NOT partially advance the schema version.
 
 ### 6.5 Export
 
@@ -507,8 +506,8 @@ The product MUST support a credential-free, documented export containing:
 - artifact metadata and selected artifact bytes; and
 - an export manifest with schema version and digests.
 
-Exports MUST exclude provider credentials, DSH secrets, Jupyter connection
-keys, browser sessions, and complete environment values.
+Exports MUST exclude provider credentials, DSH secrets, Jupyter connection keys,
+browser sessions, and complete environment values.
 
 ### 6.6 Python and DSH persistence
 
@@ -626,8 +625,8 @@ completed -> stale
 failed | canceled | stale -> pending  (new operation, same evaluation lineage)
 ```
 
-An evaluation MAY use ordinary DSH work, native children, RLM, or no model.
-The selected route is recorded.
+An evaluation MAY use ordinary DSH work, native children, RLM, or no model. The
+selected route is recorded.
 
 Completion requires:
 
@@ -658,9 +657,9 @@ The product MUST show what changed and which outputs need review.
 
 ### 8.7 Application tracking
 
-Application state changes are explicit user or tool commands. An evaluation
-does not automatically create an application. Generating a document does not
-mark an application applied.
+Application state changes are explicit user or tool commands. An evaluation does
+not automatically create an application. Generating a document does not mark an
+application applied.
 
 The initial transition graph permits:
 
@@ -673,8 +672,8 @@ interview -> offer | rejected | withdrawn | closed
 offer -> hired | withdrawn | closed
 ```
 
-Imports MAY map an upstream state into the closest state and retain the
-original label. Ambiguous mappings require user review.
+Imports MAY map an upstream state into the closest state and retain the original
+label. Ambiguous mappings require user review.
 
 ### 8.8 Artifact generation
 
@@ -685,8 +684,8 @@ Candidate-facing content is generated only from:
 - approved style and procedure settings; and
 - accepted opportunity/company evidence when appropriate.
 
-Keywords may be reformulated but facts may not be invented. The product MUST
-not claim the user authored, led, built, measured, or achieved something unless
+Keywords may be reformulated but facts may not be invented. The product MUST not
+claim the user authored, led, built, measured, or achieved something unless
 accepted evidence supports the complete assertion.
 
 ### 8.9 External actions
@@ -705,8 +704,8 @@ classification.
 
 For v0.1:
 
-- candidate facts require extractive support from candidate primary evidence
-  or explicit user confirmation;
+- candidate facts require extractive support from candidate primary evidence or
+  explicit user confirmation;
 - opportunity and company facts require source-bound support;
 - inferences are labeled and cannot be promoted through repetition;
 - computations retain inputs and formula identity;
@@ -795,12 +794,12 @@ telemetry. Direct filesystem access from Python does not traverse those guards.
 
 ### 10.3 Agent authority
 
-One exact live DSH Agent is the authority for an invocation. The plugin MUST
-not fabricate a new Agent to perform work or resolve model settings outside an
+One exact live DSH Agent is the authority for an invocation. The plugin MUST not
+fabricate a new Agent to perform work or resolve model settings outside an
 active request.
 
-Active-request model inheritance follows native DSH semantics. Explicit model
-or reasoning overrides are passed exactly and rejected when unsupported.
+Active-request model inheritance follows native DSH semantics. Explicit model or
+reasoning overrides are passed exactly and rejected when unsupported.
 
 ### 10.4 Native children
 
@@ -819,8 +818,8 @@ The product MUST distinguish:
 Returning a child handle or initial report does not mean the child completed.
 The frontend and domain operation timeline MUST preserve that distinction.
 
-Children inherit or receive explicit model and reasoning according to DSH
-public contracts. Depth limits, admission limits, cancellation, cold restore,
+Children inherit or receive explicit model and reasoning according to DSH public
+contracts. Depth limits, admission limits, cancellation, cold restore,
 messaging, and deletion remain DSH operations.
 
 Career Workbench MUST NOT access continuation-manager private fields.
@@ -872,9 +871,9 @@ bridge. Requests translate to public `ctx.llm`, `ctx.subagents`, and OPTIONAL
 
 ### 11.5 Durable results
 
-Python returns structured proposals. Career Workbench validates and commits
-them through ordinary domain commands. A variable existing in the notebook is
-not a persisted fact or completed operation.
+Python returns structured proposals. Career Workbench validates and commits them
+through ordinary domain commands. A variable existing in the notebook is not a
+persisted fact or completed operation.
 
 ### 11.6 Snapshot and restore
 
@@ -960,17 +959,17 @@ the user's browser must not be able to operate the local API.
 
 ### 12.7 Accessibility and responsiveness
 
-Core workflows MUST be keyboard operable, expose semantic labels, meet WCAG
-2.2 AA color-contrast requirements, and remain usable at common laptop widths.
+Core workflows MUST be keyboard operable, expose semantic labels, meet WCAG 2.2
+AA color-contrast requirements, and remain usable at common laptop widths.
 Activity and evidence state cannot rely on color alone.
 
 ## 13. Career Ops compatibility and import
 
 ### 13.1 Role of Career Ops
 
-Career Ops is an upstream behavior and data reference. Career Workbench does
-not embed its agent skills as the production domain backend and does not run
-its headless model workers.
+Career Ops is an upstream behavior and data reference. Career Workbench does not
+embed its agent skills as the production domain backend and does not run its
+headless model workers.
 
 ### 13.2 Initial reference revision
 
@@ -1056,23 +1055,23 @@ package and patch identities in its lock and runtime diagnostics.
 
 The initial live acceptance profile uses the DSH `openai-codex` provider with
 Codex OAuth and configured model `gpt-5.6-sol`. The configured reasoning level
-is recorded per test. No provider-reported identity is invented when the
-adapter does not supply one.
+is recorded per test. No provider-reported identity is invented when the adapter
+does not supply one.
 
 ### 14.3 Compatibility failures
 
 Missing Cordis services, mismatched package symbols, unsupported DSH revision,
 missing patches, unsupported model/reasoning, or incompatible database schema
-block affected startup or features with stable diagnostics. The product MUST
-not install a fallback runtime or silently disable a requested capability.
+block affected startup or features with stable diagnostics. The product MUST not
+install a fallback runtime or silently disable a requested capability.
 
 ## 15. Security and privacy
 
 ### 15.1 Personal data
 
-Career data may include contact details, employment history, compensation,
-work authorization, private correspondence, and third-party personal data.
-The default workspace is private to the local OS user.
+Career data may include contact details, employment history, compensation, work
+authorization, private correspondence, and third-party personal data. The
+default workspace is private to the local OS user.
 
 Fixtures, screenshots, examples, telemetry, and retained QA evidence use
 synthetic or scrubbed data.
@@ -1092,8 +1091,8 @@ references only when necessary. It MUST NOT:
 ### 15.3 Prompt injection
 
 External source text is wrapped and labeled as untrusted data in every model
-projection. Imperative text aimed at an AI is preserved as content or flagged
-as an anomaly; it is never executed as policy.
+projection. Imperative text aimed at an AI is preserved as content or flagged as
+an anomaly; it is never executed as policy.
 
 Source content cannot choose tools, models, reasoning, destinations, approval
 scope, or files outside its operation.
@@ -1166,9 +1165,8 @@ Deterministic, non-effectful reads MAY use bounded automatic retries. Provider,
 child, RLM, and mutation retries are explicit operations with fresh identities
 unless the underlying public contract proves no dispatch or commit occurred.
 
-Authentication, permission, invalid-request, evidence-safety, schema,
-identity, approval, and artifact-integrity failures are not automatically
-retried.
+Authentication, permission, invalid-request, evidence-safety, schema, identity,
+approval, and artifact-integrity failures are not automatically retried.
 
 ## 17. Observability
 
@@ -1190,8 +1188,8 @@ The application exposes:
 ### 17.2 Logs
 
 Structured logs include workspace, command, operation, entity, and public DSH
-correlation IDs when relevant. Large source content is referenced by digest,
-not logged by default.
+correlation IDs when relevant. Large source content is referenced by digest, not
+logged by default.
 
 Redaction occurs before values enter a sink. A sink failure does not corrupt
 domain state.
@@ -1199,9 +1197,9 @@ domain state.
 ### 17.3 Diagnostics
 
 The product exposes a scrubbed diagnostics report containing versions,
-capability readiness, schema state, workspace health, DSH/RLM compatibility,
-and recent stable error categories. It excludes credentials, raw personal
-content, absolute private paths by default, and connection secrets.
+capability readiness, schema state, workspace health, DSH/RLM compatibility, and
+recent stable error categories. It excludes credentials, raw personal content,
+absolute private paths by default, and connection secrets.
 
 ## 18. Validation profiles
 
@@ -1303,16 +1301,15 @@ Collect at least:
 - perceived effort, control, and trust; and
 - route preference with reasons.
 
-RLM is not preferred merely because a participant likes the final prose. It
-must improve a named dimension without unacceptable reliability, latency,
-cost, safety, or comprehension regressions.
+RLM is not preferred merely because a participant likes the final prose. It must
+improve a named dimension without unacceptable reliability, latency, cost,
+safety, or comprehension regressions.
 
 ### 18.6 Security profile
 
 Required adversarial cases include:
 
-- prompt injection in a job description, company page, email, and imported
-  file;
+- prompt injection in a job description, company page, email, and imported file;
 - unsupported candidate claims with valid-looking locators;
 - combined fragments that overstate a fact;
 - rejected evidence reappearing after retry, compaction, child output, or RLM;
@@ -1346,8 +1343,8 @@ The v0.1 vertical product slice is accepted only when a clean installation can:
 13. cancel an active operation and fence late results;
 14. import the supported subset of a pinned Career Ops fixture after preview;
 15. export a credential-free workspace package; and
-16. pass core, browser, DSH, RLM, live, security, packaging, and usability
-    gates applicable to the slice.
+16. pass core, browser, DSH, RLM, live, security, packaging, and usability gates
+    applicable to the slice.
 
 ## 20. Definition of done
 

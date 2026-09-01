@@ -1,0 +1,16 @@
+{
+  "$id": "DecideEvidenceBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["expectedRevision", "decision", "reason"],
+  "properties": {
+    "expectedRevision": { "minimum": 1, "type": "integer" },
+    "decision": {
+      "anyOf": [
+        { "const": "accepted", "type": "string" },
+        { "const": "rejected", "type": "string" }
+      ]
+    },
+    "reason": { "minLength": 1, "maxLength": 500, "type": "string" }
+  }
+}

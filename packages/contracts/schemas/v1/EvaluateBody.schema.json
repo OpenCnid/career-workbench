@@ -1,0 +1,72 @@
+{
+  "$id": "EvaluateBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["opportunityId", "rubricId", "dimensionInputs"],
+  "properties": {
+    "opportunityId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    },
+    "rubricId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    },
+    "operationId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    },
+    "dimensionInputs": {
+      "minItems": 1,
+      "maxItems": 32,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dimensionKey",
+          "semanticScoreBasisPoints",
+          "evidenceIds",
+          "disposition"
+        ],
+        "properties": {
+          "dimensionKey": { "minLength": 1, "maxLength": 80, "type": "string" },
+          "semanticScoreBasisPoints": {
+            "anyOf": [
+              { "minimum": 0, "maximum": 10000, "type": "integer" },
+              { "type": "null" }
+            ]
+          },
+          "evidenceIds": {
+            "maxItems": 64,
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "minLength": 10,
+              "maxLength": 80,
+              "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+              "type": "string"
+            }
+          },
+          "disposition": {
+            "anyOf": [
+              { "maxLength": 500, "type": "string" },
+              { "type": "null" }
+            ]
+          }
+        }
+      }
+    },
+    "contradictions": {
+      "maxItems": 20,
+      "type": "array",
+      "items": { "minLength": 1, "maxLength": 500, "type": "string" }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "$id": "ReviewArtifactBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["expectedRevision"],
+  "properties": { "expectedRevision": { "minimum": 1, "type": "integer" } }
+}

@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 1,
+  "upstream": "deepseek-rlm",
+  "revision": "0e9f030300f9e5b37b76cdcd3d39bc490a251e79",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "c506884602f7d95427d4340afb435264b3f00d6bc06b5d307508ae29e6dde57a"
+    },
+    {
+      "path": "packages/bundle/dsh.bundle.patch",
+      "sha256": "20345954225e9917e4eb1bf0038706bdaf8edf5db81b9a0935f24f8dd7b5d70a"
+    },
+    {
+      "path": "packages/bundle/example.cordis.yml",
+      "sha256": "91ec75ff90187b36113910dd0600f5638f5c1245f4a01ec8aaef10efe7bf4975"
+    },
+    {
+      "path": "packages/bundle/LICENSE",
+      "sha256": "c506884602f7d95427d4340afb435264b3f00d6bc06b5d307508ae29e6dde57a"
+    },
+    {
+      "path": "packages/bundle/package.json",
+      "sha256": "b997af08b790d355c3f0c2b98fb4d8ab90dca41f5501bfa359ceafaa204a4e26"
+    },
+    {
+      "path": "packages/bundle/README.md",
+      "sha256": "6d3915c6bd08b8587bec60b6de04a51a735becd6d1c34d9594899dfa8a635d75"
+    },
+    {
+      "path": "packages/bundle/src/index.ts",
+      "sha256": "0c2cd485f135115923a57be8c0754ad6e8fa77ebcd41a6b5916ec1e47a17636b"
+    },
+    {
+      "path": "packages/bundle/src/spawn-provider.ts",
+      "sha256": "c34f7e1491549fc6f1ba58ba5ab63c975f051601b4837aeea2a616b63b7621f6"
+    },
+    {
+      "path": "packages/bundle/tsconfig.json",
+      "sha256": "139c9cf7cff7bdfdd862705f1a568695a941c4a8d23974c51d63fea584feb27b"
+    },
+    {
+      "path": "packages/prime-runtime/LICENSE",
+      "sha256": "c506884602f7d95427d4340afb435264b3f00d6bc06b5d307508ae29e6dde57a"
+    },
+    {
+      "path": "packages/prime-runtime/package.json",
+      "sha256": "b3c416a5601c76eb8fd3cf2a17ca807f232e5e2ccdb3204336b2186ae031f116"
+    },
+    {
+      "path": "packages/prime-runtime/README.md",
+      "sha256": "12d08b4f0262edab6b85fd0b07313e3e28f2ae01e0bfbca40512c7c1e3de74d1"
+    },
+    {
+      "path": "packages/prime-runtime/src/index.ts",
+      "sha256": "ace4caab7d58a0d84ce4dcc59099abcc26a1e2b3c6fcfb9527a21ec386995449"
+    },
+    {
+      "path": "packages/prime-runtime/tsconfig.json",
+      "sha256": "cce8e6b640d5df98574ad5399062ad822d320e5baea33ccb71552b3e244a9efb"
+    },
+    {
+      "path": "packages/rlm-jupyter/LICENSE",
+      "sha256": "b51ea9bc99af8e00dfcf6a5c93b78f8665d0cb496012ce7901765e1e5dce4a4f"
+    },
+    {
+      "path": "packages/rlm-jupyter/package.json",
+      "sha256": "b2e93f9725f280c44b4a5b00c47ec8039fc9f0a24ca5d70c9bb71147ebb063df"
+    },
+    {
+      "path": "packages/rlm-jupyter/README.md",
+      "sha256": "22e79779d51fc281a43a59639e8ba1b0c29f141fab9e20e6bc5a410eeff79304"
+    },
+    {
+      "path": "packages/rlm-jupyter/src/byte-buffer.ts",
+      "sha256": "39cffec7581c4cd72e2359b32766eec20db0ea8aa2e943064f46b459cb9634a3"
+    },
+    {
+      "path": "packages/rlm-jupyter/src/config.ts",
+      "sha256": "b64b7f3ddad7d0630cef065c246daf0f24d304e2f864f24f27f2269848695c04"
+    },
+    {
+      "path": "packages/rlm-jupyter/src/host.ts",
+      "sha256": "1e60b7b9335372d9700a9671f14ec1bf9f9fa11307c9f85d7241029bd820e212"
+    },
+    {
+      "path": "packages/rlm-jupyter/src/index.ts",
+      "sha256": "23ac6a702faaf849ba947eed93923c8998d4097182e75055e2396d7282aff866"
+    },
+    {
+      "path": "packages/rlm-jupyter/src/kernel.ts",
+      "sha256": "0791be4e75ed0e5cb21b80713243660003234ea2cf53a11a690e6c7dfb6a0838"
+    },
+    {
+      "path": "packages/rlm-jupyter/src/protocol.ts",
+      "sha256": "485d5eb304c29be2db4160856f038a67f013df4d74a7c0755b0bb05dba55efa3"
+    },
+    {
+      "path": "packages/rlm-jupyter/src/python.ts",
+      "sha256": "f9319e4eb535fcd83077549a639e7dae125d3e85695412b2de2496e132a6dd4a"
+    },
+    {
+      "path": "packages/rlm-jupyter/src/shell.ts",
+      "sha256": "fa25e54eb58ca56947467d488db2ca50a998ffd3ddbd4b9ea38bc0247fa03a9a"
+    },
+    {
+      "path": "packages/rlm-jupyter/src/snapshot.ts",
+      "sha256": "10cde69d0bebcde7bb91be0b4691765e5bafda6fc1546afd150f37111bb99afe"
+    },
+    {
+      "path": "packages/rlm-jupyter/tsconfig.json",
+      "sha256": "a6a28977030bf82fa823fed29bf53ccd1006bab828456ec0bdebbfb4ab89f4de"
+    },
+    {
+      "path": "packages/rlm/LICENSE",
+      "sha256": "c506884602f7d95427d4340afb435264b3f00d6bc06b5d307508ae29e6dde57a"
+    },
+    {
+      "path": "packages/rlm/package.json",
+      "sha256": "0b21a84470a858700b0dfa5ca673766b94bc7ec06f8c3ac1c2b4af20e187b72c"
+    },
+    {
+      "path": "packages/rlm/README.md",
+      "sha256": "e4a70d064ac968c06f08c4ba516578a96efa08375f14566b9c0beefeed29c7a6"
+    },
+    {
+      "path": "packages/rlm/src/index.ts",
+      "sha256": "e62397a2cdc86e8d6d2782198fd51a24496ebf9f65bf1d511e67e7ceea1bf2f7"
+    },
+    {
+      "path": "packages/rlm/tsconfig.json",
+      "sha256": "cce8e6b640d5df98574ad5399062ad822d320e5baea33ccb71552b3e244a9efb"
+    },
+    {
+      "path": "packages/tool-ipython/LICENSE",
+      "sha256": "c506884602f7d95427d4340afb435264b3f00d6bc06b5d307508ae29e6dde57a"
+    },
+    {
+      "path": "packages/tool-ipython/package.json",
+      "sha256": "ee661871d31a3796249c668121e4d5185d43e62f5fb9a242c87ad212b0e90e7c"
+    },
+    {
+      "path": "packages/tool-ipython/README.md",
+      "sha256": "a44e061d5f421674e9f0c4588adc4af08a6a11a6523361bdb4bce679aafb199a"
+    },
+    {
+      "path": "packages/tool-ipython/src/index.ts",
+      "sha256": "a1ca84c3d8b5d709c80e9770278e95d65a85f56ec49da3809c8623046fb4cea0"
+    },
+    {
+      "path": "packages/tool-ipython/tsconfig.json",
+      "sha256": "c7ec28516e9dc138ff83c54f189b06ca7a2bfe6f1927da490157087efa4f3b83"
+    },
+    {
+      "path": "python/dsh-rlm-runtime/pyproject.toml",
+      "sha256": "964dabd19ac1033f6625137fbb1bdbd406eed2d83dc249e01ff52965af6e6b23"
+    },
+    {
+      "path": "python/dsh-rlm-runtime/src/agent_message/__init__.py",
+      "sha256": "fe4887e0e5e9070b490d33211db28eca5ae00287bb3fda2740ee0fd092e75677"
+    },
+    {
+      "path": "python/dsh-rlm-runtime/src/dsh_rlm_runtime/__init__.py",
+      "sha256": "b685dae9f567c7181b80d3231b92f1c7db75f4bb90c2a3a908562a76a02a05db"
+    },
+    {
+      "path": "python/dsh-rlm-runtime/src/dsh_tools/__init__.py",
+      "sha256": "785c7041215a4a10164d329faebb1e553ba86aed710599017640da3e11054921"
+    },
+    {
+      "path": "python/managed-requirements.in",
+      "sha256": "0abc6c565eb5d81bcc71fc0171b7b78439676c2ce46c002f07e1d7b77ddecee9"
+    },
+    {
+      "path": "python/managed-requirements.lock",
+      "sha256": "0d72c8c450c62fdb405db96cfa5dbffb3a60eedacb24dc37c028267696d258af"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "sha256": "e6927632cc9634ceccbbd033408787dceed025010e35360f9d4468fcf59fb59d"
+    },
+    {
+      "path": "tsconfig.base.json",
+      "sha256": "0537b0ac9594503a9907b93d1c8666adcddc1c66450c109ed196437b4a79bce8"
+    },
+    {
+      "path": "vendor/prime-agent-runtime/LICENSE.upstream",
+      "sha256": "b288615fb31dc504623582fb790a28e6d86bc2f5c1396845af555e43386da5a0"
+    },
+    {
+      "path": "vendor/prime-agent-runtime/pyproject.toml",
+      "sha256": "95e05b16faaa7ff9c6d8ece46d83867ca1d7e72a69f8fad162ec4c6da237885d"
+    },
+    {
+      "path": "vendor/prime-agent-runtime/src/rlm/__init__.py",
+      "sha256": "c12285a6f73aaa141a04e19d10fb8a4a0c2a0ca430e08c3b6d24d88e5fac5be1"
+    },
+    {
+      "path": "vendor/prime-agent-runtime/src/rlm/harness.py",
+      "sha256": "de43f023279bd661993f6dd27d9e97cb670d10439c861c17b381962bb48d9e8e"
+    },
+    {
+      "path": "vendor/prime-agent-runtime/src/rlm/mcp_base.py",
+      "sha256": "9aaf08bbd3c46003438e3a9e7230c01d733368c82eb106eab953317b1d1f21e9"
+    },
+    {
+      "path": "vendor/prime-agent-runtime/src/rlm/skill.py",
+      "sha256": "23f1ecba340b24a4e75880437f33fa72fbd510a2da496a87a9d033fc66b92a7a"
+    }
+  ]
+}

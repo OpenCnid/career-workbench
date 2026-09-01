@@ -1,0 +1,35 @@
+{
+  "$id": "QueryEnvelope",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "contractVersion",
+    "workspaceId",
+    "queryKind",
+    "limit",
+    "filters"
+  ],
+  "properties": {
+    "contractVersion": { "const": "v1", "type": "string" },
+    "workspaceId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string",
+      "$id": "WorkspaceId"
+    },
+    "queryKind": {
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_.-]*$",
+      "type": "string"
+    },
+    "cursor": { "minLength": 1, "maxLength": 512, "type": "string" },
+    "limit": { "minimum": 1, "maximum": 100, "type": "integer" },
+    "filters": {
+      "maxProperties": 16,
+      "type": "object",
+      "patternProperties": { "^(.*)$": {} }
+    }
+  }
+}

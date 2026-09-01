@@ -1,0 +1,23 @@
+{
+  "name": "@career-workbench/server",
+  "version": "0.1.0-preview.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx watch src/index.ts",
+    "start": "node lib/index.js",
+    "start:test": "node lib/index.js --test",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@career-workbench/application": "workspace:*",
+    "@career-workbench/career-ops-import": "workspace:*",
+    "@career-workbench/contracts": "workspace:*",
+    "@career-workbench/domain": "workspace:*",
+    "@career-workbench/storage": "workspace:*",
+    "@fastify/static": "10.1.3",
+    "fastify": "5.12.1"
+  }
+}

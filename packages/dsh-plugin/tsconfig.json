@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib",
+    "composite": true,
+    "types": ["node"],
+    "lib": ["ES2024", "DOM", "DOM.Iterable", "ESNext.Disposable"]
+  },
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../contracts" }]
+}

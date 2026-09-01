@@ -1,0 +1,35 @@
+{
+  "$id": "CreateCandidateArtifactBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["kind", "opportunityId", "factIds"],
+  "properties": {
+    "kind": {
+      "anyOf": [
+        { "const": "draft_cv", "type": "string" },
+        { "const": "draft_cover_letter", "type": "string" },
+        { "const": "draft_outreach", "type": "string" },
+        { "const": "draft_interview_prep", "type": "string" }
+      ]
+    },
+    "opportunityId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    },
+    "factIds": {
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 10,
+        "maxLength": 80,
+        "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+        "type": "string"
+      }
+    },
+    "styleNote": { "minLength": 1, "maxLength": 1000, "type": "string" }
+  }
+}

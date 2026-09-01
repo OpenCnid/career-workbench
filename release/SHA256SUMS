@@ -1,0 +1,9 @@
+9328b59947c29b6415b9adf30cb5369ba1bc866df15b5d22cd10b3fbcf980c59  release/package-inventory.json
+cba5ade850e83e11cdb00104ee06d5b37a2de5bc805efcda99083044e3d7b383  release/packages/career-workbench-contracts-0.1.0-preview.0.tgz
+82a9d33c3ce871246587c72a143cc3f9449b0d0047e0c89d19d989fdbbec01d1  release/packages/career-workbench-dsh-plugin-0.1.0-preview.0.tgz
+aca64e0b4d8ff0dd8b35527f63b0a6d639f46a873dc7e678c800d83e39d4e6ae  release/packages/deepseek-rlm-dsh-rlm-0.1.0-preview.0.tgz
+a558931b3530d019c94fc32cc3c62ae9a24c3f3338c4c8852ce60419e8f03e53  release/packages/deepseek-rlm-dsh-rlm-bundle-0.1.0-preview.0.tgz
+abce05d7b18dd43e9ea084876b7480c94d81ed3dc551690afeb49d81cb452948  release/packages/deepseek-rlm-dsh-rlm-jupyter-0.1.0-preview.0.tgz
+9f02c17ecdb157a51e581a4639108c5d30229e2d312e6d7c6797b2ed5095f5c1  release/packages/deepseek-rlm-dsh-rlm-prime-runtime-0.1.0-preview.0.tgz
+458c410a9ffba5de55d624814fcf18bdb98ce84eb0c0b554753c7634869fe8c7  release/packages/deepseek-rlm-dsh-tool-ipython-0.1.0-preview.0.tgz
+5c6fed94ff33fd6511ce263b13f5c44cbc72037570ccf70e2206acc5173cb94b  sbom.cdx.json

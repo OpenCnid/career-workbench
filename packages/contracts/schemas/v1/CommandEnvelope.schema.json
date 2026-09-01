@@ -1,0 +1,70 @@
+{
+  "$id": "CommandEnvelope",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "contractVersion",
+    "workspaceId",
+    "commandId",
+    "commandKind",
+    "actor",
+    "expectedRevisions",
+    "payload"
+  ],
+  "properties": {
+    "contractVersion": { "const": "v1", "type": "string" },
+    "workspaceId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string",
+      "$id": "WorkspaceId"
+    },
+    "commandId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string",
+      "$id": "EntityId"
+    },
+    "commandKind": {
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_.-]*$",
+      "type": "string"
+    },
+    "actor": {
+      "anyOf": [
+        { "const": "user", "type": "string" },
+        { "const": "browser", "type": "string" },
+        { "const": "dsh_agent", "type": "string" },
+        { "const": "dsh_child", "type": "string" },
+        { "const": "import", "type": "string" },
+        { "const": "system", "type": "string" }
+      ]
+    },
+    "idempotencyKey": { "minLength": 16, "maxLength": 128, "type": "string" },
+    "expectedRevisions": {
+      "maxProperties": 32,
+      "type": "object",
+      "patternProperties": {
+        "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      }
+    },
+    "operationId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string",
+      "$id": "EntityId"
+    },
+    "payload": {
+      "maxProperties": 64,
+      "type": "object",
+      "patternProperties": { "^(.*)$": {} }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "@career-workbench/career-ops-import",
+  "version": "0.1.0-preview.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@career-workbench/application": "workspace:*",
+    "@career-workbench/contracts": "workspace:*",
+    "@career-workbench/domain": "workspace:*",
+    "yaml": "2.8.1"
+  }
+}

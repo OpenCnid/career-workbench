@@ -1,0 +1,713 @@
+diff --git a/lib/index.js b/lib/index.js
+index 062737ec886212434068c4f4c192caa008f30fb8..f5fba2b9ab34c1c415382c9b36e0591cab597dde 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -770,6 +770,74 @@ function seedDescriptorTurn(childId, seed, descriptor) {
+ 	return [...staged.events];
+ }
+ //#endregion
++//#region lib/types/deletion.js
++/**
++* Durable, parent-owned deletion tombstones for continuable subagents.
++*
++* Deletion deliberately does not remove session media. The direct parent's
++* append-only log records that the address is revoked; retained child logs can
++* still satisfy audit and retention policy without remaining resumable.
++*
++* @module @deepseek-ai/dsh-subagent/deletion
++*/
++/** Fold the first durable deletion record for one child. */
++function foldSubagentDeletion(events, childId) {
++	const event = events.find((candidate) => candidate.type === "subagent/deleted" && typeof candidate.data === "object" && candidate.data !== null && candidate.data.childId === childId);
++	if (event === void 0) return void 0;
++	const data = event.data;
++	if (data.version !== 1 || typeof data.label !== "string" || typeof data.deletedAt !== "number") throw new SubagentError(`persisted deletion tombstone for subagent "${childId}" is invalid`, "CORRUPT_DELETION");
++	return data;
++}
++/** Read every deleted direct-child id from one parent's current log. */
++function deletedChildIds(events) {
++	const ids = /* @__PURE__ */ new Set();
++	for (const event of events) {
++		if (event.type !== "subagent/deleted" || typeof event.data !== "object" || event.data === null) continue;
++		const data = event.data;
++		if (data.version === 1 && typeof data.childId === "string") ids.add(data.childId);
++	}
++	return ids;
++}
++/** Load a parent's live-preferred event log without resuming an Agent. */
++async function parentEvents(ctx, parentId, signal) {
++	signal?.throwIfAborted();
++	const sessions = ctx.get("sessions");
++	if (sessions === void 0) throw new SubagentError("listing deletion state requires the sessions service", "LIST_FAILED");
++	const live = sessions.get(parentId);
++	if (live !== void 0) return live.events;
++	const persistence = ctx.get("sessionPersistence");
++	if (persistence === void 0) return [];
++	try {
++		const inspected = await persistence.inspect(parentId, signal);
++		signal?.throwIfAborted();
++		return inspected.events;
++	} catch (error) {
++		signal?.throwIfAborted();
++		throw new SubagentError(`cannot inspect deletion state for parent session "${parentId}"`, "LIST_FAILED", { cause: error });
++	}
++}
++/** Remove tombstoned direct children from a public child listing. */
++async function filterDeletedChildren(ctx, parentId, rows, signal) {
++	if (rows.length === 0) return rows;
++	const deleted = deletedChildIds(await parentEvents(ctx, parentId, signal));
++	return rows.filter((row) => !deleted.has(row.id));
++}
++/** Remove tombstoned branches from a stable pre-order descendant listing. */
++async function filterDeletedDescendants(ctx, rows, signal) {
++	if (rows.length === 0) return rows;
++	const parentIds = [...new Set(rows.map((row) => row.parentId))];
++	const deletions = /* @__PURE__ */ new Map();
++	await Promise.all(parentIds.map(async (parentId) => {
++		deletions.set(parentId, deletedChildIds(await parentEvents(ctx, parentId, signal)));
++	}));
++	const blocked = /* @__PURE__ */ new Set();
++	return rows.filter((row) => {
++		const hidden = blocked.has(row.parentId) || deletions.get(row.parentId)?.has(row.id) === true;
++		if (hidden) blocked.add(row.id);
++		return !hidden;
++	});
++}
++//#endregion
+ //#region lib/types/continuation.js
+ /**
+ * Internal continuable-subagent manager: stable child ids, descriptor
+@@ -1044,6 +1112,7 @@ var SubagentContinuationManager = class {
+ 	*/
+ 	async followup(parent, childId, content, options) {
+ 		this.assertAdmitting(parent);
++		this.assertNotDeleted(parent, childId);
+ 		while (true) {
+ 			const live = await this.locks.run(childId, async () => {
+ 				const activation = this.activations.get(childId);
+@@ -1071,6 +1140,66 @@ var SubagentContinuationManager = class {
+ 		}
+ 	}
+ 	/**
++	* Permanently revoke a continuable child address under its exact live direct
++	* parent. The parent-owned tombstone is flushed before a resident Activation
++	* is released, so every later delivery observes deletion even when teardown
++	* fails. Retained child session media is intentionally not removed.
++	*/
++	async deleteContinuable(parent, childId, signal) {
++		signal.throwIfAborted();
++		this.assertAdmitting(parent);
++		this.requirePersistence();
++		return this.locks.run(childId, async () => {
++			signal.throwIfAborted();
++			this.assertAdmitting(parent);
++			const existing = foldSubagentDeletion(parent.session.events, childId);
++			const activation = this.activations.get(childId);
++			if (existing !== void 0) {
++				if (activation !== void 0) await this.dispose(activation);
++				return {
++					...existing,
++					alreadyDeleted: true
++				};
++			}
++			let label;
++			if (activation !== void 0) {
++				this.authorizeLineage(parent, childId, activation.handle.agent.session.header.parentSession);
++				const descriptor = foldSubagentDescriptor(activation.handle.agent.session.events.slice(activation.handle.agent.session.header.seedLength ?? 0));
++				if (descriptor === void 0 || descriptor.mode !== "continuable") throw new SubagentError(`subagent "${childId}" is not continuable`, "NOT_RESUMABLE");
++				label = descriptor.label;
++			} else {
++				const persistence = this.requirePersistence();
++				let loaded;
++				try {
++					loaded = await persistence.inspect(childId, signal);
++				} catch (error) {
++					signal.throwIfAborted();
++					throw new SubagentError(`subagent "${childId}" is unavailable`, "NOT_RESUMABLE", { cause: error });
++				}
++				signal.throwIfAborted();
++				this.authorizeLineage(parent, childId, loaded.meta.parentSession);
++				const descriptor = foldSubagentDescriptor(loaded.events.slice(loaded.meta.seedLength ?? 0));
++				if (descriptor === void 0 || descriptor.mode !== "continuable") throw new SubagentError(`subagent "${childId}" is not continuable`, "NOT_RESUMABLE");
++				label = descriptor.label;
++			}
++			const tombstone = {
++				version: 1,
++				childId,
++				label,
++				deletedAt: Date.now()
++			};
++			parent.session.append("subagent/deleted", tombstone);
++			const sessions = this.ctx.get("sessions");
++			if (sessions === void 0) throw new SubagentError("continuable deletion requires the sessions service", "CONTINUATION_UNAVAILABLE");
++			await sessions.flush(parent.session);
++			if (activation !== void 0) await this.dispose(activation);
++			return {
++				...tombstone,
++				alreadyDeleted: false
++			};
++		});
++	}
++	/**
+ 	* Interrupt one live continuable child's current turn. Admission is
+ 	* synchronous and the effect is asynchronous: this authorizes the caller,
+ 	* requests `Agent.cancel(cause, { keepInbox: true })` on the target, and
+@@ -1611,6 +1740,11 @@ var SubagentContinuationManager = class {
+ 		if (this.ctx.agents.get(parent.id) !== parent) throw new SubagentError(`subagent "${childId}" delivery requires the exact live parent agent`, "UNAUTHORIZED");
+ 		if (parentSession !== parent.id) throw new SubagentError(`subagent "${childId}" belongs to another parent session`, "UNAUTHORIZED");
+ 	}
++	/** Reject an address permanently revoked in the exact live parent's log. */
++	assertNotDeleted(parent, childId) {
++		if (foldSubagentDeletion(parent.session.events, childId) === void 0) return;
++		throw new SubagentError(`subagent "${childId}" was deleted and cannot accept more messages`, "DELETED");
++	}
+ 	/**
+ 	* Follow one Activation to settlement: wait for Agent quiescence, then for
+ 	* every owned child to complete disposal, and dispose the handle once both
+@@ -2846,6 +2980,14 @@ let SubagentRuntime = (() => {
+ 			return this.requireContinuations().followup(parent, childId, content, options);
+ 		}
+ 		/**
++		* Durably revoke one continuable child owned by the exact live parent.
++		* Deletion is idempotent and retention-preserving: it appends and flushes a
++		* parent-owned tombstone, then releases any resident Activation child-first.
++		*/
++		async deleteContinuable(parent, childId, options) {
++			return this.requireContinuations().deleteContinuable(parent, childId, options.signal);
++		}
++		/**
+ 		* Interrupt one live continuable child's current turn under a human parent
+ 		* address or an exact live ancestor Agent. Fire-and-return: the cancel
+ 		* signal is issued before this returns, but the target may keep running
+@@ -2935,8 +3077,9 @@ let SubagentRuntime = (() => {
+ 		* @throws {@link SubagentError} when the projection registry or the session
+ 		*   store is not mounted, or the caller cancels the listing.
+ 		*/
+-		listChildren(parentSessionId, signal) {
+-			return listChildren(this.ctx, parentSessionId, signal);
++		async listChildren(parentSessionId, signal) {
++			const rows = await listChildren(this.ctx, parentSessionId, signal);
++			return filterDeletedChildren(this.ctx, parentSessionId, rows, signal);
+ 		}
+ 		/**
+ 		* Enumerate the root's complete session-backed subagent tree in stable
+@@ -2953,8 +3096,9 @@ let SubagentRuntime = (() => {
+ 		*   stable pre-order.
+ 		* @throws {@link SubagentError} under the same conditions as {@link listChildren}.
+ 		*/
+-		listDescendants(rootSessionId, signal) {
+-			return listDescendants(this.ctx, rootSessionId, signal);
++		async listDescendants(rootSessionId, signal) {
++			const rows = await listDescendants(this.ctx, rootSessionId, signal);
++			return filterDeletedDescendants(this.ctx, rows, signal);
+ 		}
+ 		/**
+ 		* Remote face of {@link listChildren} for one browser: the durable listing
+@@ -3172,4 +3316,4 @@ let SubagentRuntime = (() => {
+ 	};
+ })();
+ //#endregion
+-export { AssistantOutputFold, NO_START_CAPABILITIES, SUBAGENT_DESCRIPTOR_VERSION, SubagentDepthError, SubagentError, SubagentRunId, SubagentRuntime, SubagentRuntime as default, appendDelegatedPolicyOverrides, applyChildComposition, assertPositiveFinite, assertSubagentMaxDepth, assertUsableCwd, captureDelegatedPolicyOverrides, childSessionMeta, delegationDepthOf, finalAssistantOutput, foldSubagentDescriptor, parentAgentOptionsForDelegation, resolveChildAgentOptions, resolveChildCwd, resolveChildDepth, seedDescriptorTurn, settleRun, settleRunResult, snapshotSubagentDescriptor, subprocessRunHandle, validateConfiguredCwd };
++export { AssistantOutputFold, NO_START_CAPABILITIES, SUBAGENT_DESCRIPTOR_VERSION, SubagentDepthError, SubagentError, SubagentRunId, SubagentRuntime, SubagentRuntime as default, appendDelegatedPolicyOverrides, applyChildComposition, assertPositiveFinite, assertSubagentMaxDepth, assertUsableCwd, captureDelegatedPolicyOverrides, childSessionMeta, delegationDepthOf, finalAssistantOutput, foldSubagentDeletion, foldSubagentDescriptor, parentAgentOptionsForDelegation, resolveChildAgentOptions, resolveChildCwd, resolveChildDepth, seedDescriptorTurn, settleRun, settleRunResult, snapshotSubagentDescriptor, subprocessRunHandle, validateConfiguredCwd };
+diff --git a/lib/typert.host.js b/lib/typert.host.js
+index 752bda40e049c9053ddbbb6494f1ef3e2ac758fe..56059b823dd934dd2fcaef8cb84e42227bf6d544 100644
+--- a/lib/typert.host.js
++++ b/lib/typert.host.js
+@@ -101,7 +101,7 @@ export const TYPERT = {
+         typeSymbol: '@deepseek-ai/dsh-subagent/client#SubagentInterruptReceipt',
+         schema: _deepseek_ai_dsh_subagent_subagents_interruptByParent_result$schema,
+       },
+-      sourceLocation: {"file":"packages/subagent/subagent/src/index.ts","line":491,"column":3},
++      sourceLocation: {"file":"packages/subagent/subagent/src/index.ts","line":510,"column":3},
+     },
+     {
+       id: '@deepseek-ai/dsh-subagent#subagents/list',
+@@ -128,7 +128,7 @@ export const TYPERT = {
+         typeSymbol: '@deepseek-ai/dsh-subagent/client#SubagentCatalog',
+         schema: _deepseek_ai_dsh_subagent_subagents_list_result$schema,
+       },
+-      sourceLocation: {"file":"packages/subagent/subagent/src/index.ts","line":407,"column":9},
++      sourceLocation: {"file":"packages/subagent/subagent/src/index.ts","line":426,"column":9},
+     },
+     {
+       id: '@deepseek-ai/dsh-subagent#subagents/prompt',
+@@ -154,7 +154,7 @@ export const TYPERT = {
+         typeSymbol: '@deepseek-ai/dsh-subagent/client#SubagentPromptReceipt',
+         schema: _deepseek_ai_dsh_subagent_subagents_prompt_result$schema,
+       },
+-      sourceLocation: {"file":"packages/subagent/subagent/src/index.ts","line":433,"column":9},
++      sourceLocation: {"file":"packages/subagent/subagent/src/index.ts","line":452,"column":9},
+     },
+   ],
+   model: {
+@@ -181,6 +181,13 @@ export const TYPERT = {
+             "summary": "Deliver one later message to a continuable child as its next FIFO turn.",
+             "jsDoc": "/**\n * Deliver one later message to a continuable child as its next FIFO turn. A\n * resident child's Agent inbox accepts it directly (waking a `waiting`\n * Activation), while an absent one is cold-resumed from its persisted\n * Session. The Agent inbox is the only queue, so every accepted message has\n * one observable order.\n * @param parent - the exact live direct parent authorizing this delivery.\n * @param childId - durable child session id.\n * @param content - user-role content to deliver.\n * @param options - the message source fields and caller cancellation, which stops the\n *   operation only before inbox acceptance.\n * @returns the accepted message's inbox id.\n * @throws when continuation services are unavailable, parent authority is\n *   rejected, or the message was not admitted.\n */"
+           },
++          {
++            "kind": "method",
++            "name": "deleteContinuable",
++            "signature": "async deleteContinuable( parent: Agent, childId: SessionId, options: { readonly signal: AbortSignal }, ): Promise<ContinuableDeleteResult>",
++            "summary": "Durably revoke one continuable child owned by the exact live parent.",
++            "jsDoc": "/**\n * Durably revoke one continuable child owned by the exact live parent.\n * Deletion is idempotent and retention-preserving: it appends and flushes a\n * parent-owned tombstone, then releases any resident Activation child-first.\n */"
++          },
+           {
+             "kind": "method",
+             "name": "interrupt",
+@@ -219,14 +226,14 @@ export const TYPERT = {
+           {
+             "kind": "method",
+             "name": "listChildren",
+-            "signature": "listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentListEntry[]>",
++            "signature": "async listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentListEntry[]>",
+             "summary": "Enumerate the parent's direct session-backed subagents without loading or resuming an Agent.",
+             "jsDoc": "/**\n * Enumerate the parent's direct session-backed subagents without loading or\n * resuming an Agent. The Session query service supplies one live-preferred\n * corpus and shared point observations; the projection cache supplies\n * immutable descriptor hits without opening cold logs. The registered\n * `subagent` projection remains the sole mode/label classifier.\n *\n * Every query receives `signal`, and the listing rechecks cancellation\n * around each await. Read rejections that settle\n * after an abort become a stable `SubagentError` with code `CANCELLED`.\n * @param parentSessionId - parent session whose direct children are listed.\n * @param signal - caller-owned cancellation forwarded to Session queries\n *   and observed around every read await.\n * @returns children and per-child diagnostics ordered by `createdAt`, then id.\n * @throws {@link SubagentError} when the projection registry or the session\n *   store is not mounted, or the caller cancels the listing.\n */"
+           },
+           {
+             "kind": "method",
+             "name": "listDescendants",
+-            "signature": "listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>",
++            "signature": "async listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>",
+             "summary": "Enumerate the root's complete session-backed subagent tree in stable pre-order from one live-preferred corpus, without loading or resuming an Agent.",
+             "jsDoc": "/**\n * Enumerate the root's complete session-backed subagent tree in stable\n * pre-order from one live-preferred corpus, without loading or resuming an\n * Agent. Ordinary sessions and one-shot children remain traversal nodes so\n * continuable descendants below them are discovered; each returned entry\n * adds its durable `parentId` and root-relative `depth`. Identity resolution,\n * diagnostics, optional persistence, and cancellation follow the same\n * projection-backed contract as {@link listChildren}.\n * @param rootSessionId - session whose complete descendant tree is listed.\n * @param signal - caller-owned cancellation forwarded to persistence reads\n *   and observed around every read await.\n * @returns children and per-candidate diagnostics with tree position, in\n *   stable pre-order.\n * @throws {@link SubagentError} under the same conditions as {@link listChildren}.\n */"
+           },
+@@ -373,6 +380,10 @@ export const TYPERT = {
+             "name": "ContinuableCreateSpec",
+             "declaration": "export interface ContinuableCreateSpec {\n    readonly seed?: readonly SessionEvent[];\n}"
+           },
++          {
++            "name": "ContinuableDeleteResult",
++            "declaration": "export interface ContinuableDeleteResult extends SubagentDeletedData {\n    readonly alreadyDeleted: boolean;\n}"
++          },
+           {
+             "name": "ContinuableSetupContribution",
+             "declaration": "export type ContinuableSetupContribution = (childCtx: Context) => () => void;"
+@@ -571,7 +582,7 @@ export const TYPERT = {
+           },
+           {
+             "name": "Session",
+-            "declaration": "export class Session {\n    get surface(): SessionSurface;\n    readonly header: SessionHeader;\n    get id(): SessionId;\n    readonly firstLiveSeq: number;\n    get events(): readonly SessionEvent[];\n    get seq(): number;\n    append<T extends SessionEventType>(type: T, data: SessionEventMap[T], ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent] : []): SessionEvent<T>;\n    requestHeader(): EpochHeader | undefined;\n    requestContext(): RequestContext | undefined;\n    deriveMessages(): Message[];\n    deriveEventMessage(event: SessionEvent): Message | null;\n}"
++            "declaration": "export class Session {\n    get surface(): SessionSurface;\n    readonly header: SessionHeader;\n    get id(): SessionId;\n    readonly firstLiveSeq: number;\n    get events(): readonly SessionEvent[];\n    get seq(): number;\n    append<T extends SessionEventType>(type: T, data: SessionEventMap[T], ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent] : []): SessionEvent<T>;\n    appendIgnorable<T extends Exclude<SessionEventType, SurfaceEventType>>(type: T, data: SessionEventMap[T]): SessionEvent<T>;\n    requestHeader(): EpochHeader | undefined;\n    requestContext(): RequestContext | undefined;\n    deriveMessages(): Message[];\n    deriveEventMessage(event: SessionEvent): Message | null;\n}"
+           },
+           {
+             "name": "SessionEvent",
+@@ -579,7 +590,7 @@ export const TYPERT = {
+           },
+           {
+             "name": "SessionEventMap",
+-            "declaration": "export interface SessionEventMap {\n    'turn/start': { turn: number; };\n    'turn/end': { turn: number; reason: TurnEndReason; };\n    'step/start': { turn: number; step: number; };\n    'step/end': { turn: number; step: number; };\n    'user/message': UserMessage;\n    'assistant/chunk': { turn: number; step: number; chunk: StreamChunk; };\n    'assistant/message': { turn: number; step: number; message: AssistantMessage; usage?: TokenUsage; interrupted?: true; };\n    'tool/call': { turn: number; step: number; callId: ToolCallId; name: string; arguments: string; };\n    'tool/result': { turn: number; step: number; message: ToolResultMessage; error?: { name: string; code: string; }; meta?: JsonValue; };\n    'request/header': { header: EpochHeader; reason: RequestHeaderReason; startsSeries?: true; };\n    'request/context': RequestContext;\n    'session/end-seed': Record<string, never>;\n    'agent/inbox/spliced': { target: InboxTarget; start: number; removedCount?: number; inserted: UserMessage[]; outcome?: 'canceled'; };\n    'approval/asked': { id: ApprovalRequestId; toolName: string; callId?: ToolCallId; reason?: string; };\n    'approval/decided': { id: ApprovalRequestId; outcome: ApprovalOutcome; };\n    'approval/policy': { policy: ApprovalPolicy; source?: 'delegation'; };\n    'tool/code-dispatch-start': PtcDispatchStartEventData;\n    'tool/code-dispatch': PtcDispatchEventData;\n    'agent-preset/selected': { agentPreset: string; };\n    'session/title': SessionTitleEventData;\n    'todo/write': { todos: TodoItem[]; };\n    'model/selection': ModelSelection;\n    'subagent/descriptor': SubagentDescriptorData;\n    'sandbox/mode': { mode: SandboxMode; source?: 'delegation'; };\n    'command/run': { commandId: CommandId; name: string; args?: string; source: CommandSource; };\n    'command/done': { commandId: CommandId; kind: 'success' | 'error'; text?: string; sourceEventSeq?: number; };\n    'team/member': { version: 1; teamId: TeamId; member: TeamMemberSnapshot; };\n    'team/task': { version: 1; teamId: TeamId; task: TeamTaskSnapshot; };\n    'team/message/queued': { version: 1; teamId: TeamId; message: TeamMessageSnapshot; };\n    'team/message/delivered': { version: 1; teamId: TeamId; messageId: TeamMessageId; targetId: SessionId; };\n    'goal/change': GoalChangeMeta;\n    'compaction/start': { compactionId: CompactionId; sourceCommandId?: CommandId; turn: number | null; };\n    'compaction/summary': { compactionId: CompactionId; sourceCommandId?: CommandId; summary: ContentBlock[]; shadowedRange: { start: number; end: number; }; shadowedSeqs: number[]; shadowedTokenCount: number; provider: string; model: string; maxTokens?: number; usage?: TokenUsage; } & ({ rawOutput: ContentBlock[]; llmStreamCall: true; } | { rawOutput?: ContentBlock[]; llmStreamCall?: never; });\n    'compaction/end': { compactionId: CompactionId; sourceCommandId?: CommandId; turn: number | null; error?: string; };\n    'compaction/prune': { shadowedRange: { start: number; end: number; }; shadowedSeqs: number[]; shadowedTokenCount: number; };\n}"
++            "declaration": "export interface SessionEventMap {\n    'turn/start': { turn: number; };\n    'turn/end': { turn: number; reason: TurnEndReason; };\n    'step/start': { turn: number; step: number; };\n    'step/end': { turn: number; step: number; };\n    'user/message': UserMessage;\n    'assistant/chunk': { turn: number; step: number; chunk: StreamChunk; };\n    'assistant/message': { turn: number; step: number; message: AssistantMessage; usage?: TokenUsage; interrupted?: true; };\n    'tool/call': { turn: number; step: number; callId: ToolCallId; name: string; arguments: string; };\n    'tool/result': { turn: number; step: number; message: ToolResultMessage; error?: { name: string; code: string; }; meta?: JsonValue; };\n    'request/header': { header: EpochHeader; reason: RequestHeaderReason; startsSeries?: true; };\n    'request/context': RequestContext;\n    'session/end-seed': Record<string, never>;\n    'agent/inbox/spliced': { target: InboxTarget; start: number; removedCount?: number; inserted: UserMessage[]; outcome?: 'canceled'; };\n    'approval/asked': { id: ApprovalRequestId; toolName: string; callId?: ToolCallId; reason?: string; };\n    'approval/decided': { id: ApprovalRequestId; outcome: ApprovalOutcome; };\n    'approval/policy': { policy: ApprovalPolicy; source?: 'delegation'; };\n    'tool/code-dispatch-start': PtcDispatchStartEventData;\n    'tool/code-dispatch': PtcDispatchEventData;\n    'agent-preset/selected': { agentPreset: string; };\n    'session/title': SessionTitleEventData;\n    'todo/write': { todos: TodoItem[]; };\n    'model/selection': ModelSelection;\n    'subagent/descriptor': SubagentDescriptorData;\n    'sandbox/mode': { mode: SandboxMode; source?: 'delegation'; };\n    'subagent/deleted': SubagentDeletedData;\n    'command/run': { commandId: CommandId; name: string; args?: string; source: CommandSource; };\n    'command/done': { commandId: CommandId; kind: 'success' | 'error'; text?: string; sourceEventSeq?: number; };\n    'team/member': { version: 1; teamId: TeamId; member: TeamMemberSnapshot; };\n    'team/task': { version: 1; teamId: TeamId; task: TeamTaskSnapshot; };\n    'team/message/queued': { version: 1; teamId: TeamId; message: TeamMessageSnapshot; };\n    'team/message/delivered': { version: 1; teamId: TeamId; messageId: TeamMessageId; targetId: SessionId; };\n    'goal/change': GoalChangeMeta;\n    'compaction/start': { compactionId: CompactionId; sourceCommandId?: CommandId; turn: number | null; };\n    'compaction/summary': { compactionId: CompactionId; sourceCommandId?: CommandId; summary: ContentBlock[]; shadowedRange: { start: number; end: number; }; shadowedSeqs: number[]; shadowedTokenCount: number; provider: string; model: string; maxTokens?: number; usage?: TokenUsage; } & ({ rawOutput: ContentBlock[]; llmStreamCall: true; } | { rawOutput?: ContentBlock[]; llmStreamCall?: never; });\n    'compaction/end': { compactionId: CompactionId; sourceCommandId?: CommandId; turn: number | null; error?: string; };\n    'compaction/prune': { shadowedRange: { start: number; end: number; }; shadowedSeqs: number[]; shadowedTokenCount: number; };\n}"
+           },
+           {
+             "name": "SessionEventType",
+@@ -637,6 +648,10 @@ export const TYPERT = {
+             "name": "SubagentCatalog",
+             "declaration": "export interface SubagentCatalog {\n    readonly entries: readonly SubagentListEntry[];\n    readonly parentAvailable: boolean;\n}"
+           },
++          {
++            "name": "SubagentDeletedData",
++            "declaration": "export interface SubagentDeletedData {\n    readonly version: 1;\n    readonly childId: SessionId;\n    readonly label: string;\n    readonly deletedAt: number;\n}"
++          },
+           {
+             "name": "SubagentDescendantListEntry",
+             "declaration": "export type SubagentDescendantListEntry = SubagentListEntry & { readonly parentId: SessionId; readonly depth: number; };"
+diff --git a/lib/typert.remote-client.js b/lib/typert.remote-client.js
+index 07b63507242d2f46de6011513c57365eb87b8573..0b4147e3b4a200ee77d67befab41194c1f17a775 100644
+--- a/lib/typert.remote-client.js
++++ b/lib/typert.remote-client.js
+@@ -98,7 +98,7 @@ export const TYPERT_REMOTE = {
+         typeSymbol: '@deepseek-ai/dsh-subagent/client#SubagentInterruptReceipt',
+         schema: _deepseek_ai_dsh_subagent_subagents_interruptByParent_result$schema,
+       },
+-      sourceLocation: {"file":"packages/subagent/subagent/src/index.ts","line":491,"column":3},
++      sourceLocation: {"file":"packages/subagent/subagent/src/index.ts","line":510,"column":3},
+     },
+     {
+       id: '@deepseek-ai/dsh-subagent#subagents/list',
+@@ -125,7 +125,7 @@ export const TYPERT_REMOTE = {
+         typeSymbol: '@deepseek-ai/dsh-subagent/client#SubagentCatalog',
+         schema: _deepseek_ai_dsh_subagent_subagents_list_result$schema,
+       },
+-      sourceLocation: {"file":"packages/subagent/subagent/src/index.ts","line":407,"column":9},
++      sourceLocation: {"file":"packages/subagent/subagent/src/index.ts","line":426,"column":9},
+     },
+     {
+       id: '@deepseek-ai/dsh-subagent#subagents/prompt',
+@@ -151,7 +151,7 @@ export const TYPERT_REMOTE = {
+         typeSymbol: '@deepseek-ai/dsh-subagent/client#SubagentPromptReceipt',
+         schema: _deepseek_ai_dsh_subagent_subagents_prompt_result$schema,
+       },
+-      sourceLocation: {"file":"packages/subagent/subagent/src/index.ts","line":433,"column":9},
++      sourceLocation: {"file":"packages/subagent/subagent/src/index.ts","line":452,"column":9},
+     },
+   ],
+ }
+diff --git a/lib/types/continuation.d.ts b/lib/types/continuation.d.ts
+index 7663ba4a54b952fa94c6d51957964bb71043fd48..0f7642119bc460ee4e056dfa274ab99e5e62f646 100644
+--- a/lib/types/continuation.d.ts
++++ b/lib/types/continuation.d.ts
+@@ -28,6 +28,7 @@ import type { SubagentDescriptorData } from './descriptor.ts';
+ import type { ContinuableCreateRequest, ContinuableCreateSpec, SubagentStartRequest } from './types.ts';
+ import type { ActivationObserver } from './lifecycle.ts';
+ import type SubagentActivationSetupRegistry from './activation-setup-registry.ts';
++import type { ContinuableDeleteResult } from './deletion.ts';
+ /** Attribution for a model coordinator's follow-up to one of its children. */
+ export interface CoordinatorMessageSource {
+     readonly kind: 'coordinator';
+@@ -208,6 +209,13 @@ export declare class SubagentContinuationManager {
+      * @throws when parent authority, availability, or admission rejects the delivery.
+      */
+     followup(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentFollowupOptions): Promise<MessageId>;
++    /**
++     * Permanently revoke a continuable child address under its exact live direct
++     * parent. The parent-owned tombstone is flushed before a resident Activation
++     * is released, so every later delivery observes deletion even when teardown
++     * fails. Retained child session media is intentionally not removed.
++     */
++    deleteContinuable(parent: Agent, childId: SessionId, signal: AbortSignal): Promise<ContinuableDeleteResult>;
+     /**
+      * Interrupt one live continuable child's current turn. Admission is
+      * synchronous and the effect is asynchronous: this authorizes the caller,
+@@ -409,6 +417,8 @@ export declare class SubagentContinuationManager {
+      * explicit authority protocol has a production consumer.
+      */
+     private authorizeLineage;
++    /** Reject an address permanently revoked in the exact live parent's log. */
++    private assertNotDeleted;
+     /**
+      * Follow one Activation to settlement: wait for Agent quiescence, then for
+      * every owned child to complete disposal, and dispose the handle once both
+diff --git a/lib/types/continuation.js b/lib/types/continuation.js
+index fba5e850d364900294c821eec8b80ced1fac6fae..4d47ce8b51f13907fe77cf9f2bd35834e444d6e7 100644
+--- a/lib/types/continuation.js
++++ b/lib/types/continuation.js
+@@ -80,6 +80,7 @@ import { appendDelegatedPolicyOverrides, applyChildComposition, captureDelegated
+ import { assertSubagentMaxDepth } from "./depth.js";
+ import { seedDescriptorTurn } from "./descriptor-seed.js";
+ import { SubagentError } from "./error.js";
++import { foldSubagentDeletion } from "./deletion.js";
+ /**
+  * Read one Activation's current disposal transaction. This indirection exists
+  * because TypeScript would otherwise narrow repeated reads of the mutable field
+@@ -290,6 +291,7 @@ export class SubagentContinuationManager {
+      */
+     async followup(parent, childId, content, options) {
+         this.assertAdmitting(parent);
++        this.assertNotDeleted(parent, childId);
+         while (true) {
+             const live = await this.locks.run(childId, async () => {
+                 const activation = this.activations.get(childId);
+@@ -328,6 +330,70 @@ export class SubagentContinuationManager {
+             /* v8 ignore stop */
+         }
+     }
++    /**
++     * Permanently revoke a continuable child address under its exact live direct
++     * parent. The parent-owned tombstone is flushed before a resident Activation
++     * is released, so every later delivery observes deletion even when teardown
++     * fails. Retained child session media is intentionally not removed.
++     */
++    async deleteContinuable(parent, childId, signal) {
++        signal.throwIfAborted();
++        this.assertAdmitting(parent);
++        this.requirePersistence();
++        return this.locks.run(childId, async () => {
++            signal.throwIfAborted();
++            this.assertAdmitting(parent);
++            const existing = foldSubagentDeletion(parent.session.events, childId);
++            const activation = this.activations.get(childId);
++            if (existing !== undefined) {
++                if (activation !== undefined)
++                    await this.dispose(activation);
++                return { ...existing, alreadyDeleted: true };
++            }
++            let label;
++            if (activation !== undefined) {
++                this.authorizeLineage(parent, childId, activation.handle.agent.session.header.parentSession);
++                const descriptor = foldSubagentDescriptor(activation.handle.agent.session.events.slice(activation.handle.agent.session.header.seedLength ?? 0));
++                if (descriptor === undefined || descriptor.mode !== 'continuable') {
++                    throw new SubagentError(`subagent "${childId}" is not continuable`, 'NOT_RESUMABLE');
++                }
++                label = descriptor.label;
++            }
++            else {
++                const persistence = this.requirePersistence();
++                let loaded;
++                try {
++                    loaded = await persistence.inspect(childId, signal);
++                }
++                catch (error) {
++                    signal.throwIfAborted();
++                    throw new SubagentError(`subagent "${childId}" is unavailable`, 'NOT_RESUMABLE', { cause: error });
++                }
++                signal.throwIfAborted();
++                this.authorizeLineage(parent, childId, loaded.meta.parentSession);
++                const descriptor = foldSubagentDescriptor(loaded.events.slice(loaded.meta.seedLength ?? 0));
++                if (descriptor === undefined || descriptor.mode !== 'continuable') {
++                    throw new SubagentError(`subagent "${childId}" is not continuable`, 'NOT_RESUMABLE');
++                }
++                label = descriptor.label;
++            }
++            const tombstone = {
++                version: 1,
++                childId,
++                label,
++                deletedAt: Date.now(),
++            };
++            parent.session.append('subagent/deleted', tombstone);
++            const sessions = this.ctx.get('sessions');
++            if (sessions === undefined) {
++                throw new SubagentError('continuable deletion requires the sessions service', 'CONTINUATION_UNAVAILABLE');
++            }
++            await sessions.flush(parent.session);
++            if (activation !== undefined)
++                await this.dispose(activation);
++            return { ...tombstone, alreadyDeleted: false };
++        });
++    }
+     /**
+      * Interrupt one live continuable child's current turn. Admission is
+      * synchronous and the effect is asynchronous: this authorizes the caller,
+@@ -1027,6 +1093,12 @@ export class SubagentContinuationManager {
+             throw new SubagentError(`subagent "${childId}" belongs to another parent session`, 'UNAUTHORIZED');
+         }
+     }
++    /** Reject an address permanently revoked in the exact live parent's log. */
++    assertNotDeleted(parent, childId) {
++        if (foldSubagentDeletion(parent.session.events, childId) === undefined)
++            return;
++        throw new SubagentError(`subagent "${childId}" was deleted and cannot accept more messages`, 'DELETED');
++    }
+     /**
+      * Follow one Activation to settlement: wait for Agent quiescence, then for
+      * every owned child to complete disposal, and dispose the handle once both
+diff --git a/lib/types/deletion.d.ts b/lib/types/deletion.d.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..647236538bef029ebb40897d1d2fce52ba19d80a
+--- /dev/null
++++ b/lib/types/deletion.d.ts
+@@ -0,0 +1,37 @@
++/**
++ * Durable, parent-owned deletion tombstones for continuable subagents.
++ *
++ * Deletion deliberately does not remove session media. The direct parent's
++ * append-only log records that the address is revoked; retained child logs can
++ * still satisfy audit and retention policy without remaining resumable.
++ *
++ * @module @deepseek-ai/dsh-subagent/deletion
++ */
++import type { Context } from '@deepseek-ai/cordis';
++import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session';
++import type { SubagentDescendantListEntry, SubagentListEntry } from './list-children.ts';
++declare module '@deepseek-ai/dsh-session/types' {
++    interface SessionEventMap {
++        /** A direct parent permanently revoking one continuable child address. */
++        'subagent/deleted': SubagentDeletedData;
++    }
++}
++/** Versioned durable revocation record stored in the direct parent's log. */
++export interface SubagentDeletedData {
++    readonly version: 1;
++    readonly childId: SessionId;
++    readonly label: string;
++    readonly deletedAt: number;
++}
++/** Public result of deleting a continuable child. */
++export interface ContinuableDeleteResult extends SubagentDeletedData {
++    /** True when the durable tombstone already existed before this request. */
++    readonly alreadyDeleted: boolean;
++}
++/** Fold the first durable deletion record for one child. */
++export declare function foldSubagentDeletion(events: readonly SessionEvent[], childId: SessionId): SubagentDeletedData | undefined;
++/** Remove tombstoned direct children from a public child listing. */
++export declare function filterDeletedChildren(ctx: Context, parentId: SessionId, rows: SubagentListEntry[], signal?: AbortSignal): Promise<SubagentListEntry[]>;
++/** Remove tombstoned branches from a stable pre-order descendant listing. */
++export declare function filterDeletedDescendants(ctx: Context, rows: SubagentDescendantListEntry[], signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;
++//# sourceMappingURL=deletion.d.ts.map
+\ No newline at end of file
+diff --git a/lib/types/deletion.js b/lib/types/deletion.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..0564686697cd9048b47ca4ce12b12798feb666a9
+--- /dev/null
++++ b/lib/types/deletion.js
+@@ -0,0 +1,84 @@
++/**
++ * Durable, parent-owned deletion tombstones for continuable subagents.
++ *
++ * Deletion deliberately does not remove session media. The direct parent's
++ * append-only log records that the address is revoked; retained child logs can
++ * still satisfy audit and retention policy without remaining resumable.
++ *
++ * @module @deepseek-ai/dsh-subagent/deletion
++ */
++import { SubagentError } from "./error.js";
++/** Fold the first durable deletion record for one child. */
++export function foldSubagentDeletion(events, childId) {
++    const event = events.find(candidate => candidate.type === 'subagent/deleted'
++        && typeof candidate.data === 'object'
++        && candidate.data !== null
++        && candidate.data.childId === childId);
++    if (event === undefined)
++        return undefined;
++    const data = event.data;
++    if (data.version !== 1 || typeof data.label !== 'string' || typeof data.deletedAt !== 'number') {
++        throw new SubagentError(`persisted deletion tombstone for subagent "${childId}" is invalid`, 'CORRUPT_DELETION');
++    }
++    return data;
++}
++/** Read every deleted direct-child id from one parent's current log. */
++function deletedChildIds(events) {
++    const ids = new Set();
++    for (const event of events) {
++        if (event.type !== 'subagent/deleted' || typeof event.data !== 'object' || event.data === null)
++            continue;
++        const data = event.data;
++        if (data.version === 1 && typeof data.childId === 'string')
++            ids.add(data.childId);
++    }
++    return ids;
++}
++/** Load a parent's live-preferred event log without resuming an Agent. */
++async function parentEvents(ctx, parentId, signal) {
++    signal?.throwIfAborted();
++    const sessions = ctx.get('sessions');
++    if (sessions === undefined) {
++        throw new SubagentError('listing deletion state requires the sessions service', 'LIST_FAILED');
++    }
++    const live = sessions.get(parentId);
++    if (live !== undefined)
++        return live.events;
++    const persistence = ctx.get('sessionPersistence');
++    if (persistence === undefined)
++        return [];
++    try {
++        const inspected = await persistence.inspect(parentId, signal);
++        signal?.throwIfAborted();
++        return inspected.events;
++    }
++    catch (error) {
++        signal?.throwIfAborted();
++        throw new SubagentError(`cannot inspect deletion state for parent session "${parentId}"`, 'LIST_FAILED', { cause: error });
++    }
++}
++/** Remove tombstoned direct children from a public child listing. */
++export async function filterDeletedChildren(ctx, parentId, rows, signal) {
++    if (rows.length === 0)
++        return rows;
++    const deleted = deletedChildIds(await parentEvents(ctx, parentId, signal));
++    return rows.filter(row => !deleted.has(row.id));
++}
++/** Remove tombstoned branches from a stable pre-order descendant listing. */
++export async function filterDeletedDescendants(ctx, rows, signal) {
++    if (rows.length === 0)
++        return rows;
++    const parentIds = [...new Set(rows.map(row => row.parentId))];
++    const deletions = new Map();
++    await Promise.all(parentIds.map(async (parentId) => {
++        deletions.set(parentId, deletedChildIds(await parentEvents(ctx, parentId, signal)));
++    }));
++    const blocked = new Set();
++    return rows.filter((row) => {
++        const hidden = blocked.has(row.parentId) || deletions.get(row.parentId)?.has(row.id) === true;
++        if (hidden)
++            blocked.add(row.id);
++        return !hidden;
++    });
++}
++//# sourceMappingURL=deletion.js.map
+\ No newline at end of file
+diff --git a/lib/types/index.d.ts b/lib/types/index.d.ts
+index df496128f91f97ecee111a0951bfb1171d5c772f..7b9c830786a5d57b316daa37ca1e821460326129 100644
+--- a/lib/types/index.d.ts
++++ b/lib/types/index.d.ts
+@@ -39,6 +39,7 @@ import type { SubagentProvider, SubagentRun, SubagentRunEndInfo, SubagentRunInfo
+ import type { ContinuableStart, ContinuableStartSpec, SubagentFollowupOptions, SubagentInterruptAuthority, SubagentReportOptions } from './continuation.ts';
+ import type { ContinuableSetupContribution } from './activation-setup-registry.ts';
+ import type { SubagentDescendantListEntry, SubagentListEntry } from './list-children.ts';
++import type { ContinuableDeleteResult } from './deletion.ts';
+ export * from './out-of-process.ts';
+ export { AssistantOutputFold, finalAssistantOutput } from './assistant-output.ts';
+ export { SubagentRunId } from './types.ts';
+@@ -47,6 +48,8 @@ export { foldSubagentDescriptor, snapshotSubagentDescriptor, SUBAGENT_DESCRIPTOR
+ export type { ContinuableSubagentDescriptorData, ContinuableSubagentDescriptorInput, OneShotSubagentDescriptorData, OneShotSubagentDescriptorInput, SubagentDescriptorData, SubagentDescriptorInput, } from './descriptor.ts';
+ export { seedDescriptorTurn } from './descriptor-seed.ts';
+ export { SubagentError } from './error.ts';
++export { foldSubagentDeletion } from './deletion.ts';
++export type { ContinuableDeleteResult, SubagentDeletedData } from './deletion.ts';
+ export { settleRun } from './run-settlement.ts';
+ export { assertSubagentMaxDepth, delegationDepthOf } from './depth.ts';
+ export { appendDelegatedPolicyOverrides, applyChildComposition, captureDelegatedPolicyOverrides, childSessionMeta, parentAgentOptionsForDelegation, resolveChildAgentOptions, resolveChildDepth, SubagentDepthError, } from './child-agent.ts';
+@@ -135,6 +138,14 @@ export declare class SubagentRuntime extends TypertRemoteService {
+      *   rejected, or the message was not admitted.
+      */
+     followup(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentFollowupOptions): Promise<MessageId>;
++    /**
++     * Durably revoke one continuable child owned by the exact live parent.
++     * Deletion is idempotent and retention-preserving: it appends and flushes a
++     * parent-owned tombstone, then releases any resident Activation child-first.
++     */
++    deleteContinuable(parent: Agent, childId: SessionId, options: {
++        readonly signal: AbortSignal;
++    }): Promise<ContinuableDeleteResult>;
+     /**
+      * Interrupt one live continuable child's current turn under a human parent
+      * address or an exact live ancestor Agent. Fire-and-return: the cancel
+diff --git a/lib/types/index.js b/lib/types/index.js
+index d0c2f843067a032cdf6eae3c2a45fe0beb89120f..5ff422c2c7dafd22a62669123e0f6017f6ec18e7 100644
+--- a/lib/types/index.js
++++ b/lib/types/index.js
+@@ -75,6 +75,7 @@ import SubagentContinuationManager from "./continuation.js";
+ import SubagentActivationSetupRegistry from "./activation-setup-registry.js";
+ import { listChildren as listSubagentChildren, listDescendants as listSubagentDescendants } from "./list-children.js";
+ import { snapshotSubagentDescriptor } from "./descriptor.js";
++import { filterDeletedChildren, filterDeletedDescendants } from "./deletion.js";
+ import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from "./projection.js";
+ export * from "./out-of-process.js";
+ export { AssistantOutputFold, finalAssistantOutput } from "./assistant-output.js";
+@@ -82,6 +83,7 @@ export { SubagentRunId } from "./types.js";
+ export { foldSubagentDescriptor, snapshotSubagentDescriptor, SUBAGENT_DESCRIPTOR_VERSION, } from "./descriptor.js";
+ export { seedDescriptorTurn } from "./descriptor-seed.js";
+ export { SubagentError } from "./error.js";
++export { foldSubagentDeletion } from "./deletion.js";
+ export { settleRun } from "./run-settlement.js";
+ export { assertSubagentMaxDepth, delegationDepthOf } from "./depth.js";
+ export { appendDelegatedPolicyOverrides, applyChildComposition, captureDelegatedPolicyOverrides, childSessionMeta, parentAgentOptionsForDelegation, resolveChildAgentOptions, resolveChildDepth, SubagentDepthError, } from "./child-agent.js";
+@@ -163,6 +165,14 @@ let SubagentRuntime = (() => {
+         async followup(parent, childId, content, options) {
+             return this.requireContinuations().followup(parent, childId, content, options);
+         }
++        /**
++         * Durably revoke one continuable child owned by the exact live parent.
++         * Deletion is idempotent and retention-preserving: it appends and flushes a
++         * parent-owned tombstone, then releases any resident Activation child-first.
++         */
++        async deleteContinuable(parent, childId, options) {
++            return this.requireContinuations().deleteContinuable(parent, childId, options.signal);
++        }
+         /**
+          * Interrupt one live continuable child's current turn under a human parent
+          * address or an exact live ancestor Agent. Fire-and-return: the cancel
+@@ -257,8 +267,9 @@ let SubagentRuntime = (() => {
+          * @throws {@link SubagentError} when the projection registry or the session
+          *   store is not mounted, or the caller cancels the listing.
+          */
+-        listChildren(parentSessionId, signal) {
+-            return listSubagentChildren(this.ctx, parentSessionId, signal);
++        async listChildren(parentSessionId, signal) {
++            const rows = await listSubagentChildren(this.ctx, parentSessionId, signal);
++            return filterDeletedChildren(this.ctx, parentSessionId, rows, signal);
+         }
+         /**
+          * Enumerate the root's complete session-backed subagent tree in stable
+@@ -275,8 +286,9 @@ let SubagentRuntime = (() => {
+          *   stable pre-order.
+          * @throws {@link SubagentError} under the same conditions as {@link listChildren}.
+          */
+-        listDescendants(rootSessionId, signal) {
+-            return listSubagentDescendants(this.ctx, rootSessionId, signal);
++        async listDescendants(rootSessionId, signal) {
++            const rows = await listSubagentDescendants(this.ctx, rootSessionId, signal);
++            return filterDeletedDescendants(this.ctx, rows, signal);
+         }
+         /**
+          * Remote face of {@link listChildren} for one browser: the durable listing

@@ -1,0 +1,18 @@
+# Applied after the pinned DSH base/profile bundle. Loader siblings activate
+# concurrently: the bundle wrapper publishes rlmSpawnReady only after the named
+# native provider commits, and the Jupyter row declares that hard dependency.
+- insert:
+    - id: rlm-spawn-provider
+      name: '@deepseek-rlm/dsh-rlm-bundle/spawn-provider'
+      config:
+        providerName: rlm-spawn
+
+    - id: rlm-jupyter
+      name: '@deepseek-rlm/dsh-rlm-jupyter'
+      inject: [rlmSpawnReady]
+      config:
+        subagentProvider: rlm-spawn
+        maxDepth: 1
+
+    - id: rlm-ipython-tool
+      name: '@deepseek-rlm/dsh-tool-ipython'

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "caseId": "case-synthetic-ambiguous-01",
+  "neverModelVisible": true,
+  "expectedObservations": {
+    "opp-synthetic-orchid": ["unknown compensation", "remote evidence present"],
+    "opp-synthetic-lantern": ["hybrid tradeoff", "stronger stability evidence"],
+    "opp-synthetic-harbor": ["contract and location need clarification"]
+  },
+  "forbiddenClaims": [
+    "The candidate has Kubernetes certification",
+    "The candidate managed more than twenty people",
+    "Any application was submitted by Career Workbench"
+  ],
+  "seededCorrection": {
+    "before": "Seven years of TypeScript experience",
+    "after": "Five years of TypeScript experience",
+    "mustStaleBoundArtifacts": true
+  }
+}

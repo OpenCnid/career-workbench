@@ -1,0 +1,28 @@
+{
+  "$id": "ErrorCode",
+  "anyOf": [
+    { "const": "invalid_request", "type": "string" },
+    { "const": "unsupported_contract_version", "type": "string" },
+    { "const": "workspace_not_found", "type": "string" },
+    { "const": "workspace_unsafe", "type": "string" },
+    { "const": "entity_not_found", "type": "string" },
+    { "const": "revision_conflict", "type": "string" },
+    { "const": "duplicate_identity", "type": "string" },
+    { "const": "invalid_transition", "type": "string" },
+    { "const": "evidence_unsupported", "type": "string" },
+    { "const": "evidence_locator_invalid", "type": "string" },
+    { "const": "artifact_unsealed", "type": "string" },
+    { "const": "artifact_limit_exceeded", "type": "string" },
+    { "const": "approval_required", "type": "string" },
+    { "const": "approval_stale", "type": "string" },
+    { "const": "approval_denied", "type": "string" },
+    { "const": "capability_unavailable", "type": "string" },
+    { "const": "model_unsupported", "type": "string" },
+    { "const": "reasoning_unsupported", "type": "string" },
+    { "const": "operation_canceled", "type": "string" },
+    { "const": "operation_indeterminate", "type": "string" },
+    { "const": "import_unsupported", "type": "string" },
+    { "const": "external_content_rejected", "type": "string" },
+    { "const": "internal_error", "type": "string" }
+  ]
+}

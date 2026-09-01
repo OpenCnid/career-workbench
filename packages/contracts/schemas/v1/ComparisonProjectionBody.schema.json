@@ -1,0 +1,20 @@
+{
+  "$id": "ComparisonProjectionBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["evaluationIds"],
+  "properties": {
+    "evaluationIds": {
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 10,
+        "maxLength": 80,
+        "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+        "type": "string"
+      }
+    }
+  }
+}

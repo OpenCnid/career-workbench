@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": [
+    "scripts/**/*.ts",
+    "**/tests/**/*.ts",
+    "**/tests/**/*.tsx",
+    "*.config.ts",
+    "apps/*/vite.config.ts"
+  ]
+}

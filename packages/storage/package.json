@@ -1,0 +1,29 @@
+{
+  "name": "@career-workbench/storage",
+  "version": "0.1.0-preview.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib",
+    "migrations"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@career-workbench/domain": "workspace:*",
+    "better-sqlite3": "13.0.3",
+    "kysely": "0.29.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13"
+  }
+}
