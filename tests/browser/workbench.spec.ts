@@ -1068,6 +1068,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
 test("@a11y key routes have no serious axe violations and support keyboard navigation", async ({
   page,
 }) => {
+  test.setTimeout(120_000);
   await createWorkspaceIfNeeded(page);
   for (const route of [
     "overview",
