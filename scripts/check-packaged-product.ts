@@ -4,6 +4,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -56,7 +57,9 @@ if (selected.length !== productPackages.size) {
   throw new Error("Packaged-product smoke inventory is incomplete.");
 }
 
-const temporary = await mkdtemp(join(tmpdir(), "career-workbench-product-"));
+const temporary = await realpath(
+  await mkdtemp(join(tmpdir(), "career-workbench-product-")),
+);
 let child: ReturnType<typeof spawn> | undefined;
 try {
   const local = join(temporary, "local");
