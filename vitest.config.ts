@@ -2,11 +2,15 @@ import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { defineConfig } from "vitest/config";
 
-// macOS exposes its temporary directory through /var, a system symlink to
-// /private/var. Keep the production guard strict and give every test worker the
-// canonical spelling before it creates a workspace beneath that directory.
-if (process.platform === "darwin") {
-  process.env["TMPDIR"] = realpathSync(tmpdir());
+// macOS exposes /var through /private/var, while hosted Windows can expose the
+// temp directory through an 8.3 alias. Keep the production guard strict and
+// give every test worker a canonical temp root before it creates a workspace.
+const canonicalTempDirectory = realpathSync(tmpdir());
+if (process.platform === "win32") {
+  process.env["TEMP"] = canonicalTempDirectory;
+  process.env["TMP"] = canonicalTempDirectory;
+} else if (process.platform === "darwin") {
+  process.env["TMPDIR"] = canonicalTempDirectory;
 }
 
 const include = (kind: string) => [
