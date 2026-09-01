@@ -197,8 +197,19 @@ try {
     }),
   });
   if (createResponse.status !== 201) {
+    const failure = (await createResponse.json().catch(() => null)) as {
+      error?: { code?: unknown; message?: unknown };
+    } | null;
+    const code =
+      typeof failure?.error?.code === "string"
+        ? ` (${failure.error.code}${
+            typeof failure.error.message === "string"
+              ? `: ${failure.error.message}`
+              : ""
+          })`
+        : "";
     throw new Error(
-      `Packaged workspace creation failed with ${String(createResponse.status)}.`,
+      `Packaged workspace creation failed with ${String(createResponse.status)}${code}.`,
     );
   }
   const snapshotResponse = await fetch(`${apiOrigin}/api/v1/snapshot`);
