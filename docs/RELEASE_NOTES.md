@@ -24,11 +24,7 @@ submissions.
 Release blockers remain visible until evidence changes:
 
 - qualitative product-team rehearsal: not conducted;
-- independent first-time participants: 0/3;
-- Windows full native clean install: blocked by missing Visual Studio Build
-  Tools on the current host;
-- Ubuntu CI result: not executed in this workspace;
-- macOS CI result: not executed in this workspace.
+- independent first-time participants: 0/3.
 
 The authenticated live acceptance passed on 2026-09-01 through DSH's
 `openai-codex/gpt-5.6-sol` provider at reasoning `high`, including ordinary
@@ -37,6 +33,7 @@ restore (`41` to `42`), durable comparison acceptance, backend restart, a real
 Chromium Activity view, and port/process cleanup. Only scrubbed synthetic
 evidence is retained.
 
-The configured GitHub Actions matrix covers Windows, Ubuntu, and macOS, but a
-configured job is not a result. `docs/qa/MILESTONE_9.md` is the authoritative
-executed-gate record.
+The hosted GitHub Actions matrix has executed successfully on Windows, Ubuntu,
+and macOS, including native clean install, repository checks, Chromium E2E,
+release construction and verification, and isolated installation.
+`docs/qa/MILESTONE_9.md` is the authoritative executed-gate record.

@@ -5,24 +5,24 @@ evidence. `implemented` is not a pass: a row becomes `pass` only after its
 relevant automated and real gates succeed. Environment- or human-dependent rows
 remain `unmet` until real evidence exists.
 
-| SPEC criterion                                     | Status | Primary evidence                                                       |
-| -------------------------------------------------- | ------ | ---------------------------------------------------------------------- |
-| 1. Safe local workspace                            | pass   | workspace safety/security tests; SQLite/filesystem integrations        |
-| 2. Candidate source and confirmed facts            | pass   | deterministic workflow, API, and browser tests                         |
-| 3. Three synthetic opportunities                   | pass   | comparison/RLM integrations and browser fixtures                       |
-| 4. Real DSH Agent evaluation                       | pass   | authenticated live run, durable state, and Activity UI evidence        |
-| 5. Evidence, gaps, scores, totals in UI            | pass   | Playwright journey, accessibility scan, visual evidence                |
-| 6. Native continuable child                        | pass   | native-child integration and authenticated live DSH composition        |
-| 7. Admission distinct from completion              | pass   | lifecycle contract/integration and Activity UI                         |
-| 8. Same-child follow-up/report                     | pass   | cold-continuation integration and authenticated live follow-up         |
-| 9. Persistent IPython comparison                   | pass   | real Jupyter integration and authenticated live no-replay restore      |
-| 10. Result outside Python                          | pass   | accepted SQLite comparison after RLM disposal                          |
-| 11. Backend/DSH restart without replay/duplication | pass   | restart integrations and authenticated live durability proof           |
-| 12. Correction marks dependencies stale            | pass   | domain/API/Playwright correction journeys                              |
-| 13. Cancel and fence late results                  | pass   | native child/RLM cancellation, live settlement, and security tests     |
-| 14. Pinned Career Ops preview/import               | pass   | byte-identity/import/idempotency integration                           |
-| 15. Credential-free export                         | pass   | export normalization and security scans                                |
-| 16. All applicable gates                           | unmet  | usability study, Windows toolchain clean install, Ubuntu, macOS remain |
+| SPEC criterion                                     | Status | Primary evidence                                                     |
+| -------------------------------------------------- | ------ | -------------------------------------------------------------------- |
+| 1. Safe local workspace                            | pass   | workspace safety/security tests; SQLite/filesystem integrations      |
+| 2. Candidate source and confirmed facts            | pass   | deterministic workflow, API, and browser tests                       |
+| 3. Three synthetic opportunities                   | pass   | comparison/RLM integrations and browser fixtures                     |
+| 4. Real DSH Agent evaluation                       | pass   | authenticated live run, durable state, and Activity UI evidence      |
+| 5. Evidence, gaps, scores, totals in UI            | pass   | Playwright journey, accessibility scan, visual evidence              |
+| 6. Native continuable child                        | pass   | native-child integration and authenticated live DSH composition      |
+| 7. Admission distinct from completion              | pass   | lifecycle contract/integration and Activity UI                       |
+| 8. Same-child follow-up/report                     | pass   | cold-continuation integration and authenticated live follow-up       |
+| 9. Persistent IPython comparison                   | pass   | real Jupyter integration and authenticated live no-replay restore    |
+| 10. Result outside Python                          | pass   | accepted SQLite comparison after RLM disposal                        |
+| 11. Backend/DSH restart without replay/duplication | pass   | restart integrations and authenticated live durability proof         |
+| 12. Correction marks dependencies stale            | pass   | domain/API/Playwright correction journeys                            |
+| 13. Cancel and fence late results                  | pass   | native child/RLM cancellation, live settlement, and security tests   |
+| 14. Pinned Career Ops preview/import               | pass   | byte-identity/import/idempotency integration                         |
+| 15. Credential-free export                         | pass   | export normalization and security scans                              |
+| 16. All applicable gates                           | unmet  | product-team and three-person independent usability evidence remains |
 
 | Milestone | Exit status | Evidence / remaining action                                                                       |
 | --------- | ----------- | ------------------------------------------------------------------------------------------------- |
@@ -35,7 +35,7 @@ remain `unmet` until real evidence exists.
 | 6         | pass        | pinned read-only preview/import and source-byte proof                                             |
 | 7         | pass        | complete browser pipeline, reviewed artifacts, search/export/recovery                             |
 | 8         | unmet       | coordinate one product-team and three independent consenting sessions                             |
-| 9         | unmet       | obtain Windows native clean-install, Ubuntu/macOS, and Milestone 8 evidence                       |
+| 9         | unmet       | hosted Windows/Ubuntu/macOS gates pass; obtain Milestone 8 human evidence                         |
 
 The detailed per-milestone records are `docs/qa/MILESTONE_2.md` through
 `docs/qa/MILESTONE_9.md`; Milestones 0–1 are covered by the repository-wide

@@ -13,11 +13,11 @@ Milestones 8–9: deterministic SQLite/filesystem state, the protected browser
 workbench, native Cordis/DSH tools and continuable children, persistent native
 RLM/Jupyter comparison with no-replay restore, read-only Career Ops import, the
 application/review workflow, release packages, SBOM, checksums, backup/restore,
-and cross-platform CI configuration. The independent three-person qualitative
-study remains an explicit unmet external gate; configured Ubuntu/macOS jobs are
-not claimed as executed results until CI records them. The authenticated DSH
-ordinary/child/RLM acceptance profile has passed on Windows with scrubbed
-evidence retained. See `docs/qa/ACCEPTANCE_MATRIX.md`.
+and a passing hosted Windows/Ubuntu/macOS clean-install and full-check matrix.
+The independent three-person qualitative study remains an explicit unmet
+external gate. The authenticated DSH ordinary/child/RLM acceptance profile has
+passed on Windows with scrubbed evidence retained. See
+`docs/qa/ACCEPTANCE_MATRIX.md`.
 
 ## Development
 

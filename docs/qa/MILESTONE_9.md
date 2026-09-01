@@ -9,19 +9,21 @@ seven package archives, CycloneDX SBOM, SHA-256 inventory, and a clean isolated
 install/import verifier. The verifier applies the exact three DSH package
 adaptations rather than testing an unpatched profile. `pnpm check:clean-install`
 copies source without local modules or release output, performs a frozen install
-in a fresh temporary directory, and removes it. On the current Windows host the
-full clean install reached the native `better-sqlite3` build and failed because
-Visual Studio Build Tools are absent; the separate clean frozen lockfile install
-passes. A fresh Linux/amd64 Node 24.19.0 container with a native toolchain
-completed the full frozen install. The Windows clean-machine result remains
-unmet until a host with the documented toolchain runs it.
+in a fresh temporary directory, and removes it. The current developer Windows
+host lacks Visual Studio Build Tools, so its native rebuild remains a documented
+local prerequisite failure. The hosted Windows runner completed the same full
+native clean-install verifier successfully, and hosted Ubuntu and macOS runners
+completed the corresponding clean-install, full-check, browser, release, and
+isolated-install routes.
 
 The complete local Windows gate record is refreshed before handoff. The GitHub
 Actions matrix configures frozen install, all repository checks, Chromium E2E,
 release construction, release verification, and isolated installation on
 Windows, Ubuntu, and macOS with Node 24.19.0, pnpm 11.24.0, and uv 0.12.7. A
-configured matrix is not an executed result: Ubuntu and macOS remain unmet until
-their workflow runs are available.
+three-platform workflow run is retained in GitHub Actions. The macOS tests
+canonicalize the `/var` temp-directory alias to `/private/var` before applying
+the workspace boundary, and `.gitattributes` pins source checkouts to LF so the
+same formatting gate is reproducible on Windows.
 
 ## Executed gate summary
 
@@ -35,6 +37,9 @@ their workflow runs are available.
 | Windows clean frozen lockfile install                 | exit 0                                                                                                                     |
 | Windows full native clean install                     | exit 1; external Visual Studio Build Tools unavailable                                                                     |
 | Windows authenticated live acceptance                 | exit 0; `openai-codex/gpt-5.6-sol`, reasoning `high`; ordinary, child, RLM, restart, UI, cleanup passed                    |
+| Hosted Windows clean install / full matrix            | exit 0; native clean install, 279 tests, Chromium, release, and isolated install passed                                    |
+| Hosted Ubuntu clean install / full matrix             | exit 0; native clean install, 279 tests, Chromium, release, and isolated install passed                                    |
+| Hosted macOS clean install / full matrix              | exit 0; native clean install, 279 tests, Chromium, release, and isolated install passed                                    |
 | Linux/amd64 Docker full native install + `pnpm check` | exit 0; Node 24.19.0 / pnpm 11.24.0 / uv 0.12.7; 17 files / 279 tests                                                      |
 | Linux representative performance                      | 250 opportunities; create 1,155 ms; list 1 ms; export 56 ms / 490,298 bytes; SQLite 1,265,664 bytes; RSS +40,067,072 bytes |
 | Linux Chromium / release / isolated install           | 2/2 E2E; 7 packages; 642 SBOM components; 9 checksums; exact DSH-peer install/import passed                                |
@@ -62,11 +67,7 @@ draft provenance is under `docs/qa/generated/milestone-*`.
 Release blockers that cannot be inferred or fabricated:
 
 - product-team qualitative rehearsal: not conducted;
-- independent first-time participants: 0/3;
-- Windows full native clean install: rerun on a host with Visual Studio Build
-  Tools and the documented Node/pnpm versions;
-- Ubuntu workflow: not executed in this workspace;
-- macOS workflow: not executed in this workspace;
+- independent first-time participants: 0/3.
 
 No package was published, no deployment was made, and no release/commit/push/PR
-action was taken.
+action was taken by the release preparation workflow.
