@@ -1,0 +1,27 @@
+{
+  "name": "@career-workbench/contracts",
+  "version": "0.1.0-preview.0",
+  "type": "module",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib",
+    "schemas"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "0.34.52",
+    "jsonc-parser": "3.3.1"
+  }
+}

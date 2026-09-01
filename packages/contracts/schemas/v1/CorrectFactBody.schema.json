@@ -1,0 +1,18 @@
+{
+  "$id": "CorrectFactBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["expectedRevision", "value", "sourceText"],
+  "properties": {
+    "expectedRevision": { "minimum": 1, "type": "integer" },
+    "value": {
+      "anyOf": [
+        { "maxLength": 2000, "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "null" }
+      ]
+    },
+    "sourceText": { "minLength": 1, "maxLength": 10000, "type": "string" }
+  }
+}

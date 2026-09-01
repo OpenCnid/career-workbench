@@ -1,0 +1,55 @@
+{
+  "$id": "ProposeProfileFactBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "factType",
+    "subject",
+    "predicate",
+    "value",
+    "sourceLocators",
+    "proposedBy"
+  ],
+  "properties": {
+    "factType": { "minLength": 1, "maxLength": 80, "type": "string" },
+    "subject": { "minLength": 1, "maxLength": 300, "type": "string" },
+    "predicate": { "minLength": 1, "maxLength": 200, "type": "string" },
+    "value": {
+      "anyOf": [
+        { "maxLength": 2000, "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "null" }
+      ]
+    },
+    "sourceLocators": {
+      "minItems": 1,
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["sourceId", "start", "end", "quote"],
+        "properties": {
+          "sourceId": {
+            "minLength": 10,
+            "maxLength": 80,
+            "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+            "type": "string"
+          },
+          "start": { "minimum": 0, "maximum": 1048576, "type": "integer" },
+          "end": { "minimum": 1, "maximum": 1048576, "type": "integer" },
+          "quote": { "minLength": 1, "maxLength": 10000, "type": "string" }
+        }
+      }
+    },
+    "proposedBy": {
+      "anyOf": [
+        { "const": "user", "type": "string" },
+        { "const": "import", "type": "string" },
+        { "const": "agent", "type": "string" },
+        { "const": "system", "type": "string" }
+      ]
+    }
+  }
+}

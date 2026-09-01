@@ -1,0 +1,74 @@
+{
+  "$id": "DomainEvent",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "contractVersion",
+    "sequence",
+    "eventKind",
+    "schemaVersion",
+    "workspaceId",
+    "aggregateId",
+    "aggregateRevision",
+    "commandId",
+    "actor",
+    "timestamp",
+    "payload"
+  ],
+  "properties": {
+    "contractVersion": { "const": "v1", "type": "string" },
+    "sequence": { "minimum": 1, "type": "integer" },
+    "eventKind": {
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[a-z][a-z0-9_.-]*$",
+      "type": "string"
+    },
+    "schemaVersion": { "minimum": 1, "type": "integer" },
+    "workspaceId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string",
+      "$id": "WorkspaceId"
+    },
+    "aggregateId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string",
+      "$id": "EntityId"
+    },
+    "aggregateRevision": { "minimum": 1, "type": "integer" },
+    "commandId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string",
+      "$id": "EntityId"
+    },
+    "operationId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string",
+      "$id": "EntityId"
+    },
+    "actor": {
+      "anyOf": [
+        { "const": "user", "type": "string" },
+        { "const": "browser", "type": "string" },
+        { "const": "dsh_agent", "type": "string" },
+        { "const": "dsh_child", "type": "string" },
+        { "const": "import", "type": "string" },
+        { "const": "system", "type": "string" }
+      ]
+    },
+    "timestamp": { "format": "date-time", "maxLength": 40, "type": "string" },
+    "payload": {
+      "maxProperties": 64,
+      "type": "object",
+      "patternProperties": { "^(.*)$": {} }
+    }
+  }
+}

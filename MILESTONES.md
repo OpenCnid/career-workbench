@@ -241,8 +241,8 @@ with one child, and synthesizes only backend-accepted evidence.
 ### Deliverables
 
 - Child operation projection and public lineage correlation.
-- Explicit admission, start, report, message, follow-up, terminal,
-  cancellation, and deletion handling.
+- Explicit admission, start, report, message, follow-up, terminal, cancellation,
+  and deletion handling.
 - Parent synthesis gate that requires child terminal/report conditions defined
   by the operation.
 - Browser activity tree with child status and follow-up controls.
@@ -320,8 +320,8 @@ DSH Agent opens IPython
 
 ### Objective
 
-Move supported user data from the pinned current Career Ops contract into
-Career Workbench without importing its prompt-driven runtime architecture.
+Move supported user data from the pinned current Career Ops contract into Career
+Workbench without importing its prompt-driven runtime architecture.
 
 ### Deliverables
 
@@ -364,7 +364,8 @@ review without adding autonomous external actions.
 - Application pipeline and canonical state-transition UI.
 - Draft CV, cover-letter, outreach, and interview-preparation artifacts from
   verified facts.
-- Artifact editor/review, provenance inspection, stale marking, and regeneration.
+- Artifact editor/review, provenance inspection, stale marking, and
+  regeneration.
 - Opportunity liveness and legitimacy evidence as separate concepts.
 - Search, filtering, next-action, and workspace export.
 - End-to-end cancellation, correction, and recovery across all product views.
@@ -390,8 +391,8 @@ review without adding autonomous external actions.
 ### Objective
 
 Determine whether Career Workbench is easier to understand and control than the
-upstream terminal/skill workflow, and whether RLM adds value beyond ordinary
-DSH orchestration.
+upstream terminal/skill workflow, and whether RLM adds value beyond ordinary DSH
+orchestration.
 
 ### Study design
 
@@ -432,8 +433,8 @@ subagents, IPython, or RLM before the tasks.
 - Participants can distinguish admitted, running, waiting, completed, failed,
   canceled, indeterminate, and stale states at agreed preregistered thresholds.
 - No critical candidate-fact or external-action failure occurs.
-- The report distinguishes interface/backend value, DSH orchestration value,
-  and incremental RLM value.
+- The report distinguishes interface/backend value, DSH orchestration value, and
+  incremental RLM value.
 - Failures and negative results are retained rather than edited out of the
   conclusion.
 
@@ -446,8 +447,8 @@ platform, security, package, live, and usability evidence.
 
 ### Deliverables
 
-- Final installation, upgrade, backup, restore, import, export,
-  troubleshooting, security, and operating documentation.
+- Final installation, upgrade, backup, restore, import, export, troubleshooting,
+  security, and operating documentation.
 - Signed or checksummed package inventory and software bill of materials.
 - Isolated install of all packages and the DSH bundle into a clean profile.
 - Database migration and rollback rehearsal.

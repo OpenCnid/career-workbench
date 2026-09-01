@@ -7,9 +7,9 @@ major parts, their dependency direction, the boundaries that must remain
 visible, and where a change belongs. It deliberately avoids details that are
 expected to change frequently.
 
-`SPEC.md` is normative. `MILESTONES.md` describes the sequence for reaching
-this architecture. Directories named below are introduced by those milestones;
-their absence in an early checkout is not an alternative architecture.
+`SPEC.md` is normative. `MILESTONES.md` describes the sequence for reaching this
+architecture. Directories named below are introduced by those milestones; their
+absence in an early checkout is not an alternative architecture.
 
 ## Bird's-eye view
 
@@ -43,8 +43,8 @@ both without becoming the owner of either.
 
 ## Ground state and derived state
 
-The architecture distinguishes data that can authorize behavior from data
-that can be recomputed.
+The architecture distinguishes data that can authorize behavior from data that
+can be recomputed.
 
 Ground state:
 
@@ -143,9 +143,9 @@ SQLite is the canonical structured store for Career Workbench. Human-readable
 JSON and Markdown are supported export formats, not a second writable source of
 truth.
 
-**Architecture invariant:** a successful mutation commits its domain records
-and audit event atomically. Artifacts use staged writes and content identities
-so a database record never claims an unsealed artifact.
+**Architecture invariant:** a successful mutation commits its domain records and
+audit event atomically. Artifacts use staged writes and content identities so a
+database record never claims an unsealed artifact.
 
 ### `packages/application`
 
@@ -180,16 +180,16 @@ It translates domain errors into stable tool failures without hiding them.
 
 ### `packages/career-ops-import`
 
-A one-way, version-aware boundary for importing supported Career Ops
-workspaces. It discovers source files, reports unsupported or ambiguous input,
-constructs a preview, and applies only user-approved import commands.
+A one-way, version-aware boundary for importing supported Career Ops workspaces.
+It discovers source files, reports unsupported or ambiguous input, constructs a
+preview, and applies only user-approved import commands.
 
 It may contain upstream-specific parsing. The rest of Career Workbench may not.
 
 **Architecture invariant:** import is not synchronization. After a successful
-import, Career Workbench owns the resulting records. It never writes back to
-the source Career Ops workspace unless a future, separately specified exporter
-is introduced.
+import, Career Workbench owns the resulting records. It never writes back to the
+source Career Ops workspace unless a future, separately specified exporter is
+introduced.
 
 ### `packages/evals`
 
@@ -290,21 +290,21 @@ the exact accepted evidence and rubric revision that authorized them.
 
 Cancellation flows from DSH or the user interface to the active operation.
 Canceled work may preserve already committed evidence, but it cannot publish an
-unvalidated terminal artifact. A kernel generation that ignores interruption
-is retired and fenced by the RLM provider.
+unvalidated terminal artifact. A kernel generation that ignores interruption is
+retired and fenced by the RLM provider.
 
 ### Recovery
 
 Domain recovery is event- and transaction-based. DSH recovery is session-based.
-RLM recovery uses authorized snapshots and never replays historical cells.
-These mechanisms may correlate identities but do not impersonate one another.
+RLM recovery uses authorized snapshots and never replays historical cells. These
+mechanisms may correlate identities but do not impersonate one another.
 
 ### Observability
 
 The product exposes closed operation states, child lineage, tool activity,
 accepted and rejected evidence counts, approvals, failures, cancellation, and
-resource use. Humanized summaries are display data; state transitions depend
-on typed events.
+resource use. Humanized summaries are display data; state transitions depend on
+typed events.
 
 ### Privacy and secrets
 
@@ -351,6 +351,6 @@ range is widened merely because installation succeeds.
 ## Architectural nonclaims
 
 This design does not claim that SQLite is a security boundary, that local-first
-means sandboxed, that IPython is constrained, that model explanations are
-proof, that every Career Ops workflow will be reproduced, or that RLM improves
-career outcomes. Those claims require separate controls and evidence.
+means sandboxed, that IPython is constrained, that model explanations are proof,
+that every Career Ops workflow will be reproduced, or that RLM improves career
+outcomes. Those claims require separate controls and evidence.

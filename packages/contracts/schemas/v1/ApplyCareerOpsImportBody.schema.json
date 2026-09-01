@@ -1,0 +1,10 @@
+{
+  "$id": "ApplyCareerOpsImportBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["sourceFingerprint", "confirm"],
+  "properties": {
+    "sourceFingerprint": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "confirm": { "const": true, "type": "boolean" }
+  }
+}

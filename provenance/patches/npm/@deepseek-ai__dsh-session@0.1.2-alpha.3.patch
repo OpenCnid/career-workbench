@@ -1,0 +1,49 @@
+diff --git a/lib/index.js b/lib/index.js
+index f9560a0a3a5488fb09c1687a040cf1a1fb72cc2b..8490a9db6b9a35329c961ba43a3b7735adb84a54 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -1338,7 +1338,16 @@ var Session = class Session {
+ 	*   rejects before the log changes.
+ 	*/
+ 	append(type, data, ...opts) {
+-		const surfaceOpts = opts[0];
++		return this.appendEvent(type, data, false, opts[0]);
++	}
++	/**
++	* Append one informational, non-surface event that older harness builds may
++	* safely skip when they do not recognize its type.
++	*/
++	appendIgnorable(type, data) {
++		return this.appendEvent(type, data, true);
++	}
++	appendEvent(type, data, ignorable, surfaceOpts) {
+ 		const surfaceMetadata = {
+ 			...surfaceOpts?.sourceEventSeqs === void 0 ? {} : { sourceEventSeqs: surfaceOpts.sourceEventSeqs },
+ 			...surfaceOpts?.surfaceOp === void 0 ? {} : { surfaceOp: surfaceOpts.surfaceOp }
+@@ -1355,6 +1364,7 @@ var Session = class Session {
+ 			seq: this.log.length,
+ 			time: Date.now(),
+ 			data: dataSnapshot,
++			...ignorable ? { ignorable: true } : {},
+ 			...surfaceMetadataSnapshot
+ 		});
+ 		this.surfaceManager.validateNext(event);
+diff --git a/lib/types/index.d.ts b/lib/types/index.d.ts
+index eb0d512632420a595c5113bbaf869f803e35bddd..773e8ac163281c4d2dcced5093299918e06711f2 100644
+--- a/lib/types/index.d.ts
++++ b/lib/types/index.d.ts
+@@ -207,6 +207,14 @@ export declare class Session {
+      *   rejects before the log changes.
+      */
+     append<T extends SessionEventType>(type: T, data: SessionEventMap[T], ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent] : []): SessionEvent<T>;
++    /**
++     * Append one informational, non-surface event that older harness builds may
++     * safely skip when they do not recognize its type. Downstream module
++     * augmentation supplies the typed payload.
++     */
++    appendIgnorable<T extends Exclude<SessionEventType, SurfaceEventType>>(type: T, data: SessionEventMap[T]): SessionEvent<T>;
++    /** Shared acceptance and publication path for required and ignorable events. */
++    private appendEvent;
+     /** Cached fold of the request-header events — see {@link requestHeader}. */
+     private headerFold;
+     /** Log position (events consumed) the header fold has reached. */

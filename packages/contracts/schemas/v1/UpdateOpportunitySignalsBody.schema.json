@@ -1,0 +1,25 @@
+{
+  "$id": "UpdateOpportunitySignalsBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["expectedRevision", "sourceStatus", "legitimacyStatus"],
+  "properties": {
+    "expectedRevision": { "minimum": 1, "type": "integer" },
+    "sourceStatus": {
+      "anyOf": [
+        { "const": "unknown", "type": "string" },
+        { "const": "active", "type": "string" },
+        { "const": "expired", "type": "string" },
+        { "const": "unavailable", "type": "string" }
+      ]
+    },
+    "legitimacyStatus": {
+      "anyOf": [
+        { "const": "unknown", "type": "string" },
+        { "const": "high_confidence", "type": "string" },
+        { "const": "needs_review", "type": "string" },
+        { "const": "concern", "type": "string" }
+      ]
+    }
+  }
+}

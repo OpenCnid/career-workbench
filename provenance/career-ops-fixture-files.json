@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "upstream": "career-ops",
+  "revision": "3a067ee580b7982cf5dd6edf7895112e4e99600b",
+  "sourceRoot": "test-fixtures/upgrade/state-v1.18",
+  "license": "MIT",
+  "files": [
+    {
+      "source": "config/profile.yml",
+      "destination": "tests/fixtures/career-ops-v1.18/config/profile.yml",
+      "sha256": "05f3b5f52145b8c509665e0d91143594bfb6a978b532a427141d17917c4972e8"
+    },
+    {
+      "source": "cv.md",
+      "destination": "tests/fixtures/career-ops-v1.18/cv.md",
+      "sha256": "e834d05f1f2897dcc3fa522930b7c95da09d268df6cd31ce5dd5e9999b6a4de3"
+    },
+    {
+      "source": "data/applications.md",
+      "destination": "tests/fixtures/career-ops-v1.18/data/applications.md",
+      "sha256": "8952633c7167e6c7e220364bd6037506ae0ebeccde3fd973b64317e6f3796594"
+    },
+    {
+      "source": "reports/001-acme-2026-06-20.md",
+      "destination": "tests/fixtures/career-ops-v1.18/reports/001-acme-2026-06-20.md",
+      "sha256": "fce66cae59d25b0be8661e566a3b2ae8a1f35ba1bf52cafa61e050241e960b17"
+    },
+    {
+      "source": "reports/002-globex-2026-06-25.md",
+      "destination": "tests/fixtures/career-ops-v1.18/reports/002-globex-2026-06-25.md",
+      "sha256": "61d75ef150efff5c406fb9a41d3dba819fe39a94a9009f6a38aa5ac51e3e9eef"
+    }
+  ]
+}

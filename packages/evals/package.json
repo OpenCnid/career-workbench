@@ -1,0 +1,25 @@
+{
+  "name": "@career-workbench/evals",
+  "version": "0.1.0-preview.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib",
+    "fixtures",
+    "protocols"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@career-workbench/contracts": "workspace:*"
+  }
+}

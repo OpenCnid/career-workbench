@@ -1,0 +1,113 @@
+diff --git a/lib/index.js b/lib/index.js
+index 906afd7f20ce3bfc79795b9a679dd34c18c17efb..800c5f85dcafa196eef90012cdf46f9c8c56658d 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -1,7 +1,7 @@
++import { cleanupSessionResources, createModels, createProvider, getSupportedThinkingLevels, isContextOverflow } from "@earendil-works/pi-ai";
+ import { launchEnvironmentOf } from "@deepseek-ai/dsh-launch-environment";
+ import { CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, INVALID_CREDENTIAL_CODE, LlmAdapter, LlmError, QUOTA_EXCEEDED_CODE, ReasoningEffortId, RetryPolicySchema, assertUsableApiKey, attributionHeaders, contentHasImage, isContextWindowExceededError, isQuotaExceededError, normalizeApiKey, offloadRequestImagesWithPolicy, offloadedImageText, requestImageHandleText, resolveImageAttachmentAccess, resolveRetryPolicy } from "@deepseek-ai/dsh-llm";
+ import { deepEqualJson } from "@deepseek-ai/dsh-util-values";
+-import { createModels, createProvider, getSupportedThinkingLevels, isContextOverflow } from "@earendil-works/pi-ai";
+ import { MAX_TIMER_DELAY_MS, idleWatchdog, timeoutOf } from "@deepseek-ai/dsh-timeout";
+ import { brandString } from "@deepseek-ai/dsh-brand";
+ import z from "@deepseek-ai/schemastery";
+@@ -2408,6 +2408,28 @@ const name = "llm-pi-ai";
+ const inject = ["llm"];
+ const NS = "llm-pi-ai";
+ /**
++* Plugin-private adapter wrapper that assigns session-keyed SDK resources to
++* their exact live Agent before provider I/O starts. Keeping this out of
++* {@link PiAiAdapterOptions} avoids turning Harness lifecycle wiring into a
++* public adapter-construction contract.
++*/
++var AgentOwnedPiAiAdapter = class extends PiAiAdapter {
++	ownSessionResources;
++	constructor(options, ownSessionResources) {
++		super(options);
++		this.ownSessionResources = ownSessionResources;
++	}
++	prepareCall(provider, model, signal) {
++		return super.prepareCall(provider, model, signal).then((prepared) => ({
++			model: prepared.model,
++			stream: (options) => {
++				this.ownSessionResources(options.sessionId);
++				return prepared.stream(options);
++			}
++		}));
++	}
++};
++/**
+ * The registry captures these per route; a change here must re-register.
+ * Sorted by provider so a settings document that merely reorders its keys is
+ * not mistaken for a route change.
+@@ -2445,6 +2467,33 @@ function directoryEntries(profiles) {
+ }
+ /** Register one generic pi-ai adapter for all configured provider routes. */
+ function apply(ctx, config) {
++	const ownedAgents = /* @__PURE__ */ new WeakSet();
++	const agentlessSessions = /* @__PURE__ */ new WeakSet();
++	const releaseSessionResources = (sessionId) => {
++		try {
++			cleanupSessionResources(String(sessionId));
++		} catch (error) {
++			ctx.logger.warn(`llm-pi-ai: cleanup failed for session "${sessionId}": ${String(error)}`);
++		}
++	};
++	const ownSessionResources = (sessionId) => {
++		if (sessionId === void 0) return;
++		const agent = ctx.get("agents")?.get(sessionId);
++		if (agent !== void 0) {
++			if (ownedAgents.has(agent)) return;
++			agent.ctx.effect(() => () => {
++				releaseSessionResources(agent.id);
++			}, `llm-pi-ai: session resources (${agent.id})`);
++			ownedAgents.add(agent);
++			return;
++		}
++		const session = ctx.get("sessions")?.get(sessionId);
++		if (session !== void 0) agentlessSessions.add(session);
++	};
++	ctx.on("session/disposed", (session) => {
++		if (!agentlessSessions.delete(session)) return;
++		releaseSessionResources(session.id);
++	});
+ 	let current = () => config;
+ 	let lastRaw;
+ 	let memoized;
+@@ -2480,7 +2529,7 @@ function apply(ctx, config) {
+ 		credentials: credentialStoreFrom(ctx),
+ 		authContext: authContextFrom(ctx)
+ 	};
+-	const adapter = new PiAiAdapter({
++	const adapter = new AgentOwnedPiAiAdapter({
+ 		profiles,
+ 		resolveApiKey,
+ 		auth,
+@@ -2489,7 +2538,7 @@ function apply(ctx, config) {
+ 		onReplayDegrade: ({ provider, model, reason }) => {
+ 			ctx.logger.warn(`llm-pi-ai: unusable replay state on assistant history for route "${provider}/${model}"; sending that message as provider-neutral content (${reason})`);
+ 		}
+-	});
++	}, ownSessionResources);
+ 	ctx.inject(["authorization"], (authorized) => {
+ 		registerPiAiFlows(authorized, auth);
+ 	});
+diff --git a/package.json b/package.json
+index 9fd50763a75a42271cf820a854927ea708536abb..f30af5cfa91bb6063762a40b10ffea0085c3dae9 100644
+--- a/package.json
++++ b/package.json
+@@ -33,12 +33,14 @@
+   "license": "MIT",
+   "peerDependencies": {
+     "@deepseek-ai/cordis": "^4.0.2",
++    "@deepseek-ai/dsh-agent": "^0.1.2-alpha.3",
+     "@deepseek-ai/dsh-authorization": "^0.1.2-alpha.3",
+     "@deepseek-ai/dsh-credentials": "^0.1.2-alpha.3",
+     "@deepseek-ai/dsh-attachment": "^0.1.2-alpha.3",
+     "@deepseek-ai/dsh-invariants": "^0.1.2-alpha.3",
+     "@deepseek-ai/dsh-launch-environment": "^0.1.2-alpha.3",
+     "@deepseek-ai/dsh-llm": "^0.1.2-alpha.3",
++    "@deepseek-ai/dsh-session": "^0.1.2-alpha.3",
+     "@deepseek-ai/dsh-settings": "^0.1.2-alpha.3",
+     "@deepseek-ai/dsh-timeout": "^0.1.2-alpha.3",
+     "@deepseek-ai/dsh-fs": "^0.1.2-alpha.3"

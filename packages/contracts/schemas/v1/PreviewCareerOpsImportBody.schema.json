@@ -1,0 +1,9 @@
+{
+  "$id": "PreviewCareerOpsImportBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["sourceDirectory"],
+  "properties": {
+    "sourceDirectory": { "minLength": 3, "maxLength": 4096, "type": "string" }
+  }
+}

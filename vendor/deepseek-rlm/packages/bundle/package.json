@@ -1,0 +1,52 @@
+{
+  "name": "@deepseek-rlm/dsh-rlm-bundle",
+  "version": "0.1.0-preview.0",
+  "description": "Installable DeepSeek Harness RLM bundle patch",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./spawn-provider": {
+      "types": "./lib/spawn-provider.d.ts",
+      "default": "./lib/spawn-provider.js"
+    },
+    "./dsh.bundle.patch": "./dsh.bundle.patch",
+    "./example.cordis.yml": "./example.cordis.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.js",
+    "lib/**/*.d.ts",
+    "dsh.bundle.patch",
+    "example.cordis.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./dsh.bundle.patch"
+    }
+  },
+  "dependencies": {
+    "@deepseek-rlm/dsh-rlm": "workspace:*",
+    "@deepseek-rlm/dsh-rlm-prime-runtime": "workspace:*",
+    "@deepseek-rlm/dsh-rlm-jupyter": "workspace:*",
+    "@deepseek-rlm/dsh-tool-ipython": "workspace:*"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-agent": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-llm": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-session": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-session-query": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-subagent": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-subagent-spawn-in-process": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-system-prompt": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-tools": "0.1.2-alpha.3"
+  }
+}

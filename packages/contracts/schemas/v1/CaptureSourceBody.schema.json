@@ -1,0 +1,32 @@
+{
+  "$id": "CaptureSourceBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["kind", "trustClass", "mediaType", "text"],
+  "properties": {
+    "kind": {
+      "anyOf": [
+        { "const": "candidate", "type": "string" },
+        { "const": "opportunity", "type": "string" },
+        { "const": "company", "type": "string" },
+        { "const": "market", "type": "string" },
+        { "const": "message", "type": "string" },
+        { "const": "import", "type": "string" }
+      ]
+    },
+    "trustClass": {
+      "anyOf": [
+        { "const": "candidate_primary", "type": "string" },
+        { "const": "candidate_derived", "type": "string" },
+        { "const": "external", "type": "string" }
+      ]
+    },
+    "mediaType": {
+      "pattern": "^text/[a-z0-9.+-]+$",
+      "maxLength": 100,
+      "type": "string"
+    },
+    "text": { "minLength": 1, "maxLength": 1048576, "type": "string" },
+    "originalLocator": { "minLength": 1, "maxLength": 2048, "type": "string" }
+  }
+}

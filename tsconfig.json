@@ -1,0 +1,19 @@
+{
+  "files": [],
+  "references": [
+    { "path": "vendor/deepseek-rlm/packages/rlm" },
+    { "path": "vendor/deepseek-rlm/packages/prime-runtime" },
+    { "path": "vendor/deepseek-rlm/packages/rlm-jupyter" },
+    { "path": "vendor/deepseek-rlm/packages/tool-ipython" },
+    { "path": "vendor/deepseek-rlm/packages/bundle" },
+    { "path": "packages/contracts" },
+    { "path": "packages/domain" },
+    { "path": "packages/storage" },
+    { "path": "packages/application" },
+    { "path": "packages/dsh-plugin" },
+    { "path": "packages/career-ops-import" },
+    { "path": "packages/evals" },
+    { "path": "apps/server" },
+    { "path": "apps/web" }
+  ]
+}

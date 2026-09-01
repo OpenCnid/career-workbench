@@ -1,0 +1,62 @@
+{
+  "name": "@career-workbench/dsh-plugin",
+  "version": "0.1.0-preview.0",
+  "type": "module",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./service": {
+      "types": "./lib/service.d.ts",
+      "import": "./lib/service.js"
+    },
+    "./http-provider": {
+      "types": "./lib/http-provider.d.ts",
+      "import": "./lib/http-provider.js"
+    }
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@career-workbench/contracts": "workspace:*"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-agent": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-attachment": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-llm": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-jobs": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-sandbox": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-session": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-session-projection": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-subagent": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-system-prompt": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-tools": "0.1.2-alpha.3",
+    "@deepseek-rlm/dsh-rlm": "0.1.0-preview.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-agent": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-attachment": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-llm": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-jobs": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-sandbox": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-session": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-session-projection": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-subagent": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-system-prompt": "0.1.2-alpha.3",
+    "@deepseek-ai/dsh-tools": "0.1.2-alpha.3",
+    "@deepseek-rlm/dsh-rlm": "workspace:*"
+  }
+}

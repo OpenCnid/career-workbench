@@ -1,0 +1,55 @@
+{
+  "$id": "ProposeComparisonBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["evaluationIds", "policyVersion", "scenarios", "tradeoffs"],
+  "properties": {
+    "evaluationIds": {
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 10,
+        "maxLength": 80,
+        "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+        "type": "string"
+      }
+    },
+    "policyVersion": {
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "maxLength": 30,
+      "type": "string"
+    },
+    "scenarios": {
+      "minItems": 1,
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["label", "weightsBasisPoints"],
+        "properties": {
+          "label": { "minLength": 1, "maxLength": 120, "type": "string" },
+          "weightsBasisPoints": {
+            "minProperties": 1,
+            "maxProperties": 32,
+            "type": "object",
+            "patternProperties": {
+              "^[a-z][a-z0-9_]*$": {
+                "minimum": 0,
+                "maximum": 10000,
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "tradeoffs": {
+      "maxItems": 16,
+      "type": "array",
+      "items": { "minLength": 1, "maxLength": 1000, "type": "string" }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "$id": "CancelOperationBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["expectedRevision", "reason"],
+  "properties": {
+    "expectedRevision": { "minimum": 1, "type": "integer" },
+    "reason": { "minLength": 1, "maxLength": 500, "type": "string" }
+  }
+}

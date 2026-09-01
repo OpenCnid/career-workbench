@@ -1,0 +1,24 @@
+{
+  "name": "@career-workbench/application",
+  "version": "0.1.0-preview.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@career-workbench/contracts": "workspace:*",
+    "@career-workbench/domain": "workspace:*"
+  }
+}

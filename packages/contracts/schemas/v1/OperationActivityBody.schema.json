@@ -1,0 +1,32 @@
+{
+  "$id": "OperationActivityBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["expectedRevision", "phase"],
+  "properties": {
+    "expectedRevision": { "minimum": 1, "type": "integer" },
+    "phase": {
+      "anyOf": [
+        { "const": "started", "type": "string" },
+        { "const": "report", "type": "string" },
+        { "const": "message", "type": "string" },
+        { "const": "followup", "type": "string" },
+        { "const": "deleted", "type": "string" },
+        { "const": "cell", "type": "string" },
+        { "const": "bridge", "type": "string" },
+        { "const": "snapshot", "type": "string" },
+        { "const": "restore", "type": "string" },
+        { "const": "interrupt", "type": "string" },
+        { "const": "restart", "type": "string" }
+      ]
+    },
+    "message": { "minLength": 1, "maxLength": 16384, "type": "string" },
+    "messageId": { "minLength": 1, "maxLength": 200, "type": "string" },
+    "requestId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    }
+  }
+}

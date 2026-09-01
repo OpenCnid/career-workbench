@@ -1,0 +1,75 @@
+packages:
+  - apps/*
+  - packages/*
+  - vendor/deepseek-rlm/packages/*
+
+allowBuilds:
+  "@google/genai": false
+  better-sqlite3: true
+  esbuild: true
+  koffi: true
+  protobufjs: false
+  zeromq: true
+
+minimumReleaseAgeExclude:
+  - "@typescript-eslint/eslint-plugin@8.69.0"
+  - "@typescript-eslint/parser@8.69.0"
+  - "@typescript-eslint/project-service@8.69.0"
+  - "@typescript-eslint/scope-manager@8.69.0"
+  - "@typescript-eslint/tsconfig-utils@8.69.0"
+  - "@typescript-eslint/type-utils@8.69.0"
+  - "@typescript-eslint/types@8.69.0"
+  - "@typescript-eslint/typescript-estree@8.69.0"
+  - "@typescript-eslint/utils@8.69.0"
+  - "@typescript-eslint/visitor-keys@8.69.0"
+  - lucide-react@1.38.0
+  - typescript-eslint@8.69.0
+  - "@deepseek-ai/dsh-agent@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-brand@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-code-runtime@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-invariants@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-llm@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-scope@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-session-projection@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-session@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-system-prompt@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-timeout@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-tools@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-typert-protocol@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-user-approval@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-util-crypto@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-util-values@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-attachment@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-agent-loop-testkit@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-agent-loop@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-session-persistence-jsonl@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-session-persistence@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-settings@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-subagent-in-process-driver@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-subagent-spawn-in-process@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-subagent@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-util-time@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-jobs@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-sandbox@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-session-query@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-session-title@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-tool-todo@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-atomic-write@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-authorization@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-credentials-local@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-credentials@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-fs@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-home-paths@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-launch-environment@0.1.2-alpha.3"
+  - "@deepseek-ai/dsh-llm-pi-ai@0.1.2-alpha.3"
+
+onlyBuiltDependencies:
+  - better-sqlite3
+  - esbuild
+  - koffi
+  - zeromq
+
+patchedDependencies:
+  "@deepseek-ai/dsh-llm-pi-ai@0.1.2-alpha.3": provenance/patches/npm/@deepseek-ai__dsh-llm-pi-ai@0.1.2-alpha.3.patch
+  "@deepseek-ai/dsh-session@0.1.2-alpha.3": provenance/patches/npm/@deepseek-ai__dsh-session@0.1.2-alpha.3.patch
+  "@deepseek-ai/dsh-subagent@0.1.2-alpha.3": provenance/patches/npm/@deepseek-ai__dsh-subagent@0.1.2-alpha.3.patch

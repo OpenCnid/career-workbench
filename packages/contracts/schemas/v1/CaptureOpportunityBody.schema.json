@@ -1,0 +1,25 @@
+{
+  "$id": "CaptureOpportunityBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["sourceDocumentId", "organization", "roleTitle"],
+  "properties": {
+    "sourceDocumentId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    },
+    "organization": { "minLength": 1, "maxLength": 300, "type": "string" },
+    "roleTitle": { "minLength": 1, "maxLength": 300, "type": "string" },
+    "originalUrl": { "minLength": 1, "maxLength": 2048, "type": "string" },
+    "location": { "minLength": 1, "maxLength": 300, "type": "string" },
+    "workArrangement": { "minLength": 1, "maxLength": 100, "type": "string" },
+    "advertisedCompensation": {
+      "minLength": 1,
+      "maxLength": 300,
+      "type": "string"
+    },
+    "requisitionId": { "minLength": 1, "maxLength": 200, "type": "string" }
+  }
+}

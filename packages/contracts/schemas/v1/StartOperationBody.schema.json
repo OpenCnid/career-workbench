@@ -1,0 +1,47 @@
+{
+  "$id": "StartOperationBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "kind",
+    "inputIdentity",
+    "requestedCapabilities",
+    "route",
+    "dshSessionId",
+    "provider",
+    "model"
+  ],
+  "properties": {
+    "kind": { "minLength": 1, "maxLength": 80, "type": "string" },
+    "inputIdentity": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    },
+    "requestedCapabilities": {
+      "maxItems": 16,
+      "uniqueItems": true,
+      "type": "array",
+      "items": { "minLength": 1, "maxLength": 80, "type": "string" }
+    },
+    "route": {
+      "anyOf": [
+        { "const": "ordinary_dsh", "type": "string" },
+        { "const": "native_child", "type": "string" },
+        { "const": "rlm", "type": "string" }
+      ]
+    },
+    "dshSessionId": { "minLength": 1, "maxLength": 200, "type": "string" },
+    "parentOperationId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    },
+    "provider": { "minLength": 1, "maxLength": 100, "type": "string" },
+    "model": { "minLength": 1, "maxLength": 200, "type": "string" },
+    "reasoningEffort": { "minLength": 1, "maxLength": 50, "type": "string" },
+    "admissionOnly": { "type": "boolean" }
+  }
+}

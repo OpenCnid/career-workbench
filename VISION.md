@@ -17,14 +17,14 @@ materials, prepare for interviews, and remember what happened across a long
 pipeline.
 
 Existing agent-driven career tools often put critical behavior in prompt files
-or skills. That makes a prototype flexible, but it leaves important facts,
-state transitions, validation rules, and recovery behavior implicit. Terminal
-interfaces compound the problem: they hide parallel work, evidence,
-uncertainty, approvals, and durable state behind a stream of text.
+or skills. That makes a prototype flexible, but it leaves important facts, state
+transitions, validation rules, and recovery behavior implicit. Terminal
+interfaces compound the problem: they hide parallel work, evidence, uncertainty,
+approvals, and durable state behind a stream of text.
 
-The result can feel capable without feeling dependable. Users cannot always
-tell what is known, what was inferred, what is still running, what changed, or
-how to correct it.
+The result can feel capable without feeling dependable. Users cannot always tell
+what is known, what was inferred, what is still running, what changed, or how to
+correct it.
 
 ## The product promise
 
@@ -48,10 +48,10 @@ A user should be able to:
 
 ### Deterministic core, generative edge
 
-Code owns identifiers, schemas, state machines, scoring arithmetic,
-provenance, validation, persistence, migrations, approval gates, and artifact
-lifecycle. Models perform semantic analysis, research, explanation, and
-drafting within those boundaries.
+Code owns identifiers, schemas, state machines, scoring arithmetic, provenance,
+validation, persistence, migrations, approval gates, and artifact lifecycle.
+Models perform semantic analysis, research, explanation, and drafting within
+those boundaries.
 
 A model response is a proposal until the deterministic backend validates and
 records it.
@@ -60,8 +60,8 @@ records it.
 
 Career facts must come from user-approved sources. Job and company facts must
 retain their sources. Inferences must remain distinguishable from extracted
-facts. A plausible citation is not sufficient when the cited material does
-not support the complete claim.
+facts. A plausible citation is not sufficient when the cited material does not
+support the complete claim.
 
 Missing evidence should produce a visible gap, not an invented bridge.
 
@@ -69,8 +69,8 @@ Missing evidence should produce a visible gap, not an invented bridge.
 
 The product helps a person decide and act; it does not optimize for autonomous
 application volume. The user can inspect, correct, reject, retry, cancel, and
-approve work. Career Workbench never silently submits an application or sends
-a message on the user's behalf.
+approve work. Career Workbench never silently submits an application or sends a
+message on the user's behalf.
 
 ### Structured interface, conversational control
 
@@ -91,8 +91,8 @@ second agent loop.
 
 Native subagents and the RLM/IPython capability are selective tools, not a
 default ceremony. Simple work should remain simple. Persistent computation or
-recursive research is appropriate only when it produces clearer evidence,
-better recovery, or materially better results than an ordinary DSH turn.
+recursive research is appropriate only when it produces clearer evidence, better
+recovery, or materially better results than an ordinary DSH turn.
 
 ### User-owned, portable data
 
@@ -106,8 +106,8 @@ artifacts, or RLM snapshots.
 Career Ops is the initial domain reference. Career Workbench will preserve the
 useful workflows, safety lessons, and importable user artifacts while moving
 core behavior into deterministic services. It is not a fork whose architecture
-must forever mirror Career Ops, and it is not a wrapper that leaves prompt
-files as the backend.
+must forever mirror Career Ops, and it is not a wrapper that leaves prompt files
+as the backend.
 
 ## The intended experience
 
@@ -123,8 +123,8 @@ The primary screen is a workbench, not a chatbot. It presents:
 - a conversational panel for asking the orchestrator to act across those
   surfaces.
 
-The user should never need to understand Cordis, DSH, subagent APIs, Jupyter,
-or recursive language models to complete a career task. Those mechanisms are
+The user should never need to understand Cordis, DSH, subagent APIs, Jupyter, or
+recursive language models to complete a career task. Those mechanisms are
 successful when the interface makes the work easier to understand and control.
 
 ## Who it is for
@@ -133,9 +133,8 @@ Career Workbench is initially designed for an individual conducting a serious,
 selective job search. It should also remain useful between searches as a place
 to maintain accomplishments, evidence, preferences, and career history.
 
-The first product is not a recruiter-facing applicant tracking system,
-employer screening product, labor marketplace, or autonomous application
-service.
+The first product is not a recruiter-facing applicant tracking system, employer
+screening product, labor marketplace, or autonomous application service.
 
 ## What success means
 
@@ -161,8 +160,8 @@ Career Workbench does not aim to:
 - automate indiscriminate or high-volume applications;
 - evade employer screening systems;
 - fabricate experience, metrics, credentials, or authorship;
-- make employment, legal, immigration, compensation, or financial decisions
-  for the user;
+- make employment, legal, immigration, compensation, or financial decisions for
+  the user;
 - treat IPython as a security sandbox;
 - replace DSH with a product-owned model loop;
 - make model output or notebook memory the canonical database;
@@ -173,5 +172,5 @@ Career Workbench does not aim to:
 ## North star
 
 Career Workbench should feel like a calm, inspectable operating environment for
-a consequential personal process: structured where correctness matters,
-adaptive where judgment matters, and always under the user's control.
+a consequential personal process: structured where correctness matters, adaptive
+where judgment matters, and always under the user's control.

@@ -1,0 +1,48 @@
+{
+  "$id": "TerminalOperationBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "expectedRevision",
+    "state",
+    "category",
+    "message",
+    "resultIds",
+    "artifactIds"
+  ],
+  "properties": {
+    "expectedRevision": { "minimum": 1, "type": "integer" },
+    "state": {
+      "anyOf": [
+        { "const": "succeeded", "type": "string" },
+        { "const": "failed", "type": "string" },
+        { "const": "canceled", "type": "string" },
+        { "const": "indeterminate", "type": "string" }
+      ]
+    },
+    "category": { "minLength": 1, "maxLength": 100, "type": "string" },
+    "message": { "minLength": 1, "maxLength": 16384, "type": "string" },
+    "resultIds": {
+      "maxItems": 64,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 10,
+        "maxLength": 80,
+        "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+        "type": "string"
+      }
+    },
+    "artifactIds": {
+      "maxItems": 64,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 10,
+        "maxLength": 80,
+        "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+        "type": "string"
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "recordedAt": "2026-09-01T11:26:26.128Z",
+  "platform": "win32-x64",
+  "provider": "openai-codex",
+  "model": "gpt-5.6-sol",
+  "reasoningEffort": "high",
+  "checks": {
+    "credentialOwnedByDshRuntime": true,
+    "exactModelResolution": true,
+    "unsupportedModelRejected": true,
+    "unsupportedReasoningRejected": true,
+    "ordinaryAgentToolCall": true,
+    "nativeChildCompleted": true,
+    "nativeChildFollowupCompleted": true,
+    "nativeChildCanceled": true,
+    "nativeChildDeleted": true,
+    "rlmInitialValue": 41,
+    "rlmRestoredValue": 42,
+    "rlmRestoreWithoutCellReplay": true,
+    "acceptedComparisonSurvivedPythonExit": true,
+    "acceptedComparisonSurvivedBackendRestart": true,
+    "visibleUiActivity": true,
+    "liveActivityScreenshot": true,
+    "serverPortReleased": true
+  }
+}

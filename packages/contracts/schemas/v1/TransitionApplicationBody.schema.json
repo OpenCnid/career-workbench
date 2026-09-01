@@ -1,0 +1,26 @@
+{
+  "$id": "TransitionApplicationBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["expectedRevision", "state", "effectiveDate"],
+  "properties": {
+    "expectedRevision": { "minimum": 1, "type": "integer" },
+    "state": {
+      "anyOf": [
+        { "const": "considering", "type": "string" },
+        { "const": "preparing", "type": "string" },
+        { "const": "ready_for_review", "type": "string" },
+        { "const": "applied", "type": "string" },
+        { "const": "responded", "type": "string" },
+        { "const": "interview", "type": "string" },
+        { "const": "offer", "type": "string" },
+        { "const": "hired", "type": "string" },
+        { "const": "rejected", "type": "string" },
+        { "const": "withdrawn", "type": "string" },
+        { "const": "closed", "type": "string" }
+      ]
+    },
+    "effectiveDate": { "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "type": "string" },
+    "note": { "minLength": 1, "maxLength": 2000, "type": "string" }
+  }
+}

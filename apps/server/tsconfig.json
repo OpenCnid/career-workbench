@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib",
+    "composite": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/application" },
+    { "path": "../../packages/career-ops-import" },
+    { "path": "../../packages/domain" },
+    { "path": "../../packages/storage" }
+  ]
+}
