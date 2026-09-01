@@ -2,6 +2,7 @@ import {
   mkdtemp,
   mkdir,
   readFile,
+  realpath,
   rm,
   symlink,
   writeFile,
@@ -43,6 +44,19 @@ describe("workspace and artifact safety", () => {
         resolveWorkspaceRelative(tmpdir(), "artifact.txt:secret"),
       ).toThrow(/Alternate/u);
     }
+    await expect(
+      assertSafeWorkspaceRoot(join(tmpdir(), ".config", "gcloud", "workspace")),
+    ).rejects.toMatchObject({ code: "workspace_unsafe" });
+  });
+
+  it("canonicalizes Windows alias-like spellings without accepting links", async () => {
+    if (process.platform !== "win32") return;
+    const parent = await mkdtemp(join(tmpdir(), "career-workbench-alias-"));
+    roots.push(parent);
+    const canonicalParent = await realpath(parent);
+    await expect(
+      assertSafeWorkspaceRoot(join(parent.toUpperCase(), "workspace")),
+    ).resolves.toBe(join(canonicalParent, "workspace"));
   });
 
   it("rejects a linked workspace ancestor where the OS exposes it", async () => {

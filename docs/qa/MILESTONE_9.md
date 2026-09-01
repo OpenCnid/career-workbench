@@ -29,7 +29,7 @@ same formatting gate is reproducible on Windows.
 
 | Environment / command                                 | Exact result                                                                                                               |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Windows `pnpm check`                                  | exit 0; 17 files / 279 tests; 32 schemas; provenance, hygiene, docs, build, 9 manifests passed                             |
+| Windows `pnpm check`                                  | exit 0; 17 files / 280 tests; 32 schemas; provenance, hygiene, docs, build, 9 manifests passed                             |
 | Windows `pnpm test:e2e`                               | exit 0; Chromium 2/2 including ten-route axe and keyboard checks                                                           |
 | Windows `pnpm test:security`                          | exit 0; 3/3                                                                                                                |
 | Windows representative performance                    | 250 opportunities; create 449 ms; list 1 ms; export 26 ms / 490,298 bytes; SQLite 1,265,664 bytes; RSS +44,113,920 bytes   |
@@ -37,9 +37,9 @@ same formatting gate is reproducible on Windows.
 | Windows clean frozen lockfile install                 | exit 0                                                                                                                     |
 | Windows full native clean install                     | exit 1; external Visual Studio Build Tools unavailable                                                                     |
 | Windows authenticated live acceptance                 | exit 0; `openai-codex/gpt-5.6-sol`, reasoning `high`; ordinary, child, RLM, restart, UI, cleanup passed                    |
-| Hosted Windows clean install / full matrix            | exit 0; native clean install, 279 tests, Chromium, release, and isolated install passed                                    |
-| Hosted Ubuntu clean install / full matrix             | exit 0; native clean install, 279 tests, Chromium, release, and isolated install passed                                    |
-| Hosted macOS clean install / full matrix              | exit 0; native clean install, 279 tests, Chromium, release, and isolated install passed                                    |
+| Hosted Windows clean install / full matrix            | exit 0; native clean install, 280 tests, Chromium, release, and isolated install passed                                    |
+| Hosted Ubuntu clean install / full matrix             | exit 0; native clean install, 280 tests, Chromium, release, and isolated install passed                                    |
+| Hosted macOS clean install / full matrix              | exit 0; native clean install, 280 tests, Chromium, release, and isolated install passed                                    |
 | Linux/amd64 Docker full native install + `pnpm check` | exit 0; Node 24.19.0 / pnpm 11.24.0 / uv 0.12.7; 17 files / 279 tests                                                      |
 | Linux representative performance                      | 250 opportunities; create 1,155 ms; list 1 ms; export 56 ms / 490,298 bytes; SQLite 1,265,664 bytes; RSS +40,067,072 bytes |
 | Linux Chromium / release / isolated install           | 2/2 E2E; 7 packages; 642 SBOM components; 9 checksums; exact DSH-peer install/import passed                                |

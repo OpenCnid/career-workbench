@@ -1,5 +1,13 @@
 import { homedir, platform } from "node:os";
-import { isAbsolute, parse, relative, resolve, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  parse,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import { lstat, realpath } from "node:fs/promises";
 import { DomainError } from "@career-workbench/domain";
 
@@ -41,6 +49,30 @@ async function rejectLinkedExistingAncestors(candidate: string): Promise<void> {
       throw error;
     }
   }
+}
+
+async function canonicalizeExistingPrefix(candidate: string): Promise<string> {
+  let cursor = candidate;
+  const missingParts: string[] = [];
+  for (;;) {
+    try {
+      const canonical = await realpath(cursor);
+      return resolve(canonical, ...missingParts.reverse());
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      const parent = dirname(cursor);
+      if (samePath(parent, cursor)) throw error;
+      missingParts.push(basename(cursor));
+      cursor = parent;
+    }
+  }
+}
+
+function containsCredentialMarker(candidate: string): boolean {
+  const normalized = candidate.replace(/\\/gu, "/").toLowerCase();
+  return [".ssh", ".aws", ".config/gcloud", "user data", "browser"].some(
+    (marker) => normalized.includes(marker),
+  );
 }
 
 export async function assertSafeWorkspaceRoot(
@@ -87,43 +119,40 @@ export async function assertSafeWorkspaceRoot(
       "The selected location is a protected root.",
     );
   }
-  const credentialMarkers = [
-    ".ssh",
-    ".aws",
-    ".config/gcloud",
-    "User Data",
-    "Browser",
-  ];
-  if (
-    credentialMarkers.some((marker) =>
-      resolved.toLowerCase().includes(marker.toLowerCase()),
-    )
-  ) {
+  if (containsCredentialMarker(resolved)) {
     throw new DomainError(
       "workspace_unsafe",
       "Credential and browser-profile locations are not allowed.",
     );
   }
   await rejectLinkedExistingAncestors(resolved);
-  try {
-    const canonical = await realpath(resolved);
-    if (!samePath(canonical, resolved)) {
-      throw new DomainError(
-        "workspace_unsafe",
-        "Workspace root changed during validation.",
-      );
-    }
-  } catch (error) {
-    if (error instanceof DomainError) throw error;
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  const canonical = await canonicalizeExistingPrefix(resolved);
+  await rejectLinkedExistingAncestors(canonical);
+  const canonicalForbidden = await Promise.all(
+    forbidden.map((root) => canonicalizeExistingPrefix(resolve(root))),
+  );
+  if (canonicalForbidden.some((root) => samePath(root, canonical))) {
+    throw new DomainError(
+      "workspace_unsafe",
+      "The selected location is a protected root.",
+    );
   }
-  if (forbidden.some((root) => isWithin(resolved, root))) {
+  if (containsCredentialMarker(canonical)) {
+    throw new DomainError(
+      "workspace_unsafe",
+      "Credential and browser-profile locations are not allowed.",
+    );
+  }
+  if (
+    forbidden.some((root) => isWithin(resolved, root)) ||
+    canonicalForbidden.some((root) => isWithin(canonical, root))
+  ) {
     throw new DomainError(
       "workspace_unsafe",
       "Workspace root cannot contain a protected root.",
     );
   }
-  return resolved;
+  return canonical;
 }
 
 export function resolveWorkspaceRelative(
