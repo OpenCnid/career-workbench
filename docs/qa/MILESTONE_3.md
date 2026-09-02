@@ -1,13 +1,13 @@
 # Milestone 3 evidence
 
-Status: **partial.** All 20 native core tools compose and the corrected
+Status: **partial.** All 23 native core tools compose and the corrected
 authenticated ordinary-evaluation route passes. The browser still lacks a
 DSH-backed conversation, and the expanded tool surface has not all been
 exercised by the real authenticated Agent; those gaps prevent a complete claim.
 
 Implemented behavior:
 
-- installable native Cordis plugin with 20 closed-schema core tools plus
+- installable native Cordis plugin with 23 closed-schema core tools plus
   capability-gated native child/RLM tools and ordered system-prompt guidance;
 - loopback-only HTTP service provider backed by the canonical Fastify,
   application, SQLite, and artifact services;
@@ -22,6 +22,17 @@ Implemented behavior:
 - browser-visible ordinary-DSH route, state, and terminal message.
 - authenticated search-profile discovery admission, source-preserved lead
   ingestion, trusted terminal settlement, and user-only lead promotion.
+- bounded candidate-source organization admission, exact-locator profile-fact
+  proposals, trusted terminal settlement, and user-only grouped or individual
+  confirmation. A browser request cannot impersonate the Agent proposal route;
+- same-page résumé organization through the published DSH Agent loop and
+  credential owner. The browser starts the bounded intent, sees progress, and
+  receives only the canonical operation/result identities after the exact DSH
+  model route reaches its trusted terminal. The organizer uses an explicit
+  low-reasoning route and batches at most 12 source-linked proposals into one
+  serial DSH tool step. User cancellation and an eight-minute provider deadline
+  have distinct terminal messages; a deadline gets one bounded trusted-terminal
+  recovery attempt. No prompt-copy handoff remains.
 
 Primary automated evidence is
 `tests/integration/dsh-plugin.integration.test.ts`. It boots the published
@@ -48,12 +59,14 @@ were inspected at the pinned revision. The package contains no provider client,
 Agent loop, continuation-manager field access, Prime integration, nested agent
 CLI launch, or Python implementation.
 
-The corrected 2026-09-01 OAuth route used DSH-owned credentials with
-`openai-codex/gpt-5.6-sol` and reasoning `high`. The Agent itself executed the
-exact start → propose → decide → complete tool chain; new evidence was accepted,
-the evaluation reached its trusted terminal, both survived in-process server
-reconstruction, and no queued/running operation leaked. Separate backend and DSH
-OS-process restart remains unexecuted. Scrubbed evidence is
-`docs/qa/generated/live-acceptance.json` with browser evidence at
-`docs/qa/generated/live-activity.png`. No credential or provider payload is
-retained.
+The corrected 2026-09-02 OAuth route used DSH-owned credentials with
+`openai-codex/gpt-5.6-sol`: reasoning `high` for the ordinary orchestration and
+reasoning `low` for bounded same-page résumé organization. The ordinary Agent
+executed the exact start → propose → decide → complete tool chain; new evidence
+was accepted, the evaluation reached its trusted terminal, both survived
+in-process server reconstruction, and no queued/running operation leaked. The
+same acceptance run persisted source-bound résumé proposals and verified its
+exact low-reasoning route. Separate backend and DSH OS-process restart remains
+unexecuted. Scrubbed evidence is `docs/qa/generated/live-acceptance.json` with
+browser evidence at `docs/qa/generated/live-activity.png`. No credential or
+provider payload is retained.

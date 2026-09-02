@@ -63,6 +63,44 @@ export const CaptureSourceBodySchema = Type.Object(
   { $id: "CaptureSourceBody", additionalProperties: false },
 );
 
+export const UploadCandidateSourceBodySchema = Type.Object(
+  {
+    mediaType: Type.Union([
+      Type.Literal("application/pdf"),
+      Type.Literal("text/plain"),
+    ]),
+    bytesBase64: Type.String({
+      minLength: 4,
+      maxLength: 6_990_508,
+      pattern: "^[A-Za-z0-9+/]+={0,2}$",
+    }),
+    extractedText: BoundedText(49_152),
+  },
+  { $id: "UploadCandidateSourceBody", additionalProperties: false },
+);
+
+export const StartProfileOrganizationBodySchema = Type.Object(
+  {
+    sourceId: EmbeddedEntityIdSchema,
+  },
+  { $id: "StartProfileOrganizationBody", additionalProperties: false },
+);
+
+export const ProfileOrganizationRunResponseSchema = Type.Object(
+  {
+    contractVersion: Type.Literal("v1"),
+    sourceId: EmbeddedEntityIdSchema,
+    sessionId: Type.String({ minLength: 1, maxLength: 200 }),
+    operationId: EmbeddedEntityIdSchema,
+    state: Type.Literal("succeeded"),
+    proposedFactIds: Type.Array(EmbeddedEntityIdSchema, { maxItems: 24 }),
+    provider: BoundedText(100),
+    model: BoundedText(200),
+    reasoningEffort: BoundedText(100),
+  },
+  { $id: "ProfileOrganizationRunResponse", additionalProperties: false },
+);
+
 export const ProposeProfileFactBodySchema = Type.Object(
   {
     factType: BoundedText(80),
@@ -661,6 +699,15 @@ export const IdParameterSchema = Type.Object(
 
 export type CreateWorkspaceBody = Static<typeof CreateWorkspaceBodySchema>;
 export type CaptureSourceBody = Static<typeof CaptureSourceBodySchema>;
+export type UploadCandidateSourceBody = Static<
+  typeof UploadCandidateSourceBodySchema
+>;
+export type StartProfileOrganizationBody = Static<
+  typeof StartProfileOrganizationBodySchema
+>;
+export type ProfileOrganizationRunResponse = Static<
+  typeof ProfileOrganizationRunResponseSchema
+>;
 export type ProposeProfileFactBody = Static<
   typeof ProposeProfileFactBodySchema
 >;
@@ -769,6 +816,7 @@ export interface ProfileFactView {
   readonly predicate: string;
   readonly value: string | number | boolean | null;
   readonly status: string;
+  readonly proposedBy: "user" | "import" | "agent" | "system";
   readonly sourceLocators: readonly Static<typeof SourceLocatorSchema>[];
   readonly supersedesFactId: string | null;
 }
@@ -1089,6 +1137,9 @@ export type DiagnosticsResponse = Static<typeof DiagnosticsResponseSchema>;
 export const API_SCHEMAS = [
   CreateWorkspaceBodySchema,
   CaptureSourceBodySchema,
+  UploadCandidateSourceBodySchema,
+  StartProfileOrganizationBodySchema,
+  ProfileOrganizationRunResponseSchema,
   ProposeProfileFactBodySchema,
   AddCareerHistoryEntryBodySchema,
   ConfirmProfileFactBodySchema,

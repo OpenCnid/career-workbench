@@ -14,9 +14,13 @@ import {
   ContractValidationError,
   CreateWorkspaceBodySchema,
   DiagnosticsResponseSchema,
+  ProfileOrganizationRunResponseSchema,
+  StartProfileOrganizationBodySchema,
   parseJsonWithoutDuplicateKeys,
   type CreateWorkspaceBody,
   type DiagnosticsResponse,
+  type ProfileOrganizationRunResponse,
+  type StartProfileOrganizationBody,
 } from "@career-workbench/contracts";
 import {
   DomainError,
@@ -34,6 +38,11 @@ import {
   CAREER_WORKBENCH_VERSION,
 } from "./compatibility.js";
 import { registerDomainRoutes } from "./routes.js";
+import {
+  EmbeddedProfileOrganizationRunner,
+  ProfileOrganizationRunError,
+  type ProfileOrganizationRunner,
+} from "./profile-organization-runner.js";
 import { registerEventRoutes } from "./sse.js";
 
 export interface ServerOptions {
@@ -43,6 +52,10 @@ export interface ServerOptions {
   readonly dshToken?: string;
   readonly rlmEnabled?: boolean;
   readonly idFactory?: IdFactory;
+  readonly profileOrganizationRunner?: ProfileOrganizationRunner;
+  readonly dshProvider?: string;
+  readonly dshModel?: string;
+  readonly dshReasoningEffort?: string;
 }
 
 export interface Runtime {
@@ -51,6 +64,7 @@ export interface Runtime {
   service: WorkbenchService | null;
   workspace: Workspace | null;
   recentErrorCategories: DomainError["code"][];
+  profileOrganizationsInFlight: Set<string>;
   careerOpsPreviews: Map<
     string,
     {
@@ -77,6 +91,7 @@ const knownApiPaths = [
   /^\/api\/v1\/events(?:\/stream)?$/u,
   /^\/api\/v1\/workspaces$/u,
   /^\/api\/v1\/(?:sources|profile-facts|search-profiles|discovery-leads|opportunities|evidence|rubrics|evaluations|artifacts|operations)$/u,
+  /^\/api\/v1\/profile-organizations$/u,
   /^\/api\/v1\/(?:applications|search|export)$/u,
   /^\/api\/v1\/approvals(?:\/[^/]+\/decision)?$/u,
   /^\/api\/v1\/applications\/[^/]+\/transitions$/u,
@@ -318,7 +333,7 @@ export async function createServer(
     logger: false,
     forceCloseConnections: true,
     ajv: { customOptions: { removeAdditional: false, allErrors: true } },
-    bodyLimit: 1_100_000,
+    bodyLimit: 7_100_000,
   });
   const csrfToken = options.csrfToken ?? randomBytes(32).toString("base64url");
   if (options.dshToken !== undefined && options.dshToken.length < 32) {
@@ -332,8 +347,19 @@ export async function createServer(
     service: null,
     workspace: null,
     recentErrorCategories: [],
+    profileOrganizationsInFlight: new Set(),
     careerOpsPreviews: new Map(),
   };
+  const profileOrganizationRunner =
+    options.profileOrganizationRunner ??
+    (options.dshToken === undefined
+      ? null
+      : new EmbeddedProfileOrganizationRunner({
+          serviceToken: options.dshToken,
+          provider: options.dshProvider ?? "openai-codex",
+          model: options.dshModel ?? "gpt-5.6-sol",
+          reasoningEffort: options.dshReasoningEffort ?? "low",
+        }));
 
   if (
     await pathExists(join(options.workspaceRoot, "career-workbench.sqlite"))
@@ -540,6 +566,101 @@ export async function createServer(
     };
   });
 
+  server.post<{ Body: StartProfileOrganizationBody }>(
+    "/api/v1/profile-organizations",
+    {
+      schema: {
+        body: StartProfileOrganizationBodySchema,
+        response: { 200: ProfileOrganizationRunResponseSchema },
+      },
+    },
+    async (request): Promise<ProfileOrganizationRunResponse> => {
+      commandContext(request, ids);
+      requireService(runtime);
+      const repository = requireStore(runtime);
+      if (profileOrganizationRunner === null) {
+        throw new DomainError(
+          "capability_unavailable",
+          "The in-page DSH organizer is not configured. Start Career Workbench with DSH enabled.",
+        );
+      }
+      const source = await repository.get("source", request.body.sourceId);
+      if (
+        source.kind !== "candidate" ||
+        source.trustClass !== "candidate_primary"
+      ) {
+        throw new DomainError(
+          "invalid_request",
+          "Profile organization requires a saved candidate-primary source.",
+        );
+      }
+      if (runtime.profileOrganizationsInFlight.has(source.id)) {
+        throw new DomainError(
+          "duplicate_identity",
+          "This source is already being organized by DSH.",
+        );
+      }
+      const origin = request.headers.origin;
+      if (origin === undefined) {
+        throw new DomainError(
+          "external_content_rejected",
+          "The in-page organizer requires an explicit same-origin request.",
+        );
+      }
+      const controller = new AbortController();
+      const abort = (): void => controller.abort();
+      request.raw.once("aborted", abort);
+      runtime.profileOrganizationsInFlight.add(source.id);
+      try {
+        const run = await profileOrganizationRunner.run(
+          source.id,
+          new URL(`${origin}/`),
+          controller.signal,
+        );
+        const operation = (
+          await repository.list("operation", source.workspaceId)
+        ).find(
+          (item) =>
+            item.kind === "profile_organization" &&
+            item.inputIdentity === source.id &&
+            item.dshSessionId === run.sessionId &&
+            item.state === "succeeded",
+        );
+        if (operation === undefined) {
+          throw new DomainError(
+            "operation_indeterminate",
+            "DSH ended without a canonical completed organization operation. Retry the source organization.",
+          );
+        }
+        return {
+          contractVersion: "v1",
+          sourceId: source.id,
+          sessionId: run.sessionId,
+          operationId: operation.id,
+          state: "succeeded",
+          proposedFactIds: [...operation.resultIds],
+          provider: run.provider,
+          model: run.model,
+          reasoningEffort: run.reasoningEffort,
+        };
+      } catch (error) {
+        if (error instanceof ProfileOrganizationRunError) {
+          if (error.code === "CAPABILITY_UNAVAILABLE") {
+            throw new DomainError("capability_unavailable", error.message);
+          }
+          if (error.code === "RUN_ABORTED") {
+            throw new DomainError("operation_canceled", error.message);
+          }
+          throw new DomainError("operation_indeterminate", error.message);
+        }
+        throw error;
+      } finally {
+        request.raw.off("aborted", abort);
+        runtime.profileOrganizationsInFlight.delete(source.id);
+      }
+    },
+  );
+
   server.get(
     "/api/v1/diagnostics",
     { schema: { response: { 200: DiagnosticsResponseSchema } } },
@@ -576,6 +697,7 @@ export async function createServer(
   registerEventRoutes(server, runtime);
 
   server.addHook("onClose", async () => {
+    await profileOrganizationRunner?.close();
     await runtime.store?.close();
   });
 

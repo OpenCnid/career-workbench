@@ -46,6 +46,9 @@ async function main(): Promise<void> {
   const server = await createServer({
     workspaceRoot,
     ...(dshToken === undefined ? {} : { dshToken }),
+    dshProvider: process.env["CAREER_WORKBENCH_DSH_PROVIDER"] ?? "openai-codex",
+    dshModel: process.env["CAREER_WORKBENCH_DSH_MODEL"] ?? "gpt-5.6-sol",
+    dshReasoningEffort: process.env["CAREER_WORKBENCH_DSH_REASONING"] ?? "low",
     rlmEnabled: process.env["CAREER_WORKBENCH_RLM_ENABLED"] === "1",
     ...((await exists(webRoot)) ? { webRoot } : {}),
   });

@@ -37,6 +37,7 @@ import { resolveUvDirectory } from "../tests/support/runtime-tools.js";
 const PROVIDER = "openai-codex";
 const MODEL = "gpt-5.6-sol";
 const REASONING = "high";
+const PROFILE_REASONING = "low";
 const CSRF = "synthetic-live-csrf-000000000000000";
 const DSH_TOKEN = "synthetic-live-dsh-token-000000000000000000";
 const HOST = "127.0.0.1:4173";
@@ -286,34 +287,37 @@ function liveEvaluationMessage(opportunityId: string) {
   });
 }
 
-async function repairIncompleteEvaluationTurn(
+async function repairIncompleteEvaluationTurns(
   agent: Agent,
   opportunityId: string,
   eventStart: number,
 ): Promise<number> {
-  const events = agent.session.events.slice(eventStart);
-  const calls = events.flatMap((event) =>
-    event.type === "tool/call" ? [event.data] : [],
-  );
-  const names = calls.map((call) => call.name);
-  const isValidPrefix = names.every(
-    (name, index) => EXPECTED_EVALUATION_TOOL_NAMES[index] === name,
-  );
-  const hasError = events.some(
-    (event) => event.type === "tool/result" && event.data.error !== undefined,
-  );
-  if (
-    isValidPrefix &&
-    !hasError &&
-    names.length > 0 &&
-    names.length < EXPECTED_EVALUATION_TOOL_NAMES.length
-  ) {
+  let repairTurns = 0;
+  while (repairTurns < EXPECTED_EVALUATION_TOOL_NAMES.length) {
+    const events = agent.session.events.slice(eventStart);
+    const calls = events.flatMap((event) =>
+      event.type === "tool/call" ? [event.data] : [],
+    );
+    const names = calls.map((call) => call.name);
+    const isValidPrefix = names.every(
+      (name, index) => EXPECTED_EVALUATION_TOOL_NAMES[index] === name,
+    );
+    const hasError = events.some(
+      (event) => event.type === "tool/result" && event.data.error !== undefined,
+    );
+    if (
+      !isValidPrefix ||
+      hasError ||
+      names.length >= EXPECTED_EVALUATION_TOOL_NAMES.length
+    ) {
+      break;
+    }
     agent.followup(
       createUserMessage({
         content: [
           {
             type: "text",
-            text: `The evaluation tool sequence for ${opportunityId} stopped after ${names.join(", ")}. Continue from the authoritative results already in this session. Do not repeat completed calls. Issue only the remaining calls from the original exact sequence, in order, and reach the trusted evaluation terminal.`,
+            text: `The evaluation tool sequence for ${opportunityId} stopped after ${names.join(", ") || "no tool calls"}. Continue from the authoritative results already in this session. Do not repeat completed calls. Issue only the remaining calls from the original exact sequence, in order, and reach the trusted evaluation terminal.`,
           },
         ],
         source: { kind: "user" },
@@ -325,9 +329,9 @@ async function repairIncompleteEvaluationTurn(
       180_000,
     );
     await ctx.sessions.flush(agent.session);
-    return 1;
+    repairTurns += 1;
   }
-  return 0;
+  return repairTurns;
 }
 
 const root = await realpath(
@@ -338,6 +342,9 @@ let server = await createServer({
   workspaceRoot,
   csrfToken: CSRF,
   dshToken: DSH_TOKEN,
+  dshProvider: PROVIDER,
+  dshModel: MODEL,
+  dshReasoningEffort: PROFILE_REASONING,
   rlmEnabled: true,
   webRoot: join(process.cwd(), "apps", "web", "dist"),
   idFactory: new DeterministicIdFactory("11VEPRAAF0"),
@@ -589,6 +596,55 @@ try {
     "UNSUPPORTED_REASONING_EFFORT",
   );
 
+  const profileSeedSource = (
+    await server.inject({ method: "GET", url: "/api/v1/snapshot" })
+  )
+    .json<{
+      readonly sources: readonly {
+        readonly id: string;
+        readonly kind: string;
+      }[];
+    }>()
+    .sources.find((item) => item.kind === "candidate");
+  ensure(profileSeedSource !== undefined, "Synthetic profile source missing.");
+  const profileHost = `127.0.0.1:${String(listeningPort)}`;
+  const profileOrganizationResponse = await server.inject({
+    method: "POST",
+    url: "/api/v1/profile-organizations",
+    headers: {
+      host: profileHost,
+      origin: `http://${profileHost}`,
+      "content-type": "application/json",
+      cookie: `cw_csrf=${CSRF}`,
+      "x-cw-csrf": CSRF,
+      "x-idempotency-key": "synthetic-live-in-page-profile-organization",
+      "sec-fetch-site": "same-origin",
+    },
+    payload: { sourceId: profileSeedSource.id },
+  });
+  ensure(
+    profileOrganizationResponse.statusCode === 200,
+    `In-page DSH profile organization failed with ${String(profileOrganizationResponse.statusCode)}.`,
+  );
+  const profileOrganization = profileOrganizationResponse.json<{
+    readonly state: string;
+    readonly proposedFactIds: readonly string[];
+    readonly provider: string;
+    readonly model: string;
+    readonly reasoningEffort: string;
+  }>();
+  ensure(
+    profileOrganization.state === "succeeded" &&
+      profileOrganization.proposedFactIds.length > 0,
+    "In-page DSH profile organization did not persist reviewable proposals.",
+  );
+  ensure(
+    profileOrganization.provider === PROVIDER &&
+      profileOrganization.model === MODEL &&
+      profileOrganization.reasoningEffort === PROFILE_REASONING,
+    "In-page DSH profile organization changed the configured model route.",
+  );
+
   const seededSnapshot = (
     await server.inject({ method: "GET", url: "/api/v1/snapshot" })
   ).json<{
@@ -616,7 +672,7 @@ try {
   parent.followup(liveEvaluationMessage(opportunity.id));
   await within(parent.whenIdle(), "ordinary live DSH turn", 180_000);
   await ctx.sessions.flush(parent.session);
-  let ordinaryEvaluationRepairTurns = await repairIncompleteEvaluationTurn(
+  let ordinaryEvaluationRepairTurns = await repairIncompleteEvaluationTurns(
     parent,
     opportunity.id,
     0,
@@ -785,7 +841,7 @@ try {
       180_000,
     );
     await ctx.sessions.flush(supplementalEvaluationAgent.session);
-    ordinaryEvaluationRepairTurns += await repairIncompleteEvaluationTurn(
+    ordinaryEvaluationRepairTurns += await repairIncompleteEvaluationTurns(
       supplementalEvaluationAgent,
       additionalOpportunity.id,
       priorEventCount,
@@ -1177,6 +1233,11 @@ try {
   );
   await ctx.sessions.flush(parent.session);
   await ctx.sessions.flush(supplementalEvaluationAgent.session);
+  await ctx.fiber.dispose();
+
+  // Agent/session teardown is itself durable DSH activity. Capture the resume
+  // baseline only after the original context has fully disposed so the loaded
+  // session is compared with the exact bytes that were actually persisted.
   const persistedParentEventCount = parent.session.events.filter(
     (event) => event.ignorable !== true,
   ).length;
@@ -1191,7 +1252,6 @@ try {
   const persistedParentRequestHeaderCount = parent.session.events.filter(
     (event) => event.type === "request/header",
   ).length;
-  await ctx.fiber.dispose();
 
   await server.close();
   serverClosed = true;
@@ -1327,6 +1387,8 @@ try {
       unsupportedModelRejected: true,
       unsupportedReasoningRejected: true,
       ordinaryAgentToolSequenceVerified: true,
+      inPageProfileOrganizationPersisted: true,
+      inPageProfileOrganizationReasoning: PROFILE_REASONING,
       ordinaryAgentEvaluationPersisted: true,
       threeOpportunitiesEvaluatedByRealAgent: true,
       ordinaryEvaluationRepairTurns,

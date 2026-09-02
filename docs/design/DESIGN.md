@@ -1,5 +1,8 @@
 # Career Workbench design system
 
+The proposed dark visual refresh and its implementation acceptance criteria are
+specified in `docs/design/DARK_MODE_REFRESH_SPEC.md`.
+
 Career Workbench is an evidence studio, not a chatbot or an applicant tracking
 spreadsheet. Its interface should help a first-time user answer two questions
 without documentation:
@@ -13,6 +16,10 @@ without documentation:
 
 - Lead with a human outcome, then disclose the underlying records and trust
   model as the user works.
+- Trust direct user input in the interface. Names and search preferences should
+  look and edit like settings, without re-presenting provenance or verification
+  labels. Preserve revision/source history internally, and expose exact sources
+  when a model or importer has interpreted career evidence for review.
 - Keep the primary workflow visible on Overview. Show completion from canonical
   state and link every stage to the real working surface.
 - Prefer bounded views. Event history defaults to 10 items, supports 10, 25, or
@@ -40,13 +47,24 @@ without documentation:
 
 ## First-use journey
 
-1. Set up the single private local workbench, confirm the candidate identity,
-   choose target roles or explicitly defer them, record the priorities that
-   matter, and select the initial balanced-fit rubric.
-2. Add career history by pasting résumé/CV text or entering one role at a time,
-   then review the resulting source-backed claims.
-3. Save explicit search criteria: target roles, seniority, locations, work
-   arrangements, compensation floor, AI direction, priorities, and exclusions.
+1. Create the single private local workbench with only the candidate name. The
+   balanced-fit rubric is selected deterministically and target preferences are
+   explicitly deferred so first use does not become a questionnaire.
+2. Add career history by uploading a PDF or text résumé, pasting résumé/CV text,
+   describing past work in rough prose, or entering one role at a time. Upload
+   and paste are explicit separate choices; the default résumé view never hides
+   the file picker. A bounded in-page DSH run can organize a saved source into
+   exact, source-linked proposals. Review those proposals in one compact
+   editorial queue: decisions stay visible and exact source excerpts expand only
+   on request. Confirmed evidence and superseded history are separate collapsed
+   records. Only confirmed claims become career evidence that can support
+   evaluation and candidate-facing work.
+3. Choose one target role or explicitly ask to explore roles aligned with the
+   confirmed experience. Optionally refine the complete search criteria:
+   seniority, locations, work arrangements, compensation floor, AI direction,
+   priorities, and exclusions. Verified identity and reusable target, priority,
+   and work-style records belong in Settings rather than the Career evidence
+   workflow.
 4. Start bounded discovery through the configured DSH Agent. Each returned
    listing preserves exact untrusted source text, explains why it appeared, and
    remains a lead until the user shortlists or dismisses it. Manual opportunity
@@ -58,8 +76,11 @@ without documentation:
 7. Prepare reviewed materials and record pipeline state without taking an
    external action.
 
-The six stages appear as a persistent Overview guide. The interface derives
-completion from canonical backend state rather than browser storage.
+Home presents only the next incomplete action by default. The six-stage guide,
+information-use map, workspace statistics, search, and export remain available
+inside **See the full journey and workspace details**. The interface derives
+completion from canonical backend state rather than browser storage and
+refreshes it whenever the ordered activity stream reconnects.
 
 ## Reference provenance
 

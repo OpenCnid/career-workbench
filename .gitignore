@@ -15,3 +15,8 @@ test-results/
 docs/qa/generated/*
 !docs/qa/generated/live-evaluation-evidence.png
 !docs/qa/generated/live-evaluation-gaps.png
+!docs/qa/generated/milestone-2/
+docs/qa/generated/milestone-2/*
+!docs/qa/generated/milestone-2/profile-claim-review.png
+!docs/qa/generated/milestone-2/profile-settings.png
+!docs/qa/generated/milestone-2/profile-settings-narrow-editor.png

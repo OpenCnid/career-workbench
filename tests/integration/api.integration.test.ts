@@ -7,6 +7,7 @@ import { createServer } from "../../apps/server/src/server.js";
 
 const CSRF = "synthetic-csrf-proof-0000000000000000";
 const HOST = "127.0.0.1:4173";
+const DSH_TOKEN = "synthetic-profile-dsh-token-000000000000000000";
 
 interface ErrorBody {
   readonly error: { readonly code: string; readonly message: string };
@@ -94,6 +95,146 @@ describe("local /api/v1 boundary", () => {
     });
   });
 
+  it("runs profile organization behind the same-origin page and returns only canonical DSH results", async () => {
+    await server.close();
+    let runnerClosed = false;
+    let dshSerial = 0;
+    const dshHeaders = (sessionId: string, operationId?: string) => ({
+      authorization: `CW-DSH ${DSH_TOKEN}`,
+      "content-type": "application/json",
+      "x-cw-dsh-session": sessionId,
+      "x-idempotency-key": `synthetic-profile-runner-${String(++dshSerial).padStart(4, "0")}`,
+      ...(operationId === undefined ? {} : { "x-cw-operation": operationId }),
+    });
+    server = await createServer({
+      workspaceRoot: join(parent, "workspace"),
+      csrfToken: CSRF,
+      dshToken: DSH_TOKEN,
+      idFactory: new DeterministicIdFactory("PR0F1AE100"),
+      profileOrganizationRunner: {
+        run: async (sourceId, baseUrl, signal) => {
+          expect(baseUrl.href).toBe(`http://${HOST}/`);
+          expect(signal.aborted).toBe(false);
+          const sessionId = "synthetic-profile-session";
+          const operationResponse = await server.inject({
+            method: "POST",
+            url: "/api/v1/operations",
+            headers: dshHeaders(sessionId),
+            payload: {
+              kind: "profile_organization",
+              inputIdentity: sourceId,
+              requestedCapabilities: [
+                "candidate_source.read",
+                "profile_fact.propose",
+              ],
+              route: "ordinary_dsh",
+              dshSessionId: sessionId,
+              provider: "openai-codex",
+              model: "gpt-5.6-sol",
+              reasoningEffort: "high",
+            },
+          });
+          expect(operationResponse.statusCode, operationResponse.body).toBe(
+            201,
+          );
+          const operation = operationResponse.json<Identified>();
+          const quote = "Avery Example built reliable TypeScript services.";
+          const factResponse = await server.inject({
+            method: "POST",
+            url: "/api/v1/profile-facts",
+            headers: dshHeaders(sessionId, operation.id),
+            payload: {
+              factType: "achievement",
+              subject: "Avery Example",
+              predicate: "built",
+              value: "reliable TypeScript services.",
+              sourceLocators: [
+                {
+                  sourceId,
+                  start: 0,
+                  end: quote.length,
+                  quote,
+                },
+              ],
+              proposedBy: "agent",
+            },
+          });
+          expect(factResponse.statusCode, factResponse.body).toBe(201);
+          const fact = factResponse.json<Identified>();
+          const terminalResponse = await server.inject({
+            method: "POST",
+            url: `/api/v1/operations/${operation.id}/terminal`,
+            headers: dshHeaders(sessionId, operation.id),
+            payload: {
+              expectedRevision: operation.revision,
+              state: "succeeded",
+              category: "completed",
+              message: "Organized exact synthetic source claims for review.",
+              resultIds: [fact.id],
+              artifactIds: [],
+            },
+          });
+          expect(terminalResponse.statusCode, terminalResponse.body).toBe(200);
+          return {
+            sessionId,
+            provider: "openai-codex",
+            model: "gpt-5.6-sol",
+            reasoningEffort: "high",
+          };
+        },
+        close: () => {
+          runnerClosed = true;
+          return Promise.resolve();
+        },
+      },
+    });
+    await initialize();
+    const quote = "Avery Example built reliable TypeScript services.";
+    const sourceResponse = await injectMutation("/api/v1/sources", {
+      kind: "candidate",
+      trustClass: "candidate_primary",
+      mediaType: "text/plain",
+      text: quote,
+      originalLocator: "synthetic://profile-organizer-source",
+    });
+    const source = sourceResponse.json<Identified>();
+
+    const organized = await injectMutation("/api/v1/profile-organizations", {
+      sourceId: source.id,
+    });
+    expect(organized.statusCode, organized.body).toBe(200);
+    expect(organized.json()).toMatchObject({
+      contractVersion: "v1",
+      sourceId: source.id,
+      state: "succeeded",
+      provider: "openai-codex",
+      model: "gpt-5.6-sol",
+      reasoningEffort: "high",
+      proposedFactIds: [expect.stringMatching(/^fact_/u)],
+    });
+    const snapshot = (
+      await server.inject({ method: "GET", url: "/api/v1/snapshot" })
+    ).json<{
+      readonly profileFacts: readonly {
+        readonly status: string;
+        readonly proposedBy: string;
+      }[];
+    }>();
+    expect(snapshot.profileFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ status: "proposed", proposedBy: "agent" }),
+      ]),
+    );
+
+    await server.close();
+    expect(runnerClosed).toBe(true);
+    server = await createServer({
+      workspaceRoot: join(parent, "replacement-workspace"),
+      csrfToken: CSRF,
+      idFactory: new DeterministicIdFactory("C10SE0T000"),
+    });
+  });
+
   it("atomically creates guided identity, target preferences, and a selected rubric", async () => {
     const response = await injectMutation("/api/v1/workspaces", {
       displayName: "AI Engineering Search",
@@ -169,6 +310,90 @@ describe("local /api/v1 boundary", () => {
     expect(
       snapshot.json<{ readonly workspace: unknown }>().workspace,
     ).toBeNull();
+  });
+
+  it("rejects browser attempts to impersonate a DSH profile organizer", async () => {
+    await initialize();
+    const sourceResponse = await injectMutation("/api/v1/sources", {
+      kind: "candidate",
+      trustClass: "candidate_primary",
+      mediaType: "text/plain",
+      text: "Avery Example built a synthetic evaluation service",
+      originalLocator: "user-entry://synthetic-organizer-boundary",
+    });
+    expect(sourceResponse.statusCode).toBe(201);
+    const source = sourceResponse.json<Identified>();
+
+    const response = await injectMutation("/api/v1/profile-facts", {
+      factType: "achievement",
+      subject: "Avery Example",
+      predicate: "built",
+      value: "a synthetic evaluation service",
+      sourceLocators: [
+        {
+          sourceId: source.id,
+          start: 0,
+          end: 50,
+          quote: "Avery Example built a synthetic evaluation service",
+        },
+      ],
+      proposedBy: "agent",
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json<ErrorBody>().error).toMatchObject({
+      code: "approval_denied",
+    });
+  });
+
+  it("seals uploaded candidate bytes and retains a bounded text representation", async () => {
+    await initialize();
+    const text = "Avery Example built a synthetic evaluation service";
+    const bytes = Buffer.from(text, "utf8");
+    const response = await injectMutation("/api/v1/sources/upload", {
+      mediaType: "text/plain",
+      bytesBase64: bytes.toString("base64"),
+      extractedText: text,
+    });
+    expect(response.statusCode, response.body).toBe(201);
+    const source = response.json<{
+      readonly id: string;
+      readonly artifactId: string;
+      readonly contentDigest: string;
+      readonly inlineText: string;
+      readonly mediaType: string;
+    }>();
+    expect(source).toMatchObject({
+      mediaType: "text/plain",
+      inlineText: text,
+    });
+    expect(source.artifactId).toMatch(/^artifact_/u);
+
+    const snapshot = (
+      await server.inject({ method: "GET", url: "/api/v1/snapshot" })
+    ).json<{
+      readonly artifacts: readonly {
+        readonly id: string;
+        readonly kind: string;
+        readonly contentDigest: string;
+        readonly byteLength: number;
+      }[];
+    }>();
+    expect(snapshot.artifacts).toContainEqual(
+      expect.objectContaining({
+        id: source.artifactId,
+        kind: "candidate_source_bytes",
+        contentDigest: source.contentDigest,
+        byteLength: bytes.byteLength,
+      }),
+    );
+
+    const invalidPdf = await injectMutation("/api/v1/sources/upload", {
+      mediaType: "application/pdf",
+      bytesBase64: Buffer.from("not a pdf", "utf8").toString("base64"),
+      extractedText: text,
+    });
+    expect(invalidPdf.statusCode).toBe(400);
+    expect(invalidPdf.json<ErrorBody>().error.code).toBe("invalid_request");
   });
 
   it("atomically turns a guided history entry into a primary source and reviewable claims", async () => {

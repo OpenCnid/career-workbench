@@ -1,0 +1,46 @@
+{
+  "$id": "ProfileOrganizationRunResponse",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "contractVersion",
+    "sourceId",
+    "sessionId",
+    "operationId",
+    "state",
+    "proposedFactIds",
+    "provider",
+    "model",
+    "reasoningEffort"
+  ],
+  "properties": {
+    "contractVersion": { "const": "v1", "type": "string" },
+    "sourceId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    },
+    "sessionId": { "minLength": 1, "maxLength": 200, "type": "string" },
+    "operationId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    },
+    "state": { "const": "succeeded", "type": "string" },
+    "proposedFactIds": {
+      "maxItems": 24,
+      "type": "array",
+      "items": {
+        "minLength": 10,
+        "maxLength": 80,
+        "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+        "type": "string"
+      }
+    },
+    "provider": { "minLength": 1, "maxLength": 100, "type": "string" },
+    "model": { "minLength": 1, "maxLength": 200, "type": "string" },
+    "reasoningEffort": { "minLength": 1, "maxLength": 100, "type": "string" }
+  }
+}
