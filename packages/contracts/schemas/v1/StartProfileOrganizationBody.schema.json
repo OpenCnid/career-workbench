@@ -1,0 +1,14 @@
+{
+  "$id": "StartProfileOrganizationBody",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["sourceId"],
+  "properties": {
+    "sourceId": {
+      "minLength": 10,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9_]*_[0-9A-HJKMNP-TV-Z]{10,64}$",
+      "type": "string"
+    }
+  }
+}

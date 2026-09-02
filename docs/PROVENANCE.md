@@ -34,3 +34,12 @@ unmodified for interoperability testing. Their source paths, repository
 revision, MIT license, destination paths, and byte digests are recorded in
 `provenance/career-ops-fixture-files.json` and verified on every provenance
 gate.
+
+## Bundled runtime dependency
+
+The web application bundles `pdfjs-dist` `6.3.289`, the published distribution
+of Mozilla PDF.js, solely to extract selectable text from user-chosen PDF résumé
+files locally in the browser. PDF.js is Apache-2.0 licensed; no PDF.js source
+file is copied or adapted in this repository. The exact dependency is locked in
+`pnpm-lock.yaml`, reported by the generated SBOM, and attributed in
+`apps/web/THIRD_PARTY_NOTICES.md`.

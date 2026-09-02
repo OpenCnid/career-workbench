@@ -48,6 +48,27 @@ research capability; the browser does not scrape job boards or call an LLM
 provider. The browser supplies same-origin/CSRF proof automatically. The server
 never listens beyond loopback.
 
+First-time setup asks only for the candidate name. Home then accepts a PDF or
+plain-text résumé file, pasted résumé/CV text, or an informal career story as
+one immutable candidate source. File upload is limited to 5 MB; PDF intake
+requires selectable text, and extracted text is limited to 48 KiB. Uploaded
+source bytes are sealed in content-addressed storage while the bounded text
+representation supports exact locators and review. Choose **Continue with AI**
+to run one bounded DSH-owned organizer turn in the same page. The server uses
+the configured `openai-codex/gpt-5.6-sol` route with reasoning `low` by default
+for this bounded extraction task; override those exact values with
+`CAREER_WORKBENCH_DSH_PROVIDER`, `CAREER_WORKBENCH_DSH_MODEL`, and
+`CAREER_WORKBENCH_DSH_REASONING`. Unsupported values fail instead of being
+substituted. The native organizer tools may create only exact, source-linked
+proposals; they cannot confirm them. The page waits for the canonical completed
+operation and then opens the grouped summary in Career. After confirmation, Home
+asks for one target role or an explicit “help me explore” choice; the full
+search criteria remain editable in Jobs.
+
+Saving or uploading alone never invokes an LLM or verifies a claim. The browser
+never calls a provider: DSH retains model, reasoning, session, approval,
+cancellation, and lineage authority for organization and discovery.
+
 For a reproducible import example, choose `tests/fixtures/career-ops-v1.18`,
 inspect the preview and warnings, and confirm. The importer reads only its
 allowlisted data files and never runs Career Ops skills, scripts, providers,

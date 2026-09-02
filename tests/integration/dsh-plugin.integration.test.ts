@@ -257,6 +257,95 @@ describe("native Career Workbench DSH plugin", () => {
       ).json<{ readonly operations: readonly unknown[] }>();
       expect(afterDenial.operations).toHaveLength(0);
 
+      const organization = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_start_profile_organization",
+          { contractVersion: "v1", sourceId: seeded.source.id },
+          "start-profile-organization",
+        ),
+      );
+      const organizationOperationId = String(organization["operationId"]);
+      expect(organization).toMatchObject({
+        state: "running",
+        sourceId: seeded.source.id,
+        sourceText: seeded.candidateText,
+      });
+      const impersonatedProfileProposal = await execute(
+        ctx,
+        syntheticAgent("session_synthetic_dsh_impersonator"),
+        "career_workbench_propose_profile_fact",
+        {
+          contractVersion: "v1",
+          operationId: organizationOperationId,
+          factType: "achievement",
+          subject: "Avery Example",
+          predicate: "built",
+          value: "TypeScript services",
+          locator: {
+            sourceId: seeded.source.id,
+            start: 0,
+            end: seeded.candidateText.length,
+            quote: seeded.candidateText,
+          },
+        },
+        "impersonated-profile-proposal",
+      );
+      expect(impersonatedProfileProposal.isError).toBe(true);
+      if (impersonatedProfileProposal.isError) {
+        expect(impersonatedProfileProposal.error.info?.code).toBe(
+          "APPROVAL_DENIED",
+        );
+      }
+      const profileProposal = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_propose_profile_fact",
+          {
+            contractVersion: "v1",
+            operationId: organizationOperationId,
+            factType: "achievement",
+            subject: "Avery Example",
+            predicate: "built",
+            value: "TypeScript services",
+            locator: {
+              sourceId: seeded.source.id,
+              start: 0,
+              end: seeded.candidateText.length,
+              quote: seeded.candidateText,
+            },
+          },
+          "propose-profile-fact",
+        ),
+      );
+      expect(profileProposal).toMatchObject({
+        status: "proposed",
+        factType: "achievement",
+        reviewRequired: true,
+      });
+      const completedOrganization = objectValue(
+        await execute(
+          ctx,
+          agent,
+          "career_workbench_complete_profile_organization",
+          {
+            contractVersion: "v1",
+            operationId: organizationOperationId,
+            expectedRevision: organization["revision"],
+            factIds: [String(profileProposal["id"])],
+            summary:
+              "One exact synthetic achievement is ready for user review.",
+          },
+          "complete-profile-organization",
+        ),
+      );
+      expect(completedOrganization).toMatchObject({
+        state: "succeeded",
+        reviewRequired: true,
+      });
+
       const wrongModel = await execute(
         ctx,
         syntheticAgent("session_wrong_model", "unsupported-model"),

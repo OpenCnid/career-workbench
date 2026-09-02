@@ -59,6 +59,8 @@ import type {
 } from "./ports.js";
 
 const MAX_INLINE_SOURCE_BYTES = 1024 * 1024;
+const MAX_CANDIDATE_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_CANDIDATE_EXTRACTION_BYTES = 48 * 1024;
 const MAX_DISCOVERY_LEADS_PER_OPERATION = 64;
 const MAX_DISCOVERY_LEADS_PER_HOST = 20;
 const MAX_DISCOVERY_LEADS_PER_WORKSPACE = 512;
@@ -88,6 +90,12 @@ export interface CaptureSourceInput {
   readonly mediaType: string;
   readonly text: string;
   readonly originalLocator?: string;
+}
+
+export interface UploadCandidateSourceInput {
+  readonly mediaType: "application/pdf" | "text/plain";
+  readonly bytes: Uint8Array;
+  readonly extractedText: string;
 }
 
 export interface ProposeFactInput {
@@ -815,6 +823,135 @@ export class WorkbenchService {
     );
   }
 
+  public async uploadCandidateSource(
+    input: UploadCandidateSourceInput,
+    context: CommandContext,
+  ): Promise<SourceDocument> {
+    assertDomain(
+      input.bytes.byteLength > 0 &&
+        input.bytes.byteLength <= MAX_CANDIDATE_FILE_BYTES,
+      "invalid_request",
+      "Candidate file is empty or exceeds the 5 MB limit.",
+    );
+    const extractedText = input.extractedText.trim();
+    const extractedBytes = new TextEncoder().encode(extractedText);
+    assertDomain(
+      extractedBytes.byteLength > 0 &&
+        extractedBytes.byteLength <= MAX_CANDIDATE_EXTRACTION_BYTES &&
+        !extractedText.includes("\0"),
+      "invalid_request",
+      "Candidate file text is empty or exceeds the 48 KiB extraction limit.",
+    );
+    if (input.mediaType === "application/pdf") {
+      assertDomain(
+        new TextDecoder("latin1").decode(input.bytes.subarray(0, 5)) ===
+          "%PDF-",
+        "invalid_request",
+        "Uploaded PDF bytes do not contain a PDF signature.",
+      );
+    } else {
+      let decoded: string;
+      try {
+        decoded = new TextDecoder("utf-8", { fatal: true }).decode(input.bytes);
+      } catch {
+        throw new DomainError(
+          "invalid_request",
+          "Uploaded text file is not valid UTF-8.",
+        );
+      }
+      assertDomain(
+        decoded.trim() === extractedText,
+        "invalid_request",
+        "Uploaded text does not match its extracted representation.",
+      );
+    }
+
+    const sealed = await this.artifacts.seal(input.bytes, input.mediaType);
+    const digest = createHash("sha256")
+      .update(input.bytes)
+      .digest("hex") as Digest;
+    assertDomain(
+      sealed.contentDigest === digest &&
+        sealed.byteLength === input.bytes.byteLength,
+      "artifact_unsealed",
+      "Candidate file did not seal to its captured byte identity.",
+    );
+    const now = this.clock.now();
+    const artifactId = this.ids.entity("artifact");
+    const sourceId = this.ids.entity("source");
+    const artifact: Artifact = {
+      id: artifactId,
+      workspaceId: this.workspaceId,
+      kind: "candidate_source_bytes",
+      mediaType: input.mediaType,
+      contentDigest: digest,
+      byteLength: input.bytes.byteLength,
+      producer: "career-workbench",
+      producerVersion: "0.1.0-preview.0",
+      sourceIds: [],
+      factIds: [],
+      evidenceIds: [],
+      rubricIds: [],
+      evaluationIds: [],
+      operationIds: [],
+      state: "sealed",
+      relativePath: sealed.relativePath,
+      staleReason: null,
+      createdAt: now,
+      updatedAt: now,
+      revision: 1,
+    };
+    const source: SourceDocument = {
+      id: sourceId,
+      workspaceId: this.workspaceId,
+      kind: "candidate",
+      trustClass: "candidate_primary",
+      mediaType: input.mediaType,
+      contentDigest: digest,
+      byteLength: input.bytes.byteLength,
+      originalLocator:
+        input.mediaType === "application/pdf"
+          ? "upload:candidate-resume.pdf"
+          : "upload:candidate-resume.txt",
+      capturedAt: now,
+      supersedesSourceId: null,
+      inlineText: extractedText,
+      artifactId,
+      createdAt: now,
+      updatedAt: now,
+      revision: 1,
+    };
+    return this.repository.commit({
+      workspaceId: this.workspaceId,
+      context,
+      command: {
+        kind: "candidate_source.upload",
+        mediaType: input.mediaType,
+        contentDigest: digest,
+        byteLength: input.bytes.byteLength,
+      },
+      mutations: [
+        { action: "insert", kind: "artifact", entity: artifact },
+        { action: "insert", kind: "source", entity: source },
+      ],
+      events: [
+        event(context, now, "candidate_source.bytes_sealed", artifactId, 1, {
+          mediaType: input.mediaType,
+          contentDigest: digest,
+          byteLength: input.bytes.byteLength,
+        }),
+        event(context, now, "source.captured", sourceId, 1, {
+          kind: source.kind,
+          trustClass: source.trustClass,
+          contentDigest: source.contentDigest,
+          byteLength: source.byteLength,
+          artifactId,
+        }),
+      ],
+      result: source,
+    });
+  }
+
   public async addCareerHistoryEntry(
     input: AddCareerHistoryEntryInput,
     context: CommandContext,
@@ -964,6 +1101,30 @@ export class WorkbenchService {
       "invalid_request",
       "Fact subject and predicate are required.",
     );
+    if (context.actor === "dsh_agent") {
+      assertDomain(
+        input.proposedBy === "agent" &&
+          context.operationId !== undefined &&
+          context.dshSessionId !== undefined,
+        "approval_denied",
+        "DSH profile proposals require their authenticated organization operation.",
+      );
+      const operation = await this.repository.get(
+        "operation",
+        context.operationId,
+      );
+      assertDomain(
+        operation.kind === "profile_organization" &&
+          operation.state === "running" &&
+          operation.dshSessionId === context.dshSessionId &&
+          operation.inputIdentity !== null &&
+          input.sourceLocators.every(
+            (locator) => locator.sourceId === operation.inputIdentity,
+          ),
+        "approval_denied",
+        "DSH profile proposal authority does not match the source-bound operation.",
+      );
+    }
     for (const locator of input.sourceLocators) {
       const source = await this.repository.get("source", locator.sourceId);
       validateSourceLocator(source, locator);
@@ -2336,6 +2497,20 @@ export class WorkbenchService {
       inputDigest = createHash("sha256")
         .update(canonicalJson(searchProfile))
         .digest("hex") as Digest;
+    } else if (input.kind === "profile_organization") {
+      const source = await this.repository.get("source", input.inputIdentity);
+      assertDomain(
+        source.kind === "candidate" &&
+          source.trustClass === "candidate_primary" &&
+          source.inlineText !== null &&
+          new TextEncoder().encode(source.inlineText).byteLength <= 48 * 1024 &&
+          source.originalLocator !== "user-entry://onboarding/preferences" &&
+          source.originalLocator !== "user-entry://profile/target-preferences",
+        "evidence_unsupported",
+        "Profile organization requires a saved candidate résumé or career story.",
+      );
+      inputRevision = source.revision;
+      inputDigest = source.contentDigest;
     } else {
       const opportunity = await this.repository.get(
         "opportunity",
@@ -2390,7 +2565,9 @@ export class WorkbenchService {
               maximumLeadsPerHost: MAX_DISCOVERY_LEADS_PER_HOST,
               maximumSourceBytes: MAX_DISCOVERY_BYTES_PER_OPERATION,
             }
-          : {},
+          : input.kind === "profile_organization"
+            ? { maximumFacts: 48, maximumSourceBytes: 48 * 1024 }
+            : {},
       requestedCapabilities: [...input.requestedCapabilities],
       dshSessionId: input.dshSessionId,
       parentOperationId: input.parentOperationId ?? null,
@@ -2674,6 +2851,33 @@ export class WorkbenchService {
         input.artifactIds.length === 0,
         "invalid_request",
         "Job discovery does not produce artifacts.",
+      );
+    }
+    if (operation.kind === "profile_organization") {
+      assertDomain(
+        input.resultIds.length <= 48 &&
+          new Set(input.resultIds).size === input.resultIds.length,
+        "invalid_request",
+        "Profile organization results must be unique and remain within the admitted fact limit.",
+      );
+      for (const resultId of input.resultIds) {
+        const fact = await this.repository.get("profileFact", resultId);
+        assertDomain(
+          fact.status === "proposed" &&
+            fact.proposedBy === "agent" &&
+            operation.inputIdentity !== null &&
+            fact.sourceLocators.length > 0 &&
+            fact.sourceLocators.every(
+              (locator) => locator.sourceId === operation.inputIdentity,
+            ),
+          "invalid_request",
+          "Profile organization may return only unverified Agent proposals from its bound source.",
+        );
+      }
+      assertDomain(
+        input.artifactIds.length === 0,
+        "invalid_request",
+        "Profile organization does not produce artifacts.",
       );
     }
     const now = this.clock.now();

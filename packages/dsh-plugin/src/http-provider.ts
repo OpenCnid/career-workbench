@@ -28,9 +28,12 @@ import {
   type InspectableEntityKind,
   type OperationInspection,
   type ProposeEvidenceCommand,
+  type ProposeProfileFactCommand,
+  type ProposedProfileFact,
   type RecordDiscoveryLeadCommand,
   type RecordedDiscoveryLead,
   type StartedOperation,
+  type StartedProfileOrganization,
   type TransitionApplicationCommand,
   type TransitionedApplication,
   type WorkbenchContext,
@@ -39,6 +42,7 @@ import {
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_CONTEXT_BYTES = 64 * 1024;
 const MAX_SOURCE_EXCERPT = 10_000;
+const MAX_PROFILE_SOURCE_BYTES = 48 * 1024;
 
 export interface SupportedModel {
   readonly provider: string;
@@ -920,6 +924,109 @@ export class HttpCareerWorkbenchService extends CareerWorkbenchService {
       },
     );
     return operationResponse(raw);
+  }
+
+  public async startProfileOrganization(
+    authority: AgentAuthority,
+    sourceId: string,
+    commandIdentity: string,
+    signal: AbortSignal,
+  ): Promise<StartedProfileOrganization> {
+    await this.readiness(authority, signal);
+    const snapshot = await this.request<SnapshotResponse>(
+      "/api/v1/snapshot",
+      authority,
+      signal,
+    );
+    const source = snapshot.sources.find((item) => item.id === sourceId);
+    if (
+      source?.kind !== "candidate" ||
+      source.trustClass !== "candidate_primary" ||
+      source.inlineText === null ||
+      new TextEncoder().encode(source.inlineText).byteLength >
+        MAX_PROFILE_SOURCE_BYTES
+    ) {
+      throw new CareerWorkbenchError(
+        "Profile organization requires a bounded saved candidate résumé or career story.",
+        "EVIDENCE_UNSUPPORTED",
+      );
+    }
+    const operation = operationResponse(
+      await this.request<unknown>("/api/v1/operations", authority, signal, {
+        commandIdentity,
+        body: {
+          kind: "profile_organization",
+          inputIdentity: sourceId,
+          requestedCapabilities: [
+            "candidate_source.read",
+            "profile_fact.propose",
+          ],
+          route: "ordinary_dsh",
+          dshSessionId: authority.sessionId,
+          provider: authority.provider,
+          model: authority.model,
+          ...(authority.reasoningEffort === undefined
+            ? {}
+            : { reasoningEffort: authority.reasoningEffort }),
+        },
+      }),
+    );
+    return {
+      ...operation,
+      source: {
+        id: source.id,
+        kind: source.kind,
+        trustClass: source.trustClass,
+        contentDigest: source.contentDigest,
+        text: source.inlineText,
+        truncated: false,
+      },
+    };
+  }
+
+  public async proposeProfileFact(
+    authority: AgentAuthority,
+    operationId: string,
+    command: ProposeProfileFactCommand,
+    commandIdentity: string,
+    signal: AbortSignal,
+  ): Promise<ProposedProfileFact> {
+    const response = record(
+      await this.request<unknown>("/api/v1/profile-facts", authority, signal, {
+        commandIdentity,
+        operationId,
+        body: {
+          factType: command.factType,
+          subject: command.subject,
+          predicate: command.predicate,
+          value: command.value,
+          sourceLocators: [command.locator],
+          proposedBy: "agent",
+        },
+      }),
+      "Career Workbench profile proposal response",
+    );
+    const value = response["value"];
+    if (
+      value !== null &&
+      typeof value !== "string" &&
+      typeof value !== "number" &&
+      typeof value !== "boolean"
+    ) {
+      throw new CareerWorkbenchError(
+        "Career Workbench profile proposal value is invalid.",
+        "INVALID_RESPONSE",
+      );
+    }
+    return {
+      id: requiredText(response, "id", 80),
+      revision: requiredInteger(response, "revision"),
+      status: requiredText(response, "status", 40),
+      factType: requiredText(response, "factType", 80),
+      subject: requiredText(response, "subject", 300),
+      predicate: requiredText(response, "predicate", 200),
+      value,
+    };
   }
 
   public async recordDiscoveryLead(

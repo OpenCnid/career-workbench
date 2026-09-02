@@ -13,6 +13,14 @@ linked existing ancestors where the host exposes them. Content artifacts use
 workspace-generated relative paths, staged exclusive writes, SHA-256 identity,
 atomic placement, bounded byte/media types, and read-time digest inspection.
 
+Candidate file intake accepts only PDF and valid UTF-8 plain text, caps original
+bytes at 5 MB and extracted text at 48 KiB, rejects empty or
+signature-mismatched files, and never retains the local filename or path.
+Original bytes are sealed under their SHA-256 identity. PDF.js runs locally in
+the browser to obtain a bounded text representation; that representation remains
+user-supplied source data and cannot authorize a claim without explicit
+confirmation.
+
 Candidate-facing assertions require verified facts and accepted evidence that
 supports the complete claim. External content is untrusted data and cannot
 select tools, models, reasoning, files, approval scope, or mutations. Rejected

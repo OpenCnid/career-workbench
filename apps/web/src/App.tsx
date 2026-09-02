@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Tabs from "@radix-ui/react-tabs";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
   Activity,
   AlertTriangle,
@@ -20,6 +21,7 @@ import {
   RefreshCw,
   Scale,
   Search,
+  Settings2,
   ShieldCheck,
   Sparkles,
   UserRound,
@@ -42,6 +44,7 @@ import type {
   EvaluationView,
   OperationView,
   OpportunityView,
+  ProfileOrganizationRunResponse,
   ProfileFactView,
   SearchProfileView,
   ApplicationView,
@@ -56,10 +59,13 @@ import {
   query,
 } from "./api.js";
 
-const nav = [
-  { to: "/overview", label: "Overview", icon: CircleGauge },
-  { to: "/profile", label: "Profile", icon: UserRound },
-  { to: "/discover", label: "Discover", icon: Search },
+const primaryNav = [
+  { to: "/overview", label: "Home", icon: CircleGauge },
+  { to: "/profile", label: "Career", icon: UserRound },
+  { to: "/discover", label: "Jobs", icon: Search },
+] as const;
+
+const moreNav = [
   { to: "/opportunities", label: "Opportunities", icon: BriefcaseBusiness },
   { to: "/evaluations", label: "Evaluations", icon: FileCheck2 },
   { to: "/comparisons", label: "Compare", icon: Scale },
@@ -67,14 +73,141 @@ const nav = [
   { to: "/drafts", label: "Drafts", icon: FilePenLine },
   { to: "/imports", label: "Import", icon: FolderInput },
   { to: "/activity", label: "Activity", icon: Activity },
+  { to: "/settings", label: "Settings", icon: Settings2 },
   { to: "/diagnostics", label: "Diagnostics", icon: Database },
 ] as const;
 
-const mobilePrimaryNav = nav.slice(0, 4);
-const mobileMoreNav = nav.slice(4);
-
 function message(error: unknown): string {
   return error instanceof Error ? error.message : "The operation failed.";
+}
+
+function completedProfileOrganizationFactIds(
+  snapshot: SnapshotResponse,
+): ReadonlySet<string> {
+  return new Set(
+    snapshot.operations
+      .filter(
+        (operation) =>
+          operation.kind === "profile_organization" &&
+          operation.state === "succeeded",
+      )
+      .flatMap((operation) => operation.resultIds),
+  );
+}
+
+const MAX_CANDIDATE_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_CANDIDATE_TEXT_BYTES = 48 * 1024;
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 32_768) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 32_768));
+  }
+  return btoa(binary);
+}
+
+async function extractCandidateFile(file: File): Promise<{
+  readonly mediaType: "application/pdf" | "text/plain";
+  readonly bytesBase64: string;
+  readonly extractedText: string;
+}> {
+  if (file.size === 0 || file.size > MAX_CANDIDATE_FILE_BYTES) {
+    throw new ApiError(
+      400,
+      "invalid_request",
+      "Choose a non-empty PDF or text file no larger than 5 MB.",
+    );
+  }
+  const lowerName = file.name.toLowerCase();
+  const mediaType =
+    file.type === "application/pdf" || lowerName.endsWith(".pdf")
+      ? "application/pdf"
+      : file.type === "text/plain" || lowerName.endsWith(".txt")
+        ? "text/plain"
+        : null;
+  if (mediaType === null) {
+    throw new ApiError(
+      400,
+      "invalid_request",
+      "This file type is not supported yet. Choose a PDF or plain-text file.",
+    );
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let extractedText: string;
+  if (mediaType === "text/plain") {
+    try {
+      extractedText = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      throw new ApiError(
+        400,
+        "invalid_request",
+        "The selected text file is not valid UTF-8.",
+      );
+    }
+  } else {
+    const { getDocument, GlobalWorkerOptions } =
+      await import("pdfjs-dist/legacy/build/pdf.mjs");
+    GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+    const loadingTask = getDocument({
+      data: bytes.slice(),
+      stopAtErrors: true,
+      useWorkerFetch: false,
+    });
+    const document = await loadingTask.promise.catch(async () => {
+      await loadingTask.destroy();
+      throw new ApiError(
+        400,
+        "invalid_request",
+        "This PDF could not be read. It may be damaged or password protected; paste the résumé text instead.",
+      );
+    });
+    try {
+      const pages: string[] = [];
+      for (
+        let pageNumber = 1;
+        pageNumber <= document.numPages;
+        pageNumber += 1
+      ) {
+        const page = await document.getPage(pageNumber);
+        const content = await page.getTextContent();
+        pages.push(
+          content.items
+            .map((item) => ("str" in item ? item.str : ""))
+            .join(" ")
+            .replaceAll(/\s+/gu, " ")
+            .trim(),
+        );
+        page.cleanup();
+      }
+      extractedText = pages.filter((page) => page.length > 0).join("\n");
+    } finally {
+      await loadingTask.destroy();
+    }
+  }
+  const normalized = extractedText.trim();
+  if (normalized.length === 0) {
+    throw new ApiError(
+      400,
+      "invalid_request",
+      mediaType === "application/pdf"
+        ? "No selectable text was found in this PDF. Paste the résumé text or use Tell my story instead."
+        : "The selected text file is empty.",
+    );
+  }
+  if (
+    new TextEncoder().encode(normalized).byteLength > MAX_CANDIDATE_TEXT_BYTES
+  ) {
+    throw new ApiError(
+      400,
+      "invalid_request",
+      "The extracted résumé text exceeds the 48 KiB intake limit.",
+    );
+  }
+  return {
+    mediaType,
+    bytesBase64: bytesToBase64(bytes),
+    extractedText: normalized,
+  };
 }
 
 function useRefresh(): () => Promise<void> {
@@ -122,21 +255,13 @@ function Onboarding({
 }: {
   readonly onReady: () => Promise<void>;
 }): React.JSX.Element {
-  const [displayName, setDisplayName] = useState("My Career Workbench");
   const [candidateName, setCandidateName] = useState("");
-  const [targetRole, setTargetRole] = useState("");
-  const [targetPriorities, setTargetPriorities] = useState("");
-  const [locationPreference, setLocationPreference] = useState("");
-  const [deferTargetPreferences, setDeferTargetPreferences] = useState(false);
   const create = useMutation({
     mutationFn: () =>
       mutate("/api/v1/workspaces", {
-        displayName,
+        displayName: "My Career Workbench",
         candidateName,
-        ...(deferTargetPreferences ? {} : { targetRole }),
-        ...(targetPriorities.trim().length > 0 ? { targetPriorities } : {}),
-        ...(locationPreference.trim().length > 0 ? { locationPreference } : {}),
-        deferTargetPreferences,
+        deferTargetPreferences: true,
         rubricPreset: "balanced_fit",
         locale: "en-US",
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
@@ -172,12 +297,12 @@ function Onboarding({
           </ul>
         </div>
         <div className="welcome-start">
-          <p className="step-kicker">Start here · about 2 minutes</p>
-          <h2>Set up Career Workbench</h2>
+          <p className="step-kicker">Start here · about 20 seconds</p>
+          <h2>What should we call you?</h2>
           <p>
-            Career Workbench keeps one private local workbench at a time. Name
-            it, identify whose evidence it contains, and set the direction used
-            to evaluate roles. You can revise verified facts later.
+            That is enough to create your private local workbench. Next, paste a
+            résumé or simply describe what you have done. You can decide what
+            kind of role you want after your experience is organized.
           </p>
           <form
             onSubmit={(event) => {
@@ -185,19 +310,6 @@ function Onboarding({
               create.mutate();
             }}
           >
-            <label htmlFor="workspace-name">Workbench name</label>
-            <input
-              id="workspace-name"
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              aria-describedby="workbench-name-help"
-              required
-              maxLength={120}
-            />
-            <span className="field-help" id="workbench-name-help">
-              Identifies this workbench in its records and exports. It does not
-              create a switchable project.
-            </span>
             <div className="onboarding-fields">
               <label htmlFor="candidate-name">Your name</label>
               <input
@@ -205,74 +317,30 @@ function Onboarding({
                 value={candidateName}
                 onChange={(event) => setCandidateName(event.target.value)}
                 placeholder="Your full name"
+                aria-describedby="candidate-name-help"
                 required
                 maxLength={300}
               />
-              <label htmlFor="target-role">Roles you want next</label>
-              <input
-                id="target-role"
-                value={targetRole}
-                onChange={(event) => setTargetRole(event.target.value)}
-                placeholder="Senior Software Engineer · AI Platform Engineer"
-                required={!deferTargetPreferences}
-                disabled={deferTargetPreferences}
-                maxLength={500}
-                aria-describedby="target-role-help"
-              />
-              <span className="field-help" id="target-role-help">
-                This is a preference, not a claim about your past experience.
-              </span>
-              <label className="check-row" htmlFor="defer-targets">
-                <input
-                  id="defer-targets"
-                  type="checkbox"
-                  checked={deferTargetPreferences}
-                  onChange={(event) => {
-                    setDeferTargetPreferences(event.target.checked);
-                    if (event.target.checked) setTargetRole("");
-                  }}
-                />
-                I am still exploring and want to set target roles later
-              </label>
-              <label htmlFor="target-priorities">
-                What matters most in your next move? <span>optional</span>
-              </label>
-              <textarea
-                id="target-priorities"
-                value={targetPriorities}
-                onChange={(event) => setTargetPriorities(event.target.value)}
-                placeholder="For example: hands-on AI systems, strong engineering culture, learning runway, and sustainable pace."
-                maxLength={2000}
-                rows={3}
-              />
-              <label htmlFor="location-preference">
-                Location or work style <span>optional</span>
-              </label>
-              <input
-                id="location-preference"
-                value={locationPreference}
-                onChange={(event) => setLocationPreference(event.target.value)}
-                placeholder="Remote in the US · Chicago hybrid · open to relocation"
-                maxLength={300}
-              />
-              <label htmlFor="rubric-preset">Evaluation approach</label>
-              <select id="rubric-preset" value="balanced_fit" disabled>
-                <option value="balanced_fit">
-                  Balanced fit · skills 70% / preferences 30%
-                </option>
-              </select>
-              <span className="field-help">
-                The calculation is versioned and deterministic. DSH supplies
-                evidence and semantic judgments; code owns the total.
+              <span className="field-help" id="candidate-name-help">
+                Used only to identify your candidate record. It is not treated
+                as proof of your work history.
               </span>
             </div>
+            <aside
+              className="setup-use-note"
+              aria-label="How setup answers are used"
+            >
+              <strong>What happens to these answers?</strong>
+              <p>
+                Your name creates the candidate record. The next screen asks for
+                one useful input—your résumé or your own description. AI may
+                organize it, but nothing becomes evidence until you review and
+                confirm it.
+              </p>
+            </aside>
             <button
               className="primary"
-              disabled={
-                create.isPending ||
-                candidateName.trim().length === 0 ||
-                (!deferTargetPreferences && targetRole.trim().length === 0)
-              }
+              disabled={create.isPending || candidateName.trim().length === 0}
               type="submit"
             >
               {create.isPending ? "Setting up…" : "Start Career Workbench"}
@@ -301,7 +369,7 @@ function Layout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const firstMoreLinkRef = useRef<HTMLAnchorElement>(null);
-  const moreRouteIsActive = mobileMoreNav.some(
+  const moreRouteIsActive = moreNav.some(
     (item) => item.to === location.pathname,
   );
   useEffect(() => {
@@ -342,19 +410,33 @@ function Layout({
           </strong>
         </div>
         <nav className="desktop-primary-nav" aria-label="Primary">
-          {nav.map(({ to, label, icon: Icon }) => (
+          {primaryNav.map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to}>
               <Icon aria-hidden="true" />
               <span>{label}</span>
             </NavLink>
           ))}
+          <details className="desktop-more-nav">
+            <summary className={moreRouteIsActive ? "active" : ""}>
+              <Menu aria-hidden="true" />
+              <span>More</span>
+            </summary>
+            <div>
+              {moreNav.map(({ to, label, icon: Icon }) => (
+                <NavLink key={to} to={to}>
+                  <Icon aria-hidden="true" />
+                  <span>{label}</span>
+                </NavLink>
+              ))}
+            </div>
+          </details>
         </nav>
         <div className="sidebar-foot">
           <span className={`stream-dot ${streamState}`} aria-hidden="true" />
           <span>Activity {streamState}</span>
         </div>
         <nav className="mobile-primary-nav" aria-label="Mobile primary">
-          {mobilePrimaryNav.map(({ to, label, icon: Icon }) => (
+          {primaryNav.map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} onClick={() => setMobileMenuOpen(false)}>
               <Icon aria-hidden="true" />
               <span>{label}</span>
@@ -385,7 +467,7 @@ function Layout({
               <small>All Workbench tools remain available.</small>
             </header>
             <nav aria-label="More destinations">
-              {mobileMoreNav.map(({ to, label, icon: Icon }, index) => (
+              {moreNav.map(({ to, label, icon: Icon }, index) => (
                 <NavLink
                   key={to}
                   ref={index === 0 ? firstMoreLinkRef : undefined}
@@ -426,6 +508,7 @@ function Layout({
               <ActivityPage snapshot={snapshot} streamState={streamState} />
             }
           />
+          <Route path="/settings" element={<Settings snapshot={snapshot} />} />
           <Route path="/diagnostics" element={<Diagnostics />} />
           <Route path="*" element={<Navigate replace to="/overview" />} />
         </Routes>
@@ -457,8 +540,15 @@ function Overview({
 }: {
   readonly snapshot: SnapshotResponse;
 }): React.JSX.Element {
-  const verified = snapshot.profileFacts.filter(
-    (fact) => fact.status === "verified",
+  const refresh = useRefresh();
+  const diagnostics = useQuery({
+    queryKey: ["diagnostics"],
+    queryFn: loadDiagnostics,
+  });
+  const setupContext = snapshot.profileFacts.filter(
+    (fact) =>
+      fact.status === "verified" &&
+      (fact.factType === "identity" || fact.factType === "preference"),
   ).length;
   const verifiedCareerHistory = snapshot.profileFacts.filter(
     (fact) =>
@@ -485,21 +575,53 @@ function Overview({
         fact.sourceLocators.map((locator) => locator.sourceId),
       ),
   );
-  const candidateSources = snapshot.sources.filter(
+  const careerSources = snapshot.sources.filter(
     (source) =>
       source.kind === "candidate" && !onboardingSourceIds.has(source.id),
-  ).length;
-  const proposedFacts = snapshot.profileFacts.filter(
-    (fact) => fact.status === "proposed",
-  ).length;
-  const prepared = snapshot.artifacts.some(
+  );
+  const completedOrganizerFactIds =
+    completedProfileOrganizationFactIds(snapshot);
+  const proposedCareerFacts = snapshot.profileFacts.filter(
+    (fact) =>
+      fact.status === "proposed" &&
+      (fact.factType === "experience" ||
+        fact.factType === "achievement" ||
+        fact.factType === "education" ||
+        fact.factType === "skill") &&
+      (fact.proposedBy !== "agent" || completedOrganizerFactIds.has(fact.id)),
+  );
+  const candidateSources = careerSources.length;
+  const proposedFacts = proposedCareerFacts.length;
+  const latestCareerSource = careerSources.at(-1);
+  const activeSearchProfile = snapshot.searchProfiles.find(
+    (profile) => profile.active,
+  );
+  const organizerOperation = [...snapshot.operations]
+    .reverse()
+    .find(
+      (operation) =>
+        operation.kind === "profile_organization" &&
+        operation.inputIdentity === latestCareerSource?.id,
+    );
+  const candidateOutputs = snapshot.artifacts.filter(
+    (artifact) => !artifact.kind.endsWith("_source_bytes"),
+  );
+  const prepared = candidateOutputs.some(
     (artifact) => artifact.state === "sealed" || artifact.state === "stale",
   );
   const workflow = [
     {
       label: "Add your career history",
       description:
-        "Paste a résumé or add a role, then review the proposed claims.",
+        verifiedCareerHistory > 0
+          ? `${String(verifiedCareerHistory)} confirmed career ${verifiedCareerHistory === 1 ? "claim can" : "claims can"} support evaluations and reviewed drafts.`
+          : proposedFacts > 0
+            ? "Review your proposed claims. Only confirmed claims become career evidence for later work."
+            : candidateSources > 0
+              ? "Your source is saved, but it becomes usable career evidence only after you review and confirm claims."
+              : setupContext > 0
+                ? "Your workbench is ready. Add a résumé or rough career story, then confirm the claims Workbench may use."
+                : "Paste a résumé or add a role, then review the proposed claims.",
       to: "/profile",
       complete: verifiedCareerHistory > 0,
       action:
@@ -508,7 +630,7 @@ function Overview({
           : proposedFacts > 0
             ? "Review your claims"
             : candidateSources > 0
-              ? "Add a structured role"
+              ? "Organize saved history"
               : "Add career history",
     },
     {
@@ -568,7 +690,91 @@ function Overview({
   const nextStep = workflow.find((step) => !step.complete) ?? workflow[5];
   const nextStepIndex = workflow.findIndex((step) => !step.complete);
   const [searchTerm, setSearchTerm] = useState("");
-  const exportableArtifacts = snapshot.artifacts.filter(
+  const [careerStory, setCareerStory] = useState("");
+  const [careerInputMode, setCareerInputMode] = useState<"resume" | "story">(
+    "resume",
+  );
+  const [candidateFile, setCandidateFile] = useState<File | null>(null);
+  const candidateFileInputRef = useRef<HTMLInputElement>(null);
+  const [targetRole, setTargetRole] = useState("");
+  const captureCareerStory = useMutation({
+    mutationFn: () => {
+      const text = careerStory.trim();
+      if (text.length === 0)
+        throw new ApiError(
+          400,
+          "invalid_request",
+          "Paste a résumé or tell us something about your work first.",
+        );
+      return mutate<SourceView>("/api/v1/sources", {
+        kind: "candidate",
+        trustClass: "candidate_primary",
+        mediaType: "text/plain",
+        text,
+        originalLocator:
+          careerInputMode === "resume"
+            ? "user-entry://career-history/resume"
+            : "user-entry://career-history/story",
+      });
+    },
+    onSuccess: async () => {
+      setCareerStory("");
+      await refresh();
+    },
+  });
+  const uploadCandidateFile = useMutation({
+    mutationFn: async () => {
+      if (candidateFile === null) {
+        throw new ApiError(
+          400,
+          "invalid_request",
+          "Choose a PDF or text résumé file first.",
+        );
+      }
+      const extracted = await extractCandidateFile(candidateFile);
+      return mutate<SourceView>("/api/v1/sources/upload", extracted);
+    },
+    onSuccess: async () => {
+      setCandidateFile(null);
+      if (candidateFileInputRef.current !== null) {
+        candidateFileInputRef.current.value = "";
+      }
+      await refresh();
+    },
+  });
+  const saveSearchDirection = useMutation({
+    mutationFn: (direction: string) =>
+      mutate<SearchProfileView>("/api/v1/search-profiles", {
+        ...(snapshot.searchProfiles[0] === undefined
+          ? {}
+          : { expectedRevision: snapshot.searchProfiles[0].revision }),
+        targetRoles: [direction],
+        seniority: ["flexible"],
+        locations: [],
+        workArrangements: ["remote", "hybrid"],
+        priorities: [],
+        exclusions: [],
+        active: true,
+      }),
+    onSuccess: refresh,
+  });
+  const organizeCareerSource = useMutation({
+    mutationFn: () => {
+      if (latestCareerSource === undefined) {
+        throw new ApiError(
+          400,
+          "invalid_request",
+          "Save your résumé or career story first.",
+        );
+      }
+      return mutate<ProfileOrganizationRunResponse>(
+        "/api/v1/profile-organizations",
+        { sourceId: latestCareerSource.id },
+      );
+    },
+    onSuccess: refresh,
+  });
+  const exportableArtifacts = candidateOutputs.filter(
     (artifact) => artifact.state === "sealed" || artifact.state === "stale",
   );
   const [selectedArtifactIds, setSelectedArtifactIds] = useState<
@@ -606,209 +812,619 @@ function Overview({
     <>
       <PageHeader
         eyebrow={snapshot.workspace?.displayName ?? "Career Workbench"}
-        title="Make your next move with evidence."
-        description="Turn what you have done into a verified record, use it to evaluate opportunities, and prepare the next step without giving up control."
+        title="One useful step at a time."
+        description="Give Workbench what you already have. It will help organize the details, then pause whenever your review or a decision is required."
       />
-      <section className="orientation-hero" aria-labelledby="workflow-title">
-        <div className="orientation-copy">
-          <p className="eyebrow">Your guided workflow</p>
-          <h2 id="workflow-title">From career history to a clear next move.</h2>
-          <p>
-            Start by adding your career history. Then bring in a role, test the
-            fit, and prepare only what you choose to pursue.
-          </p>
-          <div className="workflow-progress">
-            <span>
-              {completedSteps} of {workflow.length} stages complete
-            </span>
-            <progress value={completedSteps} max={workflow.length}>
-              {completedSteps} of {workflow.length}
-            </progress>
+      <section className="focus-card" aria-labelledby="focus-title">
+        <header className="focus-card-head">
+          <div>
+            <p className="eyebrow">Your next step</p>
+            <h2 id="focus-title">
+              {careerSources.length === 0
+                ? "Add your résumé or career story"
+                : proposedCareerFacts.length > 0
+                  ? "Check the AI summary"
+                  : verifiedCareerHistory === 0
+                    ? "Let AI organize what you shared"
+                    : activeSearchProfile === undefined
+                      ? "What kind of role should we look for?"
+                      : snapshot.discoveryLeads.length === 0 &&
+                          snapshot.opportunities.length === 0
+                        ? "Find roles that fit your direction"
+                        : "Review the roles you found"}
+            </h2>
           </div>
-          <Link className="button-link primary" to={nextStep.to}>
-            {nextStep.action} <ArrowRight aria-hidden="true" />
-          </Link>
-        </div>
-        <div className="orientation-note">
-          <Sparkles aria-hidden="true" />
-          <strong>What is this for?</strong>
-          <p>
-            Better career decisions: factual, explainable, revisable, and
-            private by default.
-          </p>
-        </div>
-      </section>
-      <section
-        className="workflow-grid"
-        aria-label="How Career Workbench works"
-      >
-        {workflow.map((step, index) => (
-          <article className={step.complete ? "complete" : ""} key={step.label}>
-            <header>
-              <span className="workflow-number">
-                {step.complete ? <Check aria-hidden="true" /> : index + 1}
-              </span>
-              <StatusPill tone={step.complete ? "good" : "neutral"}>
-                {step.complete
-                  ? "complete"
-                  : index === nextStepIndex
-                    ? "next"
-                    : "upcoming"}
-              </StatusPill>
-            </header>
-            <h3>{step.label}</h3>
-            <p>{step.description}</p>
-            <Link to={step.to}>
-              {step.action} <ArrowRight aria-hidden="true" />
-            </Link>
-          </article>
-        ))}
-      </section>
-      <section className="stat-grid" aria-label="Workspace summary">
-        <article>
-          <span>Verified facts</span>
-          <strong>{verified}</strong>
-          <small>
-            {snapshot.profileFacts.length - verified} awaiting or superseded
-          </small>
-        </article>
-        <article>
-          <span>Opportunities</span>
-          <strong>{snapshot.opportunities.length}</strong>
-          <small>captured source records</small>
-        </article>
-        <article>
-          <span>Current evaluations</span>
-          <strong>{current}</strong>
-          <small>
-            {
-              snapshot.evaluations.filter((item) => item.state === "stale")
-                .length
-            }{" "}
-            stale
-          </small>
-        </article>
-        <article>
-          <span>Sealed artifacts</span>
-          <strong>
-            {
-              snapshot.artifacts.filter((item) => item.state === "sealed")
-                .length
-            }
-          </strong>
-          <small>immutable, content-addressed</small>
-        </article>
-      </section>
-      <div className="two-column workspace-tools">
-        <section className="panel">
-          <h2>Search canonical records</h2>
-          <form
-            className="search-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              search.mutate();
-            }}
-          >
-            <label htmlFor="workspace-search">
-              Search term
-              <input
-                id="workspace-search"
-                type="search"
-                minLength={2}
-                maxLength={100}
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                required
-              />
-            </label>
-            <button type="submit" disabled={search.isPending}>
-              <Search aria-hidden="true" /> Search
-            </button>
-          </form>
-          <ul className="search-results" aria-live="polite">
-            {search.data?.results.map((result) => (
-              <li key={`${result.kind}-${result.id}`}>
-                <div>
-                  <strong>{result.label}</strong>
-                  <small>{result.kind}</small>
-                </div>
-                <StatusPill>{result.state}</StatusPill>
-              </li>
-            ))}
-          </ul>
-          <ErrorNotice error={search.error} />
-        </section>
-        <section className="panel export-panel">
-          <h2>Credential-free export</h2>
-          <p>
-            Download normalized canonical records, ordered audit events, schema
-            versions, and manifest digests. Artifact bytes are excluded unless
-            you explicitly select sealed historical outputs below.
-          </p>
-          {exportableArtifacts.length > 0 ? (
-            <fieldset className="export-artifact-list">
-              <legend>Include artifact bytes</legend>
-              {exportableArtifacts.map((artifact) => (
-                <label key={artifact.id}>
+          <StatusPill tone={completedSteps > 0 ? "good" : "neutral"}>
+            {completedSteps} of {workflow.length} stages
+          </StatusPill>
+        </header>
+
+        {careerSources.length === 0 ? (
+          <div className="quick-career-intake">
+            <div
+              className="quick-career-choice"
+              role="group"
+              aria-label="Choose how to add your career history"
+            >
+              <button
+                type="button"
+                aria-pressed={careerInputMode === "resume"}
+                onClick={() => setCareerInputMode("resume")}
+              >
+                <FileText aria-hidden="true" /> Paste résumé
+              </button>
+              <button
+                type="button"
+                aria-pressed={careerInputMode === "story"}
+                onClick={() => setCareerInputMode("story")}
+              >
+                <Sparkles aria-hidden="true" /> Tell my story
+              </button>
+            </div>
+            {careerInputMode === "resume" && (
+              <>
+                <form
+                  className="resume-file-upload"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    uploadCandidateFile.mutate();
+                  }}
+                >
+                  <div>
+                    <FileText aria-hidden="true" />
+                    <div>
+                      <label htmlFor="quick-resume-file">
+                        Upload a résumé file
+                      </label>
+                      <p>PDF or plain text · up to 5 MB</p>
+                    </div>
+                  </div>
                   <input
-                    type="checkbox"
-                    checked={selectedArtifactIds.includes(artifact.id)}
+                    ref={candidateFileInputRef}
+                    id="quick-resume-file"
+                    type="file"
+                    accept=".pdf,.txt,application/pdf,text/plain"
                     onChange={(event) =>
-                      setSelectedArtifactIds((current) =>
-                        event.target.checked
-                          ? [...current, artifact.id]
-                          : current.filter((id) => id !== artifact.id),
-                      )
+                      setCandidateFile(event.target.files?.[0] ?? null)
                     }
                   />
-                  <span>
-                    {artifact.kind.replaceAll("_", " ")} · {artifact.state}
-                    <small>
-                      {artifact.byteLength.toLocaleString()} bytes · digest{" "}
-                      {artifact.contentDigest.slice(0, 12)}…
-                    </small>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-          ) : (
-            <small>
-              No sealed artifact bytes are available to include yet.
-            </small>
-          )}
-          <button
-            className="secondary"
-            type="button"
-            onClick={() => download.mutate()}
-            disabled={download.isPending}
+                  {candidateFile !== null && (
+                    <p className="selected-file" role="status">
+                      Selected: {candidateFile.name} ·{" "}
+                      {(candidateFile.size / 1024).toLocaleString(undefined, {
+                        maximumFractionDigits: 0,
+                      })}{" "}
+                      KB
+                    </p>
+                  )}
+                  <button
+                    className="primary"
+                    type="submit"
+                    disabled={
+                      candidateFile === null || uploadCandidateFile.isPending
+                    }
+                  >
+                    {uploadCandidateFile.isPending
+                      ? "Reading résumé…"
+                      : "Upload and continue"}
+                    {!uploadCandidateFile.isPending && (
+                      <ArrowRight aria-hidden="true" />
+                    )}
+                  </button>
+                  <p className="field-help">
+                    The original file bytes are sealed locally. Extracted text
+                    is used only to create proposals that you review.
+                  </p>
+                  <ErrorNotice error={uploadCandidateFile.error} />
+                </form>
+                <div className="intake-divider" aria-hidden="true">
+                  <span>or paste the text</span>
+                </div>
+              </>
+            )}
+            <form
+              className="quick-career-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                captureCareerStory.mutate();
+              }}
+            >
+              <label htmlFor="quick-career-story">
+                {careerInputMode === "resume"
+                  ? "Paste your résumé or CV here"
+                  : "Describe your work in your own words"}
+              </label>
+              <textarea
+                id="quick-career-story"
+                value={careerStory}
+                onChange={(event) => setCareerStory(event.target.value)}
+                placeholder={
+                  careerInputMode === "resume"
+                    ? "Copy the text from your résumé or CV and paste it here. Formatting does not need to be perfect."
+                    : "For example: I have been a software engineer for six years. At Acme I led the API migration, mentored two developers, and built an internal AI search tool…"
+                }
+                rows={9}
+                maxLength={49_152}
+                required
+              />
+              <p className="field-help">
+                {careerInputMode === "resume"
+                  ? "Paste the full document if you can. Workbench saves the text locally, then AI can organize it for your review."
+                  : "Rough notes are fine. AI can organize them next, and you will approve the result."}{" "}
+                Nothing becomes an accepted fact just by saving it.
+              </p>
+              <button
+                className="primary"
+                type="submit"
+                disabled={captureCareerStory.isPending}
+              >
+                {captureCareerStory.isPending
+                  ? "Saving…"
+                  : careerInputMode === "resume"
+                    ? "Save résumé and continue"
+                    : "Save story and continue"}
+                {!captureCareerStory.isPending && (
+                  <ArrowRight aria-hidden="true" />
+                )}
+              </button>
+              <ErrorNotice error={captureCareerStory.error} />
+            </form>
+          </div>
+        ) : proposedCareerFacts.length > 0 ? (
+          <div className="focus-action">
+            <p>
+              AI organized your source into {proposedCareerFacts.length}{" "}
+              reviewable {proposedCareerFacts.length === 1 ? "claim" : "claims"}
+              . Nothing has been accepted yet.
+            </p>
+            <Link
+              className="button-link primary"
+              to="/profile#profile-summary-review"
+            >
+              Review the summary <ArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+        ) : verifiedCareerHistory === 0 ? (
+          <div className="focus-action">
+            <p>
+              Your source is saved. Career Workbench will run its connected DSH
+              Agent here, organize only statements supported by the exact source
+              text, and bring the result back for your review.
+            </p>
+            <div className="focus-action-row">
+              <button
+                className="primary"
+                type="button"
+                onClick={() => organizeCareerSource.mutate()}
+                disabled={
+                  diagnostics.isLoading ||
+                  diagnostics.data?.capabilities["dsh"] !== true ||
+                  organizeCareerSource.isPending
+                }
+              >
+                <Sparkles aria-hidden="true" />
+                {organizeCareerSource.isPending
+                  ? "Organizing your résumé…"
+                  : "Continue with AI"}
+              </button>
+              <StatusPill
+                tone={
+                  diagnostics.data?.capabilities["dsh"] === true
+                    ? "good"
+                    : "warning"
+                }
+              >
+                {diagnostics.data?.capabilities["dsh"] === true
+                  ? "DSH connected"
+                  : "DSH unavailable"}
+              </StatusPill>
+            </div>
+            {organizerOperation !== undefined && (
+              <p className="operation-note">
+                Latest organization run:{" "}
+                {organizerOperation.state.replaceAll("_", " ")}.
+              </p>
+            )}
+            {organizeCareerSource.isPending && (
+              <div className="ai-run-progress" role="status" aria-live="polite">
+                <RefreshCw className="spin" aria-hidden="true" />
+                <div>
+                  <strong>AI is organizing your source in this window.</strong>
+                  <p>
+                    DSH is extracting exact, source-linked claims. This can take
+                    a minute. Nothing is accepted until you review it.
+                  </p>
+                </div>
+              </div>
+            )}
+            {organizeCareerSource.data?.proposedFactIds.length === 0 && (
+              <div className="notice warning" role="status">
+                <AlertTriangle aria-hidden="true" />
+                <span>
+                  AI finished but found no exact career claims in this source.
+                  Add clearer résumé text or organize it manually.
+                </span>
+              </div>
+            )}
+            <ErrorNotice error={organizeCareerSource.error} />
+            <Link to="/profile">Or organize it manually</Link>
+          </div>
+        ) : activeSearchProfile === undefined ? (
+          <div className="focus-action">
+            <p>
+              Your confirmed experience is ready. Give us one direction now; you
+              can refine location, compensation, and priorities later.
+            </p>
+            <form
+              className="quick-direction-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                saveSearchDirection.mutate(targetRole.trim());
+              }}
+            >
+              <label htmlFor="quick-target-role">
+                A role you want to explore
+              </label>
+              <div>
+                <input
+                  id="quick-target-role"
+                  value={targetRole}
+                  onChange={(event) => setTargetRole(event.target.value)}
+                  placeholder="AI Platform Engineer"
+                  required
+                  maxLength={300}
+                />
+                <button
+                  className="primary"
+                  type="submit"
+                  disabled={
+                    saveSearchDirection.isPending ||
+                    targetRole.trim().length === 0
+                  }
+                >
+                  Save direction
+                </button>
+              </div>
+            </form>
+            <button
+              className="text-button"
+              type="button"
+              onClick={() =>
+                saveSearchDirection.mutate(
+                  "Explore roles aligned with my confirmed experience",
+                )
+              }
+              disabled={saveSearchDirection.isPending}
+            >
+              I am not sure—help me explore
+            </button>
+            <ErrorNotice error={saveSearchDirection.error} />
+          </div>
+        ) : snapshot.discoveryLeads.length === 0 &&
+          snapshot.opportunities.length === 0 ? (
+          <div className="focus-action">
+            <p>
+              Your direction is saved. Jobs shows the exact search request and
+              keeps every discovered listing in an inbox for your decision.
+            </p>
+            <Link className="button-link primary" to="/discover">
+              Find matching roles <ArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+        ) : (
+          <div className="focus-action">
+            <p>
+              You have {snapshot.discoveryLeads.length} discovered and{" "}
+              {snapshot.opportunities.length} shortlisted roles. Nothing is
+              applied to or contacted automatically.
+            </p>
+            <Link className="button-link primary" to="/discover">
+              Review jobs <ArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+        )}
+      </section>
+      <details className="journey-details">
+        <summary>See the full journey and workspace details</summary>
+        <div className="journey-details-body">
+          <section
+            className="orientation-hero"
+            aria-labelledby="workflow-title"
           >
-            <Download aria-hidden="true" />
-            {download.isPending
-              ? "Preparing…"
-              : selectedArtifactIds.length === 0
-                ? "Download workspace JSON"
-                : `Download with ${String(selectedArtifactIds.length)} artifact${selectedArtifactIds.length === 1 ? "" : "s"}`}
-          </button>
-          <ErrorNotice error={download.error} />
-        </section>
-      </div>
+            <div className="orientation-copy">
+              <p className="eyebrow">Your guided workflow</p>
+              <h2 id="workflow-title">
+                From career history to a clear next move.
+              </h2>
+              <p>
+                Start by adding your career history. Then bring in a role, test
+                the fit, and prepare only what you choose to pursue.
+              </p>
+              <div className="workflow-progress">
+                <span>
+                  {completedSteps} of {workflow.length} stages complete
+                </span>
+                <progress value={completedSteps} max={workflow.length}>
+                  {completedSteps} of {workflow.length}
+                </progress>
+              </div>
+              <Link className="button-link primary" to={nextStep.to}>
+                {nextStep.action} <ArrowRight aria-hidden="true" />
+              </Link>
+            </div>
+            <div className="orientation-note">
+              <Sparkles aria-hidden="true" />
+              <strong>What is this for?</strong>
+              <p>
+                Better career decisions: factual, explainable, revisable, and
+                private by default.
+              </p>
+            </div>
+          </section>
+          <section
+            className="information-use-map"
+            aria-labelledby="information-use-title"
+          >
+            <header>
+              <div>
+                <p className="eyebrow">Your information, explained</p>
+                <h2 id="information-use-title">How what you entered is used</h2>
+              </div>
+              <StatusPill tone={verifiedCareerHistory > 0 ? "good" : "warning"}>
+                {verifiedCareerHistory > 0
+                  ? "career evidence ready"
+                  : "career history needed"}
+              </StatusPill>
+            </header>
+            <ol>
+              <li>
+                <span className="information-use-number">1</span>
+                <div>
+                  <h3>Setup answers set direction</h3>
+                  <strong>
+                    {setupContext} setup {setupContext === 1 ? "fact" : "facts"}{" "}
+                    saved
+                  </strong>
+                  <p>
+                    Your name identifies the candidate record. Any target roles,
+                    priorities, or location choices you add later prefill Jobs
+                    and become preference context when you assess a role.
+                  </p>
+                </div>
+                <ArrowRight aria-hidden="true" />
+              </li>
+              <li>
+                <span className="information-use-number">2</span>
+                <div>
+                  <h3>Career history supplies proof</h3>
+                  <strong>
+                    {verifiedCareerHistory} career{" "}
+                    {verifiedCareerHistory === 1 ? "claim" : "claims"} confirmed
+                  </strong>
+                  <p>
+                    Résumé text is preserved as a source. Only claims you review
+                    and confirm can support your experience, accomplishments,
+                    and fit.
+                  </p>
+                </div>
+                <ArrowRight aria-hidden="true" />
+              </li>
+              <li>
+                <span className="information-use-number">3</span>
+                <div>
+                  <h3>Later work keeps the distinction</h3>
+                  <strong>
+                    Preferences guide; evidence supports factual claims.
+                  </strong>
+                  <p>
+                    Evaluations can use both for different purposes. Drafts may
+                    use only accepted candidate evidence, and nothing is
+                    submitted for you.
+                  </p>
+                  <Link
+                    to={
+                      verifiedCareerHistory > 0
+                        ? "/profile#confirmed-career-record"
+                        : "/profile"
+                    }
+                  >
+                    {verifiedCareerHistory > 0
+                      ? "Review what can be used"
+                      : "Add career evidence"}{" "}
+                    <ArrowRight aria-hidden="true" />
+                  </Link>
+                </div>
+              </li>
+            </ol>
+          </section>
+          <section
+            className="workflow-grid"
+            aria-label="How Career Workbench works"
+          >
+            {workflow.map((step, index) => (
+              <article
+                className={step.complete ? "complete" : ""}
+                key={step.label}
+              >
+                <header>
+                  <span className="workflow-number">
+                    {step.complete ? <Check aria-hidden="true" /> : index + 1}
+                  </span>
+                  <StatusPill tone={step.complete ? "good" : "neutral"}>
+                    {step.complete
+                      ? "complete"
+                      : index === nextStepIndex
+                        ? "next"
+                        : "upcoming"}
+                  </StatusPill>
+                </header>
+                <h3>{step.label}</h3>
+                <p>{step.description}</p>
+                <Link to={step.to}>
+                  {step.action} <ArrowRight aria-hidden="true" />
+                </Link>
+              </article>
+            ))}
+          </section>
+          <section className="stat-grid" aria-label="Workspace summary">
+            <article>
+              <span>Career evidence</span>
+              <strong>{verifiedCareerHistory}</strong>
+              <small>
+                {setupContext} setup {setupContext === 1 ? "fact" : "facts"}{" "}
+                saved separately
+              </small>
+            </article>
+            <article>
+              <span>Opportunities</span>
+              <strong>{snapshot.opportunities.length}</strong>
+              <small>captured source records</small>
+            </article>
+            <article>
+              <span>Current evaluations</span>
+              <strong>{current}</strong>
+              <small>
+                {
+                  snapshot.evaluations.filter((item) => item.state === "stale")
+                    .length
+                }{" "}
+                stale
+              </small>
+            </article>
+            <article>
+              <span>Sealed artifacts</span>
+              <strong>
+                {
+                  candidateOutputs.filter((item) => item.state === "sealed")
+                    .length
+                }
+              </strong>
+              <small>immutable, content-addressed</small>
+            </article>
+          </section>
+          <div className="two-column workspace-tools">
+            <section className="panel">
+              <h2>Search canonical records</h2>
+              <form
+                className="search-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  search.mutate();
+                }}
+              >
+                <label htmlFor="workspace-search">
+                  Search term
+                  <input
+                    id="workspace-search"
+                    type="search"
+                    minLength={2}
+                    maxLength={100}
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    required
+                  />
+                </label>
+                <button type="submit" disabled={search.isPending}>
+                  <Search aria-hidden="true" /> Search
+                </button>
+              </form>
+              <ul className="search-results" aria-live="polite">
+                {search.data?.results.map((result) => (
+                  <li key={`${result.kind}-${result.id}`}>
+                    <div>
+                      <strong>{result.label}</strong>
+                      <small>{result.kind}</small>
+                    </div>
+                    <StatusPill>{result.state}</StatusPill>
+                  </li>
+                ))}
+              </ul>
+              <ErrorNotice error={search.error} />
+            </section>
+            <section className="panel export-panel">
+              <h2>Credential-free export</h2>
+              <p>
+                Download normalized canonical records, ordered audit events,
+                schema versions, and manifest digests. Artifact bytes are
+                excluded unless you explicitly select sealed historical outputs
+                below.
+              </p>
+              {exportableArtifacts.length > 0 ? (
+                <fieldset className="export-artifact-list">
+                  <legend>Include artifact bytes</legend>
+                  {exportableArtifacts.map((artifact) => (
+                    <label key={artifact.id}>
+                      <input
+                        type="checkbox"
+                        checked={selectedArtifactIds.includes(artifact.id)}
+                        onChange={(event) =>
+                          setSelectedArtifactIds((current) =>
+                            event.target.checked
+                              ? [...current, artifact.id]
+                              : current.filter((id) => id !== artifact.id),
+                          )
+                        }
+                      />
+                      <span>
+                        {artifact.kind.replaceAll("_", " ")} · {artifact.state}
+                        <small>
+                          {artifact.byteLength.toLocaleString()} bytes · digest{" "}
+                          {artifact.contentDigest.slice(0, 12)}…
+                        </small>
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
+              ) : (
+                <small>
+                  No sealed artifact bytes are available to include yet.
+                </small>
+              )}
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => download.mutate()}
+                disabled={download.isPending}
+              >
+                <Download aria-hidden="true" />
+                {download.isPending
+                  ? "Preparing…"
+                  : selectedArtifactIds.length === 0
+                    ? "Download workspace JSON"
+                    : `Download with ${String(selectedArtifactIds.length)} artifact${selectedArtifactIds.length === 1 ? "" : "s"}`}
+              </button>
+              <ErrorNotice error={download.error} />
+            </section>
+          </div>
+        </div>
+      </details>
     </>
   );
 }
 
-function preferenceLabel(predicate: string): string {
-  switch (predicate) {
-    case "targets":
-      return "Target role";
-    case "prioritizes":
-      return "Priorities";
-    case "prefers":
-      return "Location or work style";
-    case "deferred":
-      return "Deferred during setup";
-    default:
-      return predicate.replaceAll("_", " ");
-  }
+function affectedOutputCount(
+  snapshot: SnapshotResponse,
+  factId: string,
+): number {
+  const factEvidenceIds = new Set(
+    snapshot.evidence
+      .filter((item) => item.candidateFactId === factId)
+      .map((item) => item.id),
+  );
+  const affectedEvaluationIds = new Set(
+    snapshot.evaluations
+      .filter((evaluation) =>
+        evaluation.acceptedEvidenceIds.some((id) => factEvidenceIds.has(id)),
+      )
+      .map((evaluation) => evaluation.id),
+  );
+  const affectedArtifactCount = snapshot.artifacts.filter(
+    (artifact) =>
+      artifact.factIds.includes(factId) ||
+      artifact.evidenceIds.some((id) => factEvidenceIds.has(id)) ||
+      artifact.evaluationIds.some((id) => affectedEvaluationIds.has(id)),
+  ).length;
+  return affectedEvaluationIds.size + affectedArtifactCount;
 }
 
 function Profile({
@@ -822,15 +1438,43 @@ function Profile({
       (fact) => fact.factType === "identity" && fact.status === "verified",
     )?.value ?? "",
   );
-  const directionFacts = snapshot.profileFacts.filter(
-    (fact) => fact.factType === "preference" && fact.status === "verified",
+  const setupSourceIds = new Set(
+    snapshot.profileFacts
+      .filter(
+        (fact) =>
+          fact.factType === "identity" || fact.factType === "preference",
+      )
+      .flatMap((fact) =>
+        fact.sourceLocators.map((locator) => locator.sourceId),
+      ),
   );
-  const hasVerifiedTarget = directionFacts.some(
-    (fact) => fact.predicate === "targets",
+  const careerSources = snapshot.sources.filter(
+    (source) => source.kind === "candidate" && !setupSourceIds.has(source.id),
   );
-  const targetWasDeferred =
-    !hasVerifiedTarget &&
-    directionFacts.some((fact) => fact.predicate === "deferred");
+  const completedOrganizerFactIds =
+    completedProfileOrganizationFactIds(snapshot);
+  const visibleCareerFacts = snapshot.profileFacts.filter(
+    (fact) =>
+      (fact.factType === "experience" ||
+        fact.factType === "achievement" ||
+        fact.factType === "education" ||
+        fact.factType === "skill") &&
+      !(
+        fact.status === "proposed" &&
+        fact.proposedBy === "agent" &&
+        !completedOrganizerFactIds.has(fact.id)
+      ),
+  );
+  const proposedCareerFacts = visibleCareerFacts.filter(
+    (fact) => fact.status === "proposed",
+  );
+  const verifiedCareerFacts = visibleCareerFacts.filter(
+    (fact) => fact.status === "verified",
+  );
+  const historicalCareerFacts = visibleCareerFacts.filter(
+    (fact) => fact.status !== "proposed" && fact.status !== "verified",
+  );
+  const latestCareerSource = careerSources.at(-1);
   const [sourceText, setSourceText] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [subject, setSubject] = useState("");
@@ -841,9 +1485,6 @@ function Profile({
   const [organization, setOrganization] = useState("");
   const [dateRange, setDateRange] = useState("");
   const [achievementsText, setAchievementsText] = useState("");
-  const [targetRoleText, setTargetRoleText] = useState("");
-  const [targetPrioritiesText, setTargetPrioritiesText] = useState("");
-  const [locationPreferenceText, setLocationPreferenceText] = useState("");
   const capture = useMutation({
     mutationFn: () => {
       const text = sourceText.trim();
@@ -916,196 +1557,94 @@ function Profile({
     },
     onSuccess: refresh,
   });
-  const completePreferences = useMutation({
+  const confirmSummary = useMutation({
     mutationFn: async () => {
-      if (verifiedIdentityName.length === 0)
-        throw new ApiError(
-          400,
-          "identity_required",
-          "A verified identity is required before adding target preferences.",
-        );
-      const specifications = [
-        {
-          predicate: "targets",
-          value: targetRoleText.trim(),
-        },
-        ...(targetPrioritiesText.trim().length === 0
-          ? []
-          : [
-              {
-                predicate: "prioritizes",
-                value: targetPrioritiesText.trim(),
-              },
-            ]),
-        ...(locationPreferenceText.trim().length === 0
-          ? []
-          : [
-              {
-                predicate: "prefers",
-                value: locationPreferenceText.trim(),
-              },
-            ]),
-      ];
-      const claims = specifications.map(
-        (item) => `${verifiedIdentityName} ${item.predicate} ${item.value}`,
-      );
-      const source = await mutate<SourceView>("/api/v1/sources", {
-        kind: "candidate",
-        trustClass: "candidate_primary",
-        mediaType: "text/plain",
-        text: claims.join("\n"),
-        originalLocator: "user-entry://profile/target-preferences",
-      });
-      let offset = 0;
-      for (const [index, item] of specifications.entries()) {
-        const quote = claims[index] ?? "";
-        await mutate("/api/v1/profile-facts", {
-          factType: "preference",
-          subject: verifiedIdentityName,
-          predicate: item.predicate,
-          value: item.value,
-          sourceLocators: [
-            {
-              sourceId: source.id,
-              start: offset,
-              end: offset + quote.length,
-              quote,
-            },
-          ],
-          proposedBy: "user",
+      for (const fact of proposedCareerFacts) {
+        await mutate(`/api/v1/profile-facts/${fact.id}/confirm`, {
+          expectedRevision: fact.revision,
+          outcome: { kind: "confirm" },
         });
-        offset += quote.length + 1;
       }
     },
-    onSuccess: async () => {
-      setTargetRoleText("");
-      setTargetPrioritiesText("");
-      setLocationPreferenceText("");
-      await refresh();
-    },
+    onSettled: refresh,
   });
-  const needsPreferenceCompletion = !hasVerifiedTarget;
+  const organizeCareerSource = useMutation({
+    mutationFn: () => {
+      if (latestCareerSource === undefined) {
+        throw new ApiError(
+          400,
+          "invalid_request",
+          "Save your résumé or career story first.",
+        );
+      }
+      return mutate<ProfileOrganizationRunResponse>(
+        "/api/v1/profile-organizations",
+        { sourceId: latestCareerSource.id },
+      );
+    },
+    onSuccess: refresh,
+  });
   return (
     <>
       <PageHeader
         eyebrow="Candidate record"
         title="Add your career history"
-        description="Start with an existing résumé or add one role at a time. Career Workbench preserves what you provide before asking you to review any claims."
+        description="Start with a résumé, rough notes, or one role. Workbench keeps the source, helps organize it, and waits for your review before using any claim as career evidence. Identity and search preferences live in Settings."
       />
-      <section
-        className="panel profile-direction"
-        aria-labelledby="career-direction-title"
-      >
-        <div>
-          <p className="eyebrow">Career direction</p>
-          <h2 id="career-direction-title">Targets and preferences</h2>
-          <p>
-            These user-verified preferences guide evaluation context. They are
-            not evidence of experience and do not authorize an application or
-            other external action.
-          </p>
-        </div>
-        {directionFacts.length > 0 && (
-          <dl className="direction-facts">
-            {directionFacts.map((fact) => (
-              <div key={fact.id}>
-                <dt>{preferenceLabel(fact.predicate)}</dt>
-                <dd>{String(fact.value)}</dd>
-              </div>
+      {proposedCareerFacts.length > 0 && (
+        <section
+          className="panel profile-summary-review"
+          id="profile-summary-review"
+          aria-labelledby="profile-summary-title"
+        >
+          <header>
+            <div>
+              <p className="eyebrow">Step 2 · Check what will be used</p>
+              <h2 id="profile-summary-title">Review what AI found</h2>
+              <p>
+                Scan each claim, then confirm, edit, or set it aside. Source
+                text stays tucked away unless you want to check it.
+              </p>
+            </div>
+            <StatusPill tone="warning">
+              {proposedCareerFacts.length} left
+            </StatusPill>
+          </header>
+          <div className="claim-review-list">
+            {proposedCareerFacts.map((fact) => (
+              <FactCard
+                key={fact.id}
+                fact={fact}
+                sources={snapshot.sources}
+                affectedOutputs={0}
+              />
             ))}
-          </dl>
-        )}
-        <div className="direction-next-action">
-          {needsPreferenceCompletion ? (
-            <>
-              <strong>
-                {targetWasDeferred
-                  ? "Complete the target roles deferred during setup."
-                  : "Add your first target role."}
-              </strong>
-              <p>
-                Enter your preferences directly. Workbench preserves your exact
-                words as a primary source and creates proposed preference
-                claims. They do not guide evaluations until you confirm them in
-                the review list.
-              </p>
-              {!completePreferences.isSuccess && (
-                <form
-                  className="preference-entry-form"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    completePreferences.mutate();
-                  }}
-                >
-                  <label htmlFor="profile-target-role">Target role</label>
-                  <input
-                    id="profile-target-role"
-                    value={targetRoleText}
-                    onChange={(event) => setTargetRoleText(event.target.value)}
-                    maxLength={500}
-                    required
-                  />
-                  <label htmlFor="profile-target-priorities">
-                    Priorities <span className="optional">optional</span>
-                  </label>
-                  <textarea
-                    id="profile-target-priorities"
-                    value={targetPrioritiesText}
-                    onChange={(event) =>
-                      setTargetPrioritiesText(event.target.value)
-                    }
-                    maxLength={2_000}
-                  />
-                  <label htmlFor="profile-location-preference">
-                    Location or work style{" "}
-                    <span className="optional">optional</span>
-                  </label>
-                  <input
-                    id="profile-location-preference"
-                    value={locationPreferenceText}
-                    onChange={(event) =>
-                      setLocationPreferenceText(event.target.value)
-                    }
-                    maxLength={300}
-                  />
-                  <button
-                    className="secondary"
-                    type="submit"
-                    disabled={
-                      completePreferences.isPending ||
-                      targetRoleText.trim().length === 0
-                    }
-                  >
-                    {completePreferences.isPending
-                      ? "Saving proposals…"
-                      : "Add preferences for review"}
-                  </button>
-                </form>
-              )}
-              {completePreferences.isSuccess && (
-                <div className="notice" role="status">
-                  <Check aria-hidden="true" />
-                  <span>
-                    Preference proposals saved. Review and confirm them below
-                    before they guide evaluations.
-                  </span>
-                </div>
-              )}
-              <ErrorNotice error={completePreferences.error} />
-            </>
-          ) : (
-            <>
-              <strong>Need to change a recorded preference?</strong>
-              <p>
-                Go to the verified preference in the review list below and
-                choose <q>Correct verified fact</q>. The correction keeps the
-                old value and its provenance in the audit trail.
-              </p>
-            </>
-          )}
-          <a href="#profile-fact-review">Review preference facts</a>
-        </div>
-      </section>
+          </div>
+          <div className="profile-summary-actions">
+            <button
+              className="primary"
+              type="button"
+              onClick={() => confirmSummary.mutate()}
+              disabled={confirmSummary.isPending}
+            >
+              {confirmSummary.isPending
+                ? "Confirming…"
+                : `Everything looks right — confirm all ${String(proposedCareerFacts.length)}`}
+            </button>
+            <small>
+              Use the controls on a claim when only that line needs work.
+            </small>
+          </div>
+          <ErrorNotice error={confirmSummary.error} />
+        </section>
+      )}
+      <div className="profile-settings-link">
+        <Settings2 aria-hidden="true" />
+        <span>
+          Looking for your name, target roles, or location preferences?{" "}
+          <Link to="/settings">Manage them in Settings.</Link>
+        </span>
+      </div>
       <section className="panel history-intake">
         <header className="history-intake-head">
           <div>
@@ -1116,7 +1655,10 @@ function Profile({
               more sources and roles later.
             </p>
           </div>
-          <StatusPill>{snapshot.sources.length} saved sources</StatusPill>
+          <StatusPill>
+            {careerSources.length} career{" "}
+            {careerSources.length === 1 ? "source" : "sources"}
+          </StatusPill>
         </header>
         <Tabs.Root className="history-tabs" defaultValue="resume">
           <Tabs.List aria-label="Career history input method">
@@ -1161,14 +1703,50 @@ function Profile({
                 <h3>Where AI can help</h3>
                 <p>
                   Saving here is archival only: it preserves the source but does
-                  not invoke AI or create profile facts. A DSH-backed organizer
-                  may turn saved text into proposed roles and accomplishments.
-                  You still review every claim before it can be used in
-                  evaluations or résumé drafts.
+                  not accept any claims. The DSH-backed organizer can turn the
+                  saved text into an exact, source-linked summary. You still
+                  review every claim before it can be used in evaluations or
+                  résumé drafts.
                 </p>
+                {latestCareerSource !== undefined && (
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={() => organizeCareerSource.mutate()}
+                    disabled={organizeCareerSource.isPending}
+                  >
+                    {organizeCareerSource.isPending
+                      ? "Organizing in this window…"
+                      : "Continue with AI"}
+                  </button>
+                )}
                 <small>
-                  This browser never calls an LLM provider directly.
+                  This browser asks the server to run one DSH-owned turn; it
+                  never calls an LLM provider directly.
                 </small>
+                {organizeCareerSource.isPending && (
+                  <div
+                    className="ai-run-progress"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <RefreshCw className="spin" aria-hidden="true" />
+                    <div>
+                      <strong>DSH is organizing this source now.</strong>
+                      <p>The review list will update here when it finishes.</p>
+                    </div>
+                  </div>
+                )}
+                {organizeCareerSource.data?.proposedFactIds.length === 0 && (
+                  <div className="notice warning" role="status">
+                    <AlertTriangle aria-hidden="true" />
+                    <span>
+                      AI finished but found no exact career claims in this
+                      source. Add clearer résumé text or use the manual form.
+                    </span>
+                  </div>
+                )}
+                <ErrorNotice error={organizeCareerSource.error} />
               </aside>
             </div>
             {capture.data !== undefined && (
@@ -1176,9 +1754,8 @@ function Profile({
                 <Check aria-hidden="true" />
                 <span>
                   Résumé text saved as an immutable source. Browser-only saving
-                  does not extract claims. Add a role manually, add an exact
-                  statement below, or ask your configured DSH Agent to organize
-                  the saved source.
+                  does not accept claims. Choose Continue with AI to organize it
+                  here, or add a role manually.
                 </span>
               </div>
             )}
@@ -1267,69 +1844,55 @@ function Profile({
           </Tabs.Content>
         </Tabs.Root>
       </section>
-      <section
-        className="section-head history-review-head"
-        id="profile-fact-review"
-      >
-        <div>
-          <p className="eyebrow">Step 2 · Check what will be used</p>
-          <h2>Review proposed claims</h2>
-          <p>
-            Confirm, correct, or decline each source-backed statement. Only
-            confirmed claims can support candidate-facing work.
-          </p>
-        </div>
-        <StatusPill tone="warning">
-          {
-            snapshot.profileFacts.filter((fact) => fact.status === "proposed")
-              .length
-          }{" "}
-          awaiting review
-        </StatusPill>
-      </section>
-      <div className="card-list">
-        {snapshot.profileFacts.length === 0 ? (
-          <Empty>
-            No proposed claims yet. Add a role manually to create reviewable
-            statements from your own answers.
-          </Empty>
-        ) : (
-          snapshot.profileFacts.map((fact) => {
-            const factEvidenceIds = new Set(
-              snapshot.evidence
-                .filter((item) => item.candidateFactId === fact.id)
-                .map((item) => item.id),
-            );
-            const affectedEvaluationIds = new Set(
-              snapshot.evaluations
-                .filter((evaluation) =>
-                  evaluation.acceptedEvidenceIds.some((id) =>
-                    factEvidenceIds.has(id),
-                  ),
-                )
-                .map((evaluation) => evaluation.id),
-            );
-            const affectedArtifactCount = snapshot.artifacts.filter(
-              (artifact) =>
-                artifact.factIds.includes(fact.id) ||
-                artifact.evidenceIds.some((id) => factEvidenceIds.has(id)) ||
-                artifact.evaluationIds.some((id) =>
-                  affectedEvaluationIds.has(id),
-                ),
-            ).length;
-            return (
+      {verifiedCareerFacts.length > 0 && (
+        <details
+          className="panel profile-record-details"
+          id="confirmed-career-record"
+        >
+          <summary>
+            <span>
+              <strong>Confirmed career record</strong>
+              <small>
+                The claims Workbench may use in evaluations and drafts.
+              </small>
+            </span>
+            <StatusPill tone="good">
+              {verifiedCareerFacts.length} confirmed
+            </StatusPill>
+          </summary>
+          <div className="compact-fact-list">
+            {verifiedCareerFacts.map((fact) => (
               <FactCard
                 key={fact.id}
                 fact={fact}
                 sources={snapshot.sources}
-                affectedOutputs={
-                  affectedEvaluationIds.size + affectedArtifactCount
-                }
+                affectedOutputs={affectedOutputCount(snapshot, fact.id)}
               />
-            );
-          })
-        )}
-      </div>
+            ))}
+          </div>
+        </details>
+      )}
+      {historicalCareerFacts.length > 0 && (
+        <details className="panel profile-record-details">
+          <summary>
+            <span>
+              <strong>Past decisions and replaced claims</strong>
+              <small>Kept for audit history; not used as current proof.</small>
+            </span>
+            <StatusPill>{historicalCareerFacts.length} archived</StatusPill>
+          </summary>
+          <div className="compact-fact-list">
+            {historicalCareerFacts.map((fact) => (
+              <FactCard
+                key={fact.id}
+                fact={fact}
+                sources={snapshot.sources}
+                affectedOutputs={affectedOutputCount(snapshot, fact.id)}
+              />
+            ))}
+          </div>
+        </details>
+      )}
       <details className="panel exact-fact-builder">
         <summary>Advanced: add an exact statement from a saved source</summary>
         <p>
@@ -1352,13 +1915,11 @@ function Profile({
               required
             >
               <option value="">Select a saved source</option>
-              {snapshot.sources
-                .filter((item) => item.kind === "candidate")
-                .map((source) => (
-                  <option key={source.id} value={source.id}>
-                    {source.inlineText?.slice(0, 64)}
-                  </option>
-                ))}
+              {careerSources.map((source) => (
+                <option key={source.id} value={source.id}>
+                  {source.inlineText?.slice(0, 64)}
+                </option>
+              ))}
             </select>
             <div className="field-row">
               <label>
@@ -1443,74 +2004,52 @@ function FactCard({
         ? "warning"
         : "neutral";
   return (
-    <article className="fact-card">
+    <article className={`fact-card fact-card-${fact.status}`}>
       <div className="fact-body">
         <div>
-          <StatusPill tone={tone}>
-            {fact.status.replaceAll("_", " ")}
-          </StatusPill>
+          <div className="fact-meta">
+            <StatusPill tone={tone}>
+              {fact.status.replaceAll("_", " ")}
+            </StatusPill>
+            <span>{fact.factType.replaceAll("_", " ")}</span>
+          </div>
           <h3>
             {fact.subject} <span>{fact.predicate}</span> {String(fact.value)}
           </h3>
         </div>
         <small>Revision {fact.revision}</small>
       </div>
-      <div
-        className="source-provenance fact-source-provenance"
-        aria-label={`Source provenance for ${factClaim}`}
-      >
-        <strong>Source provenance</strong>
-        {fact.sourceLocators.length === 0 ? (
-          <small>No exact source locator is recorded for this claim.</small>
-        ) : (
-          <ul>
-            {fact.sourceLocators.map((locator, index) => {
-              const source = sources.find(
-                (item) => item.id === locator.sourceId,
-              );
-              return (
-                <li key={`${locator.sourceId}-${String(index)}`}>
-                  <q>{locator.quote}</q>
-                  <small>
-                    {source?.trustClass.replaceAll("_", " ") ??
-                      "source unavailable"}
-                    {source === undefined
-                      ? ""
-                      : ` · ${String(source.byteLength)} bytes · ${source.contentDigest.slice(0, 18)}…`}
-                    {` · offsets ${String(locator.start)}–${String(locator.end)}`}
-                  </small>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
       {fact.status === "proposed" && (
         <div className="actions" aria-label="Confirmation outcomes">
           <button
+            className="fact-confirm"
             aria-label={`Confirm ${factClaim}`}
+            disabled={decide.isPending}
             onClick={() => decide.mutate("confirm")}
           >
             <Check aria-hidden="true" />
-            Confirm
+            Looks right
           </button>
           <button
             aria-label={`Correct ${factClaim}`}
+            disabled={decide.isPending}
             onClick={() => setShowCorrection(true)}
           >
-            Correct
+            Edit
           </button>
           <button
             aria-label={`Mark ${factClaim} as narrative only`}
+            disabled={decide.isPending}
             onClick={() => decide.mutate("narrative_only")}
           >
-            Narrative only
+            Keep as note
           </button>
           <button
             aria-label={`Cannot confirm ${factClaim}`}
+            disabled={decide.isPending}
             onClick={() => decide.mutate("cannot_confirm")}
           >
-            Cannot confirm
+            Can’t verify
           </button>
         </div>
       )}
@@ -1520,10 +2059,45 @@ function FactCard({
             aria-label={`Correct verified fact ${factClaim}`}
             onClick={() => setShowCorrection((value) => !value)}
           >
-            Correct verified fact
+            Edit this claim
           </button>
         </div>
       )}
+      <details className="fact-source-details">
+        <summary>
+          <FileText aria-hidden="true" />
+          Check source
+        </summary>
+        <div
+          className="source-provenance fact-source-provenance"
+          aria-label={`Source provenance for ${factClaim}`}
+        >
+          {fact.sourceLocators.length === 0 ? (
+            <small>No exact source locator is recorded for this claim.</small>
+          ) : (
+            <ul>
+              {fact.sourceLocators.map((locator, index) => {
+                const source = sources.find(
+                  (item) => item.id === locator.sourceId,
+                );
+                return (
+                  <li key={`${locator.sourceId}-${String(index)}`}>
+                    <q>{locator.quote}</q>
+                    <small>
+                      {source?.trustClass.replaceAll("_", " ") ??
+                        "source unavailable"}
+                      {source === undefined
+                        ? ""
+                        : ` · ${String(source.byteLength)} bytes · ${source.contentDigest.slice(0, 18)}…`}
+                      {` · offsets ${String(locator.start)}–${String(locator.end)}`}
+                    </small>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </details>
       {showCorrection && (
         <div className="correction-preview">
           <p>
@@ -1555,6 +2129,387 @@ function FactCard({
       )}
       <ErrorNotice error={decide.error ?? correct.error} />
     </article>
+  );
+}
+
+function settingLabel(fact: ProfileFactView): string {
+  if (fact.factType === "identity") return "Name";
+  if (fact.predicate === "targets") return "Target role";
+  if (fact.predicate === "prioritizes") return "Priorities";
+  if (fact.predicate === "prefers") return "Location or work style";
+  return "Search preference";
+}
+
+function SettingFactRow({
+  fact,
+  affectedOutputs,
+}: {
+  readonly fact: ProfileFactView;
+  readonly affectedOutputs: number;
+}): React.JSX.Element {
+  const refresh = useRefresh();
+  const label = settingLabel(fact);
+  const value = String(fact.value ?? "");
+  const [corrected, setCorrected] = useState(value);
+  const [showCorrection, setShowCorrection] = useState(false);
+  useEffect(() => {
+    setCorrected(String(fact.value ?? ""));
+    if (fact.status !== "verified" && fact.status !== "proposed") {
+      setShowCorrection(false);
+    }
+  }, [fact.revision, fact.status, fact.value]);
+  const confirm = useMutation({
+    mutationFn: () =>
+      mutate(`/api/v1/profile-facts/${fact.id}/confirm`, {
+        expectedRevision: fact.revision,
+        outcome: { kind: "confirm" },
+      }),
+    onSuccess: refresh,
+  });
+  const correct = useMutation({
+    mutationFn: () =>
+      mutate(`/api/v1/profile-facts/${fact.id}/corrections`, {
+        expectedRevision: fact.revision,
+        value: corrected,
+        sourceText: `${fact.subject} ${fact.predicate} ${corrected}`,
+      }),
+    onSuccess: async () => {
+      setShowCorrection(false);
+      await refresh();
+    },
+  });
+  return (
+    <article className="setting-fact-row">
+      <header>
+        <div>
+          <span className="setting-fact-label">{label}</span>
+          <strong>{value}</strong>
+        </div>
+        <small>Revision {fact.revision}</small>
+      </header>
+      {fact.status === "proposed" && (
+        <div className="setting-pending">
+          <p>Confirm this setting before Workbench uses it.</p>
+          <div className="actions">
+            <button
+              className="primary"
+              disabled={confirm.isPending}
+              onClick={() => confirm.mutate()}
+            >
+              Use this setting
+            </button>
+            <button onClick={() => setShowCorrection(true)}>Edit</button>
+          </div>
+        </div>
+      )}
+      {fact.status === "verified" && !showCorrection && (
+        <div className="setting-fact-actions">
+          <button onClick={() => setShowCorrection(true)}>
+            Edit {label.toLocaleLowerCase()}
+          </button>
+        </div>
+      )}
+      {showCorrection && (
+        <form
+          className="settings-correction-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            correct.mutate();
+          }}
+        >
+          <p>
+            Saving updates this setting
+            {affectedOutputs > 0
+              ? ` and marks ${String(affectedOutputs)} dependent result${affectedOutputs === 1 ? "" : "s"} for refresh.`
+              : "."}
+          </p>
+          <label htmlFor={`setting-${fact.id}`}>{label}</label>
+          <input
+            id={`setting-${fact.id}`}
+            value={corrected}
+            onChange={(event) => setCorrected(event.target.value)}
+            required
+          />
+          <div className="settings-form-actions">
+            <button
+              className="primary"
+              type="submit"
+              disabled={correct.isPending || corrected.trim().length === 0}
+            >
+              {correct.isPending
+                ? "Saving…"
+                : `Save ${label.toLocaleLowerCase()}`}
+            </button>
+            <button type="button" onClick={() => setShowCorrection(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+      <ErrorNotice error={confirm.error ?? correct.error} />
+    </article>
+  );
+}
+
+function Settings({
+  snapshot,
+}: {
+  readonly snapshot: SnapshotResponse;
+}): React.JSX.Element {
+  const refresh = useRefresh();
+  const identityFacts = snapshot.profileFacts.filter(
+    (fact) => fact.factType === "identity",
+  );
+  const preferenceFacts = snapshot.profileFacts.filter(
+    (fact) => fact.factType === "preference",
+  );
+  const displayedIdentityFacts = identityFacts.filter(
+    (fact) => fact.status === "verified" || fact.status === "proposed",
+  );
+  const displayedPreferenceFacts = preferenceFacts.filter(
+    (fact) =>
+      fact.predicate !== "deferred" &&
+      (fact.status === "verified" || fact.status === "proposed"),
+  );
+  const verifiedIdentityName = String(
+    identityFacts.find((fact) => fact.status === "verified")?.value ?? "",
+  );
+  const hasVerifiedTarget = preferenceFacts.some(
+    (fact) =>
+      fact.status === "verified" &&
+      fact.predicate === "targets" &&
+      String(fact.value).trim().length > 0,
+  );
+  const targetWasDeferred =
+    !hasVerifiedTarget &&
+    preferenceFacts.some(
+      (fact) => fact.status === "verified" && fact.predicate === "deferred",
+    );
+  const [targetRoleText, setTargetRoleText] = useState("");
+  const [targetPrioritiesText, setTargetPrioritiesText] = useState("");
+  const [locationPreferenceText, setLocationPreferenceText] = useState("");
+  const completePreferences = useMutation({
+    mutationFn: async () => {
+      if (verifiedIdentityName.length === 0)
+        throw new ApiError(
+          400,
+          "identity_required",
+          "A verified identity is required before adding target preferences.",
+        );
+      const specifications = [
+        {
+          predicate: "targets",
+          value: targetRoleText.trim(),
+        },
+        ...(targetPrioritiesText.trim().length === 0
+          ? []
+          : [
+              {
+                predicate: "prioritizes",
+                value: targetPrioritiesText.trim(),
+              },
+            ]),
+        ...(locationPreferenceText.trim().length === 0
+          ? []
+          : [
+              {
+                predicate: "prefers",
+                value: locationPreferenceText.trim(),
+              },
+            ]),
+      ];
+      const claims = specifications.map(
+        (item) =>
+          verifiedIdentityName + " " + item.predicate + " " + item.value,
+      );
+      const source = await mutate<SourceView>("/api/v1/sources", {
+        kind: "candidate",
+        trustClass: "candidate_primary",
+        mediaType: "text/plain",
+        text: claims.join("\n"),
+        originalLocator: "user-entry://profile/target-preferences",
+      });
+      let offset = 0;
+      for (const [index, item] of specifications.entries()) {
+        const quote = claims[index] ?? "";
+        const fact = await mutate<ProfileFactView>("/api/v1/profile-facts", {
+          factType: "preference",
+          subject: verifiedIdentityName,
+          predicate: item.predicate,
+          value: item.value,
+          sourceLocators: [
+            {
+              sourceId: source.id,
+              start: offset,
+              end: offset + quote.length,
+              quote,
+            },
+          ],
+          proposedBy: "user",
+        });
+        await mutate(`/api/v1/profile-facts/${fact.id}/confirm`, {
+          expectedRevision: fact.revision,
+          outcome: { kind: "confirm" },
+        });
+        offset += quote.length + 1;
+      }
+    },
+    onSuccess: async () => {
+      setTargetRoleText("");
+      setTargetPrioritiesText("");
+      setLocationPreferenceText("");
+      await refresh();
+    },
+  });
+  return (
+    <>
+      <PageHeader
+        eyebrow="Workspace settings"
+        title="Identity and search preferences"
+        description="Keep reusable personal settings here, separate from the career evidence you review on Career."
+      />
+      <div className="settings-grid">
+        <section
+          className="panel settings-card"
+          aria-labelledby="identity-title"
+        >
+          <header className="settings-card-header">
+            <span className="settings-card-icon" aria-hidden="true">
+              <UserRound />
+            </span>
+            <div>
+              <h2 id="identity-title">Identity</h2>
+              <p>
+                Your name labels this workbench and the materials you create.
+              </p>
+            </div>
+          </header>
+          <div className="compact-fact-list">
+            {displayedIdentityFacts.length === 0 ? (
+              <Empty>No identity record is available.</Empty>
+            ) : (
+              displayedIdentityFacts.map((fact) => (
+                <SettingFactRow
+                  key={fact.id}
+                  fact={fact}
+                  affectedOutputs={affectedOutputCount(snapshot, fact.id)}
+                />
+              ))
+            )}
+          </div>
+        </section>
+        <section
+          className="panel settings-card"
+          aria-labelledby="preference-title"
+        >
+          <header className="settings-card-header">
+            <span className="settings-card-icon sky" aria-hidden="true">
+              <Search />
+            </span>
+            <div>
+              <h2 id="preference-title">Search preferences</h2>
+              <p>
+                Target roles, priorities, and work style prefill Jobs and guide
+                preference matching. They never prove career experience.
+              </p>
+            </div>
+          </header>
+          {displayedPreferenceFacts.length > 0 && (
+            <div className="compact-fact-list">
+              {displayedPreferenceFacts.map((fact) => (
+                <SettingFactRow
+                  key={fact.id}
+                  fact={fact}
+                  affectedOutputs={affectedOutputCount(snapshot, fact.id)}
+                />
+              ))}
+            </div>
+          )}
+          <details
+            className="settings-preference-editor"
+            open={!hasVerifiedTarget}
+          >
+            <summary>
+              {hasVerifiedTarget
+                ? "Add another target or preference"
+                : targetWasDeferred
+                  ? "Finish your deferred search direction"
+                  : "Add your first target role"}
+            </summary>
+            <p>
+              These are your settings. Saving them is your confirmation that
+              Workbench may use them to find and compare roles.
+            </p>
+            <form
+              className="preference-entry-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                completePreferences.mutate();
+              }}
+            >
+              <label htmlFor="settings-target-role">Target role</label>
+              <input
+                id="settings-target-role"
+                value={targetRoleText}
+                onChange={(event) => setTargetRoleText(event.target.value)}
+                placeholder="Senior Software Engineer focused on AI platforms"
+                maxLength={500}
+                required
+              />
+              <label htmlFor="settings-target-priorities">
+                Priorities <span className="optional">optional</span>
+              </label>
+              <textarea
+                id="settings-target-priorities"
+                value={targetPrioritiesText}
+                onChange={(event) =>
+                  setTargetPrioritiesText(event.target.value)
+                }
+                placeholder="Hands-on AI systems, strong engineering culture"
+                maxLength={2_000}
+              />
+              <label htmlFor="settings-location-preference">
+                Location or work style{" "}
+                <span className="optional">optional</span>
+              </label>
+              <input
+                id="settings-location-preference"
+                value={locationPreferenceText}
+                onChange={(event) =>
+                  setLocationPreferenceText(event.target.value)
+                }
+                placeholder="Remote in the United States"
+                maxLength={300}
+              />
+              <button
+                className="secondary"
+                type="submit"
+                disabled={
+                  completePreferences.isPending ||
+                  targetRoleText.trim().length === 0
+                }
+              >
+                {completePreferences.isPending
+                  ? "Saving preferences…"
+                  : "Save search preferences"}
+              </button>
+            </form>
+            {completePreferences.isSuccess && (
+              <div className="notice" role="status">
+                <Check aria-hidden="true" />
+                <span>
+                  Search preferences saved. Jobs will use them as defaults.
+                </span>
+              </div>
+            )}
+            <ErrorNotice error={completePreferences.error} />
+          </details>
+          <Link className="settings-jobs-link" to="/discover">
+            Open active job-search criteria <ArrowRight aria-hidden="true" />
+          </Link>
+        </section>
+      </div>
+    </>
   );
 }
 
@@ -5022,7 +5977,10 @@ function useActivityStream(
     const stream = new EventSource(
       `/api/v1/events/stream?after=${String(initialAfter.current)}`,
     );
-    stream.onopen = () => setState("connected");
+    stream.onopen = () => {
+      setState("connected");
+      void refresh();
+    };
     stream.onerror = () => setState("reconnecting");
     stream.addEventListener("domain", () => {
       void refresh();

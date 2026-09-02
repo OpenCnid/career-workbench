@@ -62,6 +62,33 @@ export interface StartedOperation {
   readonly cancellationRequestedAt: string | null;
 }
 
+export interface StartedProfileOrganization extends StartedOperation {
+  readonly source: SourceExcerpt;
+}
+
+export interface ProposeProfileFactCommand {
+  readonly factType: "experience" | "achievement" | "education" | "skill";
+  readonly subject: string;
+  readonly predicate: string;
+  readonly value: string;
+  readonly locator: {
+    readonly sourceId: string;
+    readonly start: number;
+    readonly end: number;
+    readonly quote: string;
+  };
+}
+
+export interface ProposedProfileFact {
+  readonly id: string;
+  readonly revision: number;
+  readonly status: string;
+  readonly factType: string;
+  readonly subject: string;
+  readonly predicate: string;
+  readonly value: string | number | boolean | null;
+}
+
 export type ChildTerminalState =
   "succeeded" | "failed" | "canceled" | "indeterminate";
 
@@ -359,6 +386,21 @@ export abstract class CareerWorkbenchService extends Service {
     commandIdentity: string,
     signal: AbortSignal,
   ): Promise<StartedOperation>;
+
+  public abstract startProfileOrganization(
+    authority: AgentAuthority,
+    sourceId: string,
+    commandIdentity: string,
+    signal: AbortSignal,
+  ): Promise<StartedProfileOrganization>;
+
+  public abstract proposeProfileFact(
+    authority: AgentAuthority,
+    operationId: string,
+    command: ProposeProfileFactCommand,
+    commandIdentity: string,
+    signal: AbortSignal,
+  ): Promise<ProposedProfileFact>;
 
   public abstract recordDiscoveryLead(
     authority: AgentAuthority,

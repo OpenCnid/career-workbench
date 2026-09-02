@@ -23,6 +23,7 @@ import {
   type TransitionApplicationInput,
   type UpsertSearchProfileInput,
   type UpdateOpportunitySignalsInput,
+  type UploadCandidateSourceInput,
 } from "@career-workbench/application";
 import { discoverCareerOps } from "@career-workbench/career-ops-import";
 import {
@@ -33,6 +34,7 @@ import {
   CancelOperationBodySchema,
   CaptureOpportunityBodySchema,
   CaptureSourceBodySchema,
+  UploadCandidateSourceBodySchema,
   RecordDiscoveryLeadBodySchema,
   ConfirmProfileFactBodySchema,
   ComparisonProjectionBodySchema,
@@ -65,6 +67,7 @@ import {
   type ApplyCareerOpsImportBody,
   type CancelOperationBody,
   type CaptureSourceBody,
+  type UploadCandidateSourceBody,
   type RecordDiscoveryLeadBody,
   type ConfirmProfileFactBody,
   type ComparisonProjectionBody,
@@ -595,18 +598,53 @@ export function registerDomainRoutes(
         ),
   );
 
+  server.post<{ Body: UploadCandidateSourceBody }>(
+    "/api/v1/sources/upload",
+    { schema: { body: UploadCandidateSourceBodySchema } },
+    async (request, reply) => {
+      const bytes = Buffer.from(request.body.bytesBase64, "base64");
+      if (bytes.toString("base64") !== request.body.bytesBase64) {
+        throw new DomainError(
+          "invalid_request",
+          "Candidate file bytes are not canonical base64.",
+        );
+      }
+      return reply.status(201).send(
+        await requireService(runtime).uploadCandidateSource(
+          {
+            mediaType: request.body.mediaType,
+            bytes: new Uint8Array(bytes),
+            extractedText: request.body.extractedText,
+          } satisfies UploadCandidateSourceInput,
+          commandContext(request, ids),
+        ),
+      );
+    },
+  );
+
   server.post<{ Body: ProposeProfileFactBody }>(
     "/api/v1/profile-facts",
     { schema: { body: ProposeProfileFactBodySchema } },
-    async (request, reply) =>
-      reply
+    async (request, reply) => {
+      const context = commandContext(request, ids);
+      if (
+        (context.actor === "browser" && request.body.proposedBy !== "user") ||
+        (context.actor === "dsh_agent" && request.body.proposedBy !== "agent")
+      ) {
+        throw new DomainError(
+          "approval_denied",
+          "Profile proposal provenance does not match the authenticated caller.",
+        );
+      }
+      return reply
         .status(201)
         .send(
           await requireService(runtime).proposeProfileFact(
             validatedBody<ProposeFactInput>(request.body),
-            commandContext(request, ids),
+            context,
           ),
-        ),
+        );
+    },
   );
 
   server.post<{ Body: UpsertSearchProfileBody }>(

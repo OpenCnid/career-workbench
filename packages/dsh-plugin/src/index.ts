@@ -39,6 +39,7 @@ Career Workbench is the authoritative career-state backend. Use only the career_
 - Candidate-facing assertions require accepted candidate evidence linked to a verified fact and exact source locator.
 - Call career_workbench_start_evaluation before proposing evidence; use the returned operationId only from the same originating DSH Agent.
 - Proposals are not accepted facts. Explicitly accept or reject them through career_workbench_decide_evidence.
+- For résumé or free-form career intake, start one source-bound profile organization operation, record only exact source-backed profile proposals, and complete it for user review. Never infer unstated accomplishments, metrics, dates, or target preferences.
 - Capture only external opportunity/company/market text; these tools cannot create candidate-primary sources. Use career_workbench_record_gap instead of inventing missing evidence.
 - Complete with closed dimension inputs. Career Workbench performs deterministic arithmetic and returns the only trusted terminal.
 - Candidate artifacts created by DSH remain staged drafts requiring separate human review. Application transitions require an unexpired, browser-requested and browser-approved single-use approval bound to the exact revision and displayed effect.

@@ -101,6 +101,12 @@ correctness. A disconnected or stale client cannot authorize a mutation.
 The local application host. It assembles the domain services, storage adapters,
 HTTP API, event delivery, import support, and DSH plugin configuration.
 
+For the bounded in-page profile organizer, the loopback server composes the
+published DSH Agent loop, DSH credential store, model adapter, and native Career
+Workbench plugin. A same-origin browser command may start that one turn, but
+only the exact DSH Agent can call the source-bound proposal tools; the server
+returns canonical operation/result identities after the DSH terminal.
+
 This is an entry point and composition root. It may know concrete packages; no
 core package may depend on it.
 
