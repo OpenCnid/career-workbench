@@ -63,6 +63,7 @@ const temporary = await realpath(
   await mkdtemp(join(tmpdir(), "career-workbench-product-")),
 );
 let child: ReturnType<typeof spawn> | undefined;
+let childOutput = "";
 try {
   const local = join(temporary, "local");
   await mkdir(local);
@@ -154,11 +155,21 @@ try {
     stdio: "pipe",
     windowsHide: true,
   });
+  for (const stream of [child.stdout, child.stderr]) {
+    stream?.setEncoding("utf8");
+    stream?.on("data", (chunk: string) => {
+      childOutput = `${childOutput}${chunk}`.slice(-4_000);
+    });
+  }
   let response: Response | undefined;
   for (let attempt = 0; attempt < 150; attempt += 1) {
     if (child.exitCode !== null) {
+      const diagnostic = childOutput
+        .replaceAll(temporary, "<temporary>")
+        .replaceAll(resolve("."), "<repository>")
+        .trim();
       throw new Error(
-        `Packaged server exited before readiness: ${String(child.exitCode)}.`,
+        `Packaged server exited before readiness: ${String(child.exitCode)}.${diagnostic.length === 0 ? "" : `\n${diagnostic}`}`,
       );
     }
     try {
