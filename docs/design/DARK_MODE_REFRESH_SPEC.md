@@ -1,8 +1,8 @@
 # Career Workbench dark interface refresh
 
-Status: proposed for the next implementation session
-Scope: browser UI only; no domain, storage, API, DSH, RLM, or evidence-policy
-changes
+- Status: proposed for the next implementation session
+- Scope: browser UI only; no domain, storage, API, DSH, RLM, or evidence-policy
+  changes
 
 ## Product intent
 
