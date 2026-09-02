@@ -23,8 +23,10 @@ const productPackages = new Set([
   "@career-workbench/storage",
   "@career-workbench/application",
   "@career-workbench/career-ops-import",
+  "@career-workbench/dsh-plugin",
   "@career-workbench/web",
   "@career-workbench/server",
+  "@deepseek-rlm/dsh-rlm",
 ]);
 
 async function availablePort(): Promise<number> {
