@@ -131,6 +131,27 @@ const FixtureBodySchema = {
   },
 } as const;
 
+const evidenceClaimLimit = 2000;
+
+function boundedSourceExcerpt(text: string): {
+  readonly start: number;
+  readonly end: number;
+  readonly quote: string;
+} {
+  const start = text.search(/\S/u);
+  if (start < 0) {
+    throw new DomainError(
+      "evidence_locator_invalid",
+      "Saved opportunity source does not contain usable text.",
+    );
+  }
+  let end = Math.min(text.length, start + evidenceClaimLimit);
+  if (end < text.length && /[\uD800-\uDBFF]/u.test(text.charAt(end - 1))) {
+    end -= 1;
+  }
+  return { start, end, quote: text.slice(start, end) };
+}
+
 // Runtime TypeBox validation has narrowed this wire value; this adapter applies
 // domain brands without allowing transport types into the application layer.
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
@@ -633,7 +654,7 @@ export function registerDomainRoutes(
       ) {
         throw new DomainError(
           "approval_denied",
-          "Profile proposal provenance does not match the authenticated caller.",
+          "Profile proposal operation does not match the authenticated caller.",
         );
       }
       return reply
@@ -992,7 +1013,7 @@ export function registerDomainRoutes(
       ) {
         throw new DomainError(
           "invalid_transition",
-          "Only a verified or unverified active fact can be corrected.",
+          "Only an active career detail can be corrected.",
         );
       }
       const claim = `${fact.subject} ${fact.predicate} ${String(request.body.value)}`;
@@ -1068,7 +1089,7 @@ export function registerDomainRoutes(
       if (fact?.sourceLocators[0] === undefined) {
         throw new DomainError(
           "evidence_unsupported",
-          "Local demonstration requires a verified experience or achievement fact.",
+          "Local demonstration requires a saved experience or achievement.",
         );
       }
       const candidateLocator = fact.sourceLocators[0];
@@ -1086,7 +1107,7 @@ export function registerDomainRoutes(
         candidateEvidence.id,
         candidateEvidence.revision,
         "accepted",
-        "Complete verified candidate fact.",
+        "Current career detail selected by the user.",
         subcommand(base, ids, "candidate-accept"),
       );
       const opportunitySource = await repository.get(
@@ -1099,16 +1120,17 @@ export function registerDomainRoutes(
           "Fixture opportunity source is unavailable.",
         );
       }
+      const opportunityExcerpt = boundedSourceExcerpt(
+        opportunitySource.inlineText,
+      );
       const opportunityEvidence = await domain.proposeEvidence(
         {
           classification: "opportunity_fact",
-          claim: opportunitySource.inlineText,
+          claim: opportunityExcerpt.quote,
           sourceId: opportunitySource.id,
           locator: {
             sourceId: opportunitySource.id,
-            start: 0,
-            end: opportunitySource.inlineText.length,
-            quote: opportunitySource.inlineText,
+            ...opportunityExcerpt,
           },
         },
         subcommand(base, ids, "opportunity-evidence"),
@@ -1130,7 +1152,7 @@ export function registerDomainRoutes(
           dimensions: [
             {
               key: "skills",
-              label: "Skills evidence",
+              label: "Skills match",
               weightBasisPoints: 7000,
               missingInput: "block",
               criticalMinimumBasisPoints: null,

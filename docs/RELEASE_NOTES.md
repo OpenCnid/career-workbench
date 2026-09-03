@@ -20,8 +20,9 @@ Security limitations: the backend and IPython have OS authority; IPython is not
 a sandbox; external content is untrusted; credentials remain with their owning
 runtime; the local service token is sensitive; exports contain career data; and
 human evidence decisions can be wrong. No v0.1 path performs external sends or
-submissions. Job discovery requires a research capability supplied by the owning
-DSH runtime; no browser or built-in board scraper bypasses DSH.
+submissions. In-page job discovery uses an authenticated owning DSH Agent and a
+bounded fixed-origin Remotive API tool; no browser or unrestricted board scraper
+bypasses DSH.
 
 Release blockers remain visible until evidence changes:
 

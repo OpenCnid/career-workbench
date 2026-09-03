@@ -115,17 +115,17 @@ export function validateEvidenceForAcceptance(
     assertDomain(
       candidateFact?.status === "verified",
       "evidence_unsupported",
-      "Candidate evidence requires a verified fact.",
+      "This action requires a current career detail chosen by the user.",
     );
     assertDomain(
       evidence.claim === renderProfileFactClaim(candidateFact),
       "evidence_unsupported",
-      "Candidate evidence must support the complete fact without combining fragments.",
+      "The selected career detail must be used as a complete item without combining fragments.",
     );
     assertDomain(
       source?.trustClass === "candidate_primary",
       "evidence_unsupported",
-      "Candidate evidence requires a primary source.",
+      "The selected career detail must remain linked to its saved source.",
     );
   } else if (
     ["opportunity_fact", "company_fact", "market_fact"].includes(

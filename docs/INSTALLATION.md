@@ -42,11 +42,12 @@ records and exports, not a browser-switchable project. To operate a different
 root, stop this process and start a separately configured local server. Use
 Profile, Discover, Opportunities, Evaluations, Compare, Pipeline, Drafts,
 Activity, Import, and Diagnostics. In Discover, save an active search profile,
-copy the bounded request into the configured DSH Agent, and review the returned
-source-preserved inbox. Discovery requires the owning DSH runtime to provide a
-research capability; the browser does not scrape job boards or call an LLM
-provider. The browser supplies same-origin/CSRF proof automatically. The server
-never listens beyond loopback.
+choose **Find jobs**, and review the returned source-preserved inbox without
+leaving the page. The owning DSH Agent performs the bounded run and can query
+only the fixed Remotive public job API for this workflow. The browser does not
+scrape job boards or call an LLM provider. Outbound HTTPS access to
+`remotive.com` is required to retrieve current listings. The browser supplies
+same-origin/CSRF proof automatically. The server never listens beyond loopback.
 
 First-time setup asks only for the candidate name. Home then accepts a PDF or
 plain-text résumé file, pasted résumé/CV text, or an informal career story as

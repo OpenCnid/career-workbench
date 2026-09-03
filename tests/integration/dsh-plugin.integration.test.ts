@@ -167,7 +167,7 @@ describe("native Career Workbench DSH plugin", () => {
       dimensions: [
         {
           key: "skills",
-          label: "Skills evidence",
+          label: "Skills match",
           weightBasisPoints: 10_000,
           missingInput: "block",
           criticalMinimumBasisPoints: null,
@@ -832,7 +832,7 @@ describe("native Career Workbench DSH plugin", () => {
         ),
       );
       expect(String(inspectedArtifact["contextJson"])).toContain(
-        "explicit human review required",
+        "Human review required",
       );
 
       const inspectedTerminalOperation = objectValue(

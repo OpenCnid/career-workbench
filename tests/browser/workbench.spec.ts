@@ -25,9 +25,15 @@ interface BrowserSnapshot {
   }[];
   readonly profileFacts: readonly {
     readonly id: string;
+    readonly revision: number;
     readonly status: string;
   }[];
-  readonly searchProfiles: readonly { readonly id: string }[];
+  readonly searchProfiles: readonly {
+    readonly id: string;
+    readonly locations: readonly string[];
+    readonly priorities: readonly string[];
+    readonly exclusions: readonly string[];
+  }[];
   readonly discoveryLeads: readonly {
     readonly id: string;
     readonly state: string;
@@ -107,25 +113,137 @@ test.describe.configure({ mode: "serial" });
 
 async function createWorkspaceIfNeeded(page: Page) {
   await page.goto("/");
-  const create = page.getByRole("button", { name: "Start Career Workbench" });
+  const create = page.getByRole("button", { name: "Continue" });
   if (await create.isVisible()) {
-    await expect(page.getByText(/about 20 seconds/u)).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "Turn your experience into your next move.",
+      }),
+    ).toBeVisible();
+    await expect(page.locator("main.onboarding p")).toHaveCount(0);
     await expect(page.getByLabel("Workbench name")).toHaveCount(0);
     await expect(page.getByLabel("Roles you want next")).toHaveCount(0);
-    await expect(
-      page.getByText(/next screen asks for one useful input/u),
-    ).toBeVisible();
-    await page.getByLabel("Your name").fill("Avery Example");
+    await page
+      .getByRole("textbox", { name: "What’s your name?", exact: true })
+      .fill("Avery Example");
     await create.click();
     await expect(
       page.getByRole("heading", {
-        name: "One useful step at a time.",
+        name: "Build the case for what comes next.",
       }),
     ).toBeVisible();
     await expect(
-      page.getByLabel("Current workbench: My Career Workbench"),
+      page.getByText("Welcome, Avery", { exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByText("Welcome, Avery Example", { exact: true }),
+    ).toHaveCount(0);
+    await expect(page.locator(".sidebar")).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Go to setup" }),
+    ).toHaveAttribute("href", "/overview");
   }
+}
+
+async function completeCareerSetupIfNeeded(page: Page): Promise<void> {
+  await page.goto("/overview");
+  if ((await page.getByRole("link", { name: "Career" }).count()) > 0) return;
+
+  const browserSession = await responseJson<{ readonly csrfToken: string }>(
+    await page.request.get("/api/v1/session"),
+  );
+  let command = 0;
+  const browserHeaders = () => ({
+    "content-type": "application/json",
+    origin: "http://127.0.0.1:4173",
+    "sec-fetch-site": "same-origin",
+    "x-cw-csrf": browserSession.csrfToken,
+    "x-idempotency-key": `synthetic-a11y-browser-${String(++command).padStart(4, "0")}`,
+  });
+  const dshHeaders = (operationId?: string) => ({
+    authorization: `CW-DSH ${DSH_TOKEN}`,
+    "content-type": "application/json",
+    "x-cw-dsh-session": DSH_SESSION,
+    "x-idempotency-key": `synthetic-a11y-dsh-${String(++command).padStart(4, "0")}`,
+    ...(operationId === undefined ? {} : { "x-cw-operation": operationId }),
+  });
+  const careerText =
+    "Avery Example worked as a software engineer building reliable systems.";
+  const sourceResponse = await page.request.post("/api/v1/sources", {
+    headers: browserHeaders(),
+    data: {
+      kind: "candidate",
+      trustClass: "candidate_primary",
+      mediaType: "text/plain",
+      text: careerText,
+      originalLocator: "synthetic://a11y-career-source",
+    },
+  });
+  expect(sourceResponse.ok()).toBe(true);
+  const source = await responseJson<{ readonly id: string }>(sourceResponse);
+  const operationResponse = await page.request.post("/api/v1/operations", {
+    headers: dshHeaders(),
+    data: {
+      kind: "profile_organization",
+      inputIdentity: source.id,
+      requestedCapabilities: ["candidate_source.read", "profile_fact.propose"],
+      route: "ordinary_dsh",
+      dshSessionId: DSH_SESSION,
+      provider: "openai-codex",
+      model: "gpt-5.6-sol",
+      reasoningEffort: "low",
+    },
+  });
+  expect(operationResponse.ok()).toBe(true);
+  const operation = await responseJson<OperationResponse>(operationResponse);
+  const factResponse = await page.request.post("/api/v1/profile-facts", {
+    headers: dshHeaders(operation.id),
+    data: {
+      factType: "experience",
+      subject: "Avery Example",
+      predicate: "worked as",
+      value: "a software engineer building reliable systems.",
+      sourceLocators: [
+        {
+          sourceId: source.id,
+          start: 0,
+          end: careerText.length,
+          quote: careerText,
+        },
+      ],
+      proposedBy: "agent",
+    },
+  });
+  expect(factResponse.ok()).toBe(true);
+  const fact = await responseJson<{
+    readonly id: string;
+    readonly revision: number;
+  }>(factResponse);
+  const terminalResponse = await page.request.post(
+    `/api/v1/operations/${operation.id}/terminal`,
+    {
+      headers: dshHeaders(operation.id),
+      data: {
+        expectedRevision: operation.revision,
+        state: "succeeded",
+        category: "completed",
+        message: "Prepared a synthetic accessibility setup fact.",
+        resultIds: [fact.id],
+        artifactIds: [],
+      },
+    },
+  );
+  expect(terminalResponse.ok()).toBe(true);
+  const confirmResponse = await page.request.post(
+    `/api/v1/profile-facts/${fact.id}/confirm`,
+    {
+      headers: browserHeaders(),
+      data: { expectedRevision: fact.revision, outcome: { kind: "confirm" } },
+    },
+  );
+  expect(confirmResponse.ok()).toBe(true);
+  await page.reload();
+  await expect(page.getByRole("link", { name: "Career" })).toBeVisible();
 }
 
 async function openMoreDestination(page: Page, name: string): Promise<void> {
@@ -146,25 +264,27 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await mkdir(importEvidenceRoot, { recursive: true });
   await mkdir(productEvidenceRoot, { recursive: true });
   await createWorkspaceIfNeeded(page);
-  await page.getByRole("link", { name: "Home" }).click();
   await expect(
     page.getByRole("heading", { name: "Add your résumé or career story" }),
   ).toBeVisible();
-  await expect(page.getByText("0 of 6 stages", { exact: true })).toBeVisible();
+  await expect(page.getByText(/of 6 stages/u)).toHaveCount(0);
+  await expect(page.getByText(/Your progress/u)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Upload résumé" }),
+  ).toHaveAttribute("aria-pressed", "true");
   await expect(
     page.getByRole("button", { name: "Paste résumé" }),
-  ).toHaveAttribute("aria-pressed", "true");
+  ).toHaveAttribute("aria-pressed", "false");
   await expect(
     page.getByRole("button", { name: "Tell my story" }),
   ).toHaveAttribute("aria-pressed", "false");
   await page.getByRole("button", { name: "Tell my story" }).click();
-  await expect(
-    page.getByLabel("Describe your work in your own words"),
-  ).toBeVisible();
+  await expect(page.getByLabel("Tell us what you’ve done")).toBeVisible();
   await page.getByRole("button", { name: "Paste résumé" }).click();
   await expect(
-    page.getByRole("button", { name: "Save résumé and continue" }),
+    page.getByRole("button", { name: "Save and continue" }),
   ).toBeEnabled();
+  await page.getByRole("button", { name: "Upload résumé" }).click();
 
   const syntheticCareerLines = [
     "Avery Example worked as Software Engineer at Synthetic Systems from 2021 to 2024.",
@@ -175,9 +295,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     mimeType: "application/pdf",
     buffer: syntheticPdf(syntheticCareerLines),
   });
-  await expect(
-    page.getByText(/Selected: synthetic-resume\.pdf/u),
-  ).toBeVisible();
+  await expect(page.getByText(/synthetic-resume\.pdf/u)).toBeVisible();
   await page.getByRole("button", { name: "Upload and continue" }).click();
   await expect(
     page.getByRole("heading", { name: "Let AI organize what you shared" }),
@@ -337,16 +455,30 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   ).toBeVisible();
   await page.getByRole("link", { name: "Review the summary" }).click();
   const summaryReview = page.getByRole("region", {
-    name: "Review what AI found",
+    name: "Review your résumé",
   });
+  await expect(
+    page.getByRole("heading", { name: "How would you like to start?" }),
+  ).toHaveCount(0);
+  await expect(page.getByText(/Manage them in Settings/u)).toHaveCount(0);
   await expect(summaryReview).toContainText(
     "Avery Example built TypeScript services.",
   );
   await expect(summaryReview.locator(".fact-card")).toHaveCount(2);
-  await expect(summaryReview.getByText("Check source").first()).toBeVisible();
+  await expect(summaryReview.getByRole("checkbox")).toHaveCount(2);
+  await expect(summaryReview.getByRole("checkbox").first()).toBeChecked();
+  await expect(
+    summaryReview.getByRole("button", { name: /^Keep /u }),
+  ).toHaveCount(0);
+  await expect(
+    summaryReview.getByRole("button", { name: /^Remove /u }),
+  ).toHaveCount(0);
+  await expect(
+    summaryReview.getByText("Source", { exact: true }).first(),
+  ).toBeVisible();
   await expect(
     summaryReview.getByLabel(
-      "Source provenance for Avery Example built TypeScript services.",
+      "Source details for Avery Example built TypeScript services.",
     ),
   ).toBeHidden();
   await summaryReview.screenshot({
@@ -354,10 +486,33 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   });
   await summaryReview
     .getByRole("button", {
-      name: "Everything looks right — confirm all 2",
+      name: "Continue",
     })
     .click();
   await expect(summaryReview).toHaveCount(0);
+  await expect(page).toHaveURL(/\/overview$/u);
+  await expect(
+    page.getByRole("heading", {
+      name: "What kind of role should we look for?",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Primary", exact: true }),
+  ).toBeVisible();
+  const roleCombobox = page.getByRole("combobox", { name: "Role" });
+  await roleCombobox.focus();
+  await expect(
+    page.getByRole("listbox", { name: "Suggested roles" }),
+  ).toBeVisible();
+  await roleCombobox.fill("soft");
+  await expect(
+    page.getByRole("option", { name: /Software Engineer/u }),
+  ).toBeVisible();
+  await roleCombobox.press("Enter");
+  await expect(roleCombobox).toHaveValue("Software Engineer");
+  await expect(
+    page.getByRole("button", { name: "Use this role" }),
+  ).toBeEnabled();
 
   await page.evaluate(() => {
     localStorage.setItem(
@@ -457,31 +612,29 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   const proposed = page
     .locator(".fact-card")
     .filter({ hasText: "mentored synthetic developers" });
-  await expect(proposed).toContainText("proposed");
+  await expect(proposed).toContainText("suggested");
   await proposed.getByText("Check source", { exact: true }).click();
-  const factProvenance = proposed.getByLabel(
-    "Source provenance for Avery Example mentored synthetic developers",
+  const factSource = proposed.getByLabel(
+    "Source details for Avery Example mentored synthetic developers",
   );
-  await expect(factProvenance).toContainText(
+  await expect(factSource).toContainText(
     "Avery Example mentored synthetic developers",
   );
-  await expect(factProvenance).toContainText("candidate primary");
+  await expect(factSource).toContainText("From your saved career material");
   await proposed
     .getByRole("button", {
-      name: "Confirm Avery Example mentored synthetic developers",
+      name: "Keep Avery Example mentored synthetic developers",
       exact: true,
     })
     .click();
-  await expect(proposed).toContainText("verified");
+  await expect(proposed).toContainText("saved");
 
   await page.getByRole("tab", { name: "Paste résumé or CV" }).click();
   await page
     .getByLabel("Résumé or CV text")
     .fill("Avery Example documented synthetic release notes");
   await page.getByRole("button", { name: "Save résumé text" }).click();
-  await expect(
-    page.getByText(/Résumé text saved as an immutable source/u),
-  ).toBeVisible();
+  await expect(page.getByText(/Résumé text saved locally/u)).toBeVisible();
   await page
     .getByText("Advanced: add an exact statement from a saved source")
     .click();
@@ -493,43 +646,101 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     .filter({ hasText: "Avery Example documented synthetic release notes" });
   await correctionCandidate
     .getByRole("button", {
-      name: "Correct Avery Example documented synthetic release notes",
+      name: "Edit Avery Example documented synthetic release notes",
     })
     .click();
   await correctionCandidate
-    .getByLabel("Corrected value")
+    .getByLabel("Updated value")
     .fill("reviewed synthetic release notes");
   await correctionCandidate
     .getByRole("button", {
       name: "Save correction for Avery Example documented synthetic release notes",
     })
     .click();
-  await expect(correctionCandidate).toContainText("superseded");
+  await expect(correctionCandidate).toContainText("replaced");
   await expect(
     page.locator(".fact-card").filter({
       hasText: "Avery Example documented reviewed synthetic release notes",
     }),
-  ).toContainText("verified");
+  ).toContainText("saved");
 
   await page.getByRole("link", { name: "Jobs" }).click();
   await expect(
-    page.getByRole("heading", { name: "Find roles worth your time" }),
+    page.getByRole("heading", { name: "Find your next role." }),
   ).toBeVisible();
-  await expect(page.getByLabel("Target roles")).toHaveValue(
+  await expect(page.getByLabel("Roles", { exact: true })).toHaveValue(
     "Senior Software Engineer focused on AI platforms",
   );
+  const roleField = await page
+    .locator(".discovery-field-control")
+    .nth(0)
+    .boundingBox();
+  const locationField = await page
+    .locator(".discovery-field-control")
+    .nth(1)
+    .boundingBox();
+  expect(roleField?.height).toBe(locationField?.height);
+  await page.getByLabel("Add a location").selectOption("Chicago, IL");
+  await expect(
+    page.getByRole("button", { name: "Remove location Chicago, IL" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Seniority")).toBeHidden();
+  await page.getByText("More preferences", { exact: true }).click();
   await page.getByLabel("Seniority").selectOption("senior");
   await page
     .getByLabel("AI direction")
     .fill("Production AI platforms, evaluation, and agent infrastructure");
-  await page
-    .getByLabel(/Exclusions/u)
-    .fill("Commission-only roles\nMandatory relocation");
-  await page.getByRole("button", { name: "Save search direction" }).click();
-  await expect(page.getByText("Active", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Career growth" }).click();
+  await page.getByRole("button", { name: "Commission-only roles" }).click();
+  await page.getByRole("button", { name: "Mandatory relocation" }).click();
+  await page.getByRole("button", { name: "Save search" }).click();
   await expect(
-    page.getByRole("button", { name: "Copy DSH discovery request" }),
-  ).toBeEnabled();
+    page.getByRole("button", { name: "Saved", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("heading", { name: "Find matching jobs" }),
+  ).toBeVisible();
+  const startSearch = page.getByRole("button", {
+    name: "Find jobs",
+  });
+  await expect(startSearch).toBeEnabled();
+  await expect(startSearch).toBeFocused();
+  const finishInPageDiscovery = Promise.withResolvers<undefined>();
+  let requestedSearchProfileId = "";
+  await page.route("**/api/v1/job-discoveries", async (route) => {
+    const requestBody = route.request().postDataJSON() as {
+      readonly searchProfileId: string;
+    };
+    requestedSearchProfileId = requestBody.searchProfileId;
+    await finishInPageDiscovery.promise;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        contractVersion: "v1",
+        searchProfileId: requestBody.searchProfileId,
+        sessionId: "synthetic-in-page-discovery",
+        operationId: "operation_00000000000000000000000031",
+        state: "succeeded",
+        leadIds: [],
+        provider: "openai-codex",
+        model: "gpt-5.6-sol",
+        reasoningEffort: "low",
+      }),
+    });
+  });
+  await startSearch.click();
+  await expect(
+    page.getByRole("button", { name: "Finding jobs…" }),
+  ).toBeDisabled();
+  finishInPageDiscovery.resolve(undefined);
+  await expect(
+    page.getByText(
+      "No matching jobs found this time. Try broader roles or locations.",
+    ),
+  ).toBeVisible();
+  await page.unroute("**/api/v1/job-discoveries");
+  await page.getByText("More preferences", { exact: true }).click();
 
   const discoverySeed = await responseJson<BrowserSnapshot>(
     await page.request.get("/api/v1/snapshot"),
@@ -537,6 +748,12 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   const searchProfile = discoverySeed.searchProfiles[0];
   if (searchProfile === undefined)
     throw new Error("Expected the browser to persist search criteria.");
+  expect(requestedSearchProfileId).toBe(searchProfile.id);
+  expect(searchProfile.locations).toContain("Chicago, IL");
+  expect(searchProfile.priorities).toContain("Career growth");
+  expect(searchProfile.exclusions).toEqual(
+    expect.arrayContaining(["Commission-only roles", "Mandatory relocation"]),
+  );
   let discoveryCommand = 0;
   const discoveryHeaders = (operationId?: string) => ({
     authorization: `CW-DSH ${DSH_TOKEN}`,
@@ -605,7 +822,22 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   );
   expect(discoveryTerminal.ok()).toBe(true);
   await page.reload();
-  await expect(page.getByText("9 to review")).toBeVisible();
+  await expect(page.getByText("9 new")).toBeVisible();
+  const compactSearch = page.getByRole("region", {
+    name: "Job search setup",
+  });
+  await expect(compactSearch).toContainText(
+    "Senior Software Engineer focused on AI platforms",
+  );
+  await expect(
+    compactSearch.getByRole("button", { name: "Find new matches" }),
+  ).toBeVisible();
+  await expect(compactSearch.getByLabel("Roles", { exact: true })).toBeHidden();
+  await compactSearch.getByRole("button", { name: "Edit" }).click();
+  await expect(
+    compactSearch.getByLabel("Roles", { exact: true }),
+  ).toBeVisible();
+  await compactSearch.getByRole("button", { name: "Done" }).click();
   await expect(page.getByText("Page 1 of 2")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Senior AI Platform Engineer 9" }),
@@ -618,10 +850,10 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await page
     .locator(".discovery-card")
     .filter({ hasText: "Senior AI Platform Engineer 9" })
-    .getByRole("button", { name: "Dismiss" })
+    .getByRole("button", { name: "Pass" })
     .click();
-  await expect(page.getByText("8 to review")).toBeVisible();
-  await page.getByRole("tab", { name: /Dismissed/u }).click();
+  await expect(page.getByText("8 new")).toBeVisible();
+  await page.getByRole("tab", { name: /Passed/u }).click();
   await expect(
     page.getByRole("heading", { name: "Senior AI Platform Engineer 9" }),
   ).toBeVisible();
@@ -629,19 +861,18 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     path: join(productEvidenceRoot, "discovery-inbox.png"),
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Return to inbox" }).click();
-  await expect(
-    page.getByText(/returned to the inbox for another look/u),
-  ).toBeVisible();
-  await expect(page.getByRole("tab", { name: /Inbox · 9/u })).toHaveAttribute(
+  await page.getByRole("button", { name: "Move to New" }).click();
+  await expect(page.getByText(/moved back to New/u)).toBeVisible();
+  await expect(page.getByRole("tab", { name: /New · 9/u })).toHaveAttribute(
     "data-state",
     "active",
   );
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
-    page.getByRole("heading", { name: "Find roles worth your time" }),
+    page.getByRole("heading", { name: "Find your next role." }),
   ).toBeVisible();
-  await expect(page.getByLabel("Target roles")).toBeVisible();
+  await compactSearch.getByRole("button", { name: "Edit" }).click();
+  await expect(page.getByLabel("Roles", { exact: true })).toBeVisible();
   await page.screenshot({
     path: join(productEvidenceRoot, "discovery-mobile.png"),
     fullPage: true,
@@ -665,15 +896,13 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await expect(
     page.getByRole("heading", { name: "Platform Engineer" }),
   ).toBeVisible();
-  const capturedOpportunity = page
-    .locator(".opportunity-card")
-    .filter({ hasText: "Platform Engineer" });
-  await capturedOpportunity
-    .getByText("View preserved posting and provenance")
-    .click();
-  await expect(capturedOpportunity.locator(".source-metadata")).toContainText(
-    "external",
-  );
+  const capturedOpportunity = page.locator(".opportunity-card").filter({
+    has: page.getByRole("heading", {
+      name: "Platform Engineer",
+      exact: true,
+    }),
+  });
+  await capturedOpportunity.getByText("View saved posting").click();
   await expect(
     capturedOpportunity.locator(".source-inspection pre"),
   ).toHaveText(
@@ -682,33 +911,35 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
 
   await openMoreDestination(page, "Evaluations");
   await expect(
-    page.getByLabel("Opportunity").locator('option[value=""]'),
+    page.getByLabel("Saved job").locator('option[value=""]'),
   ).toBeDisabled();
-  await page.getByRole("button", { name: "Run local demonstration" }).click();
-  const evaluation = page
-    .locator(".evaluation-card")
-    .filter({ hasText: "Platform Engineer" })
-    .filter({
-      hasText: "Local evidence-gate demonstration · not a fit recommendation",
-    });
+  await page
+    .getByLabel("Saved job")
+    .selectOption({ label: "Platform Engineer · Synthetic Labs" });
+  await page.getByRole("button", { name: "Check fit" }).click();
+  const evaluation = page.locator(".current-evaluation > .evaluation-card");
   await expect(evaluation.locator(".score strong")).toHaveText("78");
-  await expect(evaluation).toContainText(
-    "Local evidence-gate demonstration · not a fit recommendation",
+  await expect(evaluation).toContainText("Fit estimate, not a recommendation.");
+  await page.getByRole("button", { name: "Check again" }).click();
+  await expect(
+    page.locator(".current-evaluation > .evaluation-card"),
+  ).toHaveCount(1);
+  await expect(page.locator(".evaluation-history")).not.toHaveAttribute(
+    "open",
+    "",
   );
-  await evaluation.getByRole("tab", { name: "Evidence" }).click();
+  await evaluation.getByRole("tab", { name: "Used" }).click();
   await expect(
-    evaluation.getByRole("heading", { name: "Accepted evidence" }),
+    evaluation.getByRole("heading", { name: "Your experience" }),
   ).toBeVisible();
   await expect(
-    evaluation.locator(".evidence-list li").filter({
-      hasText: "Avery Example built TypeScript services",
-    }),
+    evaluation.getByText("Avery Example built TypeScript services"),
   ).toBeVisible();
   await expect(
-    evaluation.getByRole("heading", {
-      name: "Rejected evidence linked to evaluated sources",
-    }),
+    evaluation.getByRole("heading", { name: "Saved job" }),
   ).toBeVisible();
+  await expect(evaluation).toContainText("Platform Engineer at Synthetic Labs");
+  await expect(evaluation.getByText(/Details left out/u)).toHaveCount(0);
   await evaluation.getByRole("tab", { name: "Gaps" }).click();
   await expect(
     evaluation.getByRole("heading", { name: "Critical findings and gaps" }),
@@ -731,27 +962,35 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   });
 
   await openMoreDestination(page, "Opportunities");
-  const firstOpportunity = page
-    .locator(".opportunity-card")
-    .filter({ hasText: "Platform Engineer" })
-    .first();
+  const firstOpportunity = page.locator(".opportunity-card").filter({
+    has: page.getByRole("heading", {
+      name: "Platform Engineer",
+      exact: true,
+    }),
+  });
   await firstOpportunity.getByLabel("Posting liveness").selectOption("active");
   await firstOpportunity
-    .getByLabel("Legitimacy evidence")
+    .getByLabel("Legitimacy signals")
     .selectOption("high_confidence");
   await firstOpportunity.getByRole("button", { name: "Save signals" }).click();
   await expect(firstOpportunity).toContainText("liveness active");
   await expect(firstOpportunity).toContainText("legitimacy high confidence");
 
   await openMoreDestination(page, "Pipeline");
+  await page
+    .getByLabel("Opportunity")
+    .selectOption({ label: "Platform Engineer · Synthetic Labs" });
   await page.getByRole("button", { name: "Start pipeline record" }).click();
-  const application = page
-    .locator(".application-card")
-    .filter({ hasText: "Platform Engineer" });
+  const application = page.locator(".application-card").filter({
+    has: page.getByRole("heading", {
+      name: "Platform Engineer",
+      exact: true,
+    }),
+  });
   await expect(application).toContainText("considering");
   await expect(
     application.getByRole("link", {
-      name: "Prepare evidence-backed materials",
+      name: "Prepare tailored materials",
     }),
   ).toHaveAttribute("href", "/drafts");
   await application.getByLabel("Record next state").selectOption("preparing");
@@ -781,13 +1020,11 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   });
   await expect(requestArtifactApproval).toBeDisabled();
   await expect(artifactApproval).toContainText(
-    "Inspect the current content and provenance before requesting approval.",
+    "Inspect the current content before requesting approval.",
   );
-  await draft
-    .getByRole("button", { name: "Inspect content and provenance" })
-    .click();
+  await draft.getByRole("button", { name: "Inspect draft" }).click();
   await expect(draft).toContainText("[NON-FACTUAL STYLE]");
-  await expect(draft).toContainText("accepted evidence");
+  await expect(draft).toContainText("supporting references");
   await expect(requestArtifactApproval).toBeEnabled();
   await requestArtifactApproval.click();
   await expect(
@@ -829,9 +1066,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     artifactApproval.getByText("expired", { exact: true }),
   ).toBeVisible();
   await expect(requestArtifactApproval).toBeDisabled();
-  await draft
-    .getByRole("button", { name: "Inspect content and provenance" })
-    .click();
+  await draft.getByRole("button", { name: "Inspect draft" }).click();
   await artifactApproval
     .getByRole("button", { name: "Request approval to review and seal" })
     .click();
@@ -859,7 +1094,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await openMoreDestination(page, "Pipeline");
   await application.getByLabel("Record next state").selectOption("applied");
   await application
-    .getByRole("button", { name: "Record as applied — does not submit" })
+    .getByRole("button", { name: "Record as applied. Does not submit." })
     .click();
   await expect(application).toContainText("applied");
   await application
@@ -879,7 +1114,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   );
   await expect(
     application.getByRole("link", {
-      name: "Review evidence and gaps while tracking a response",
+      name: "Review the evaluation while tracking a response",
     }),
   ).toHaveAttribute("href", "/evaluations");
 
@@ -902,13 +1137,13 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     "Staff TypeScript Engineer",
   ]) {
     const optionValue = await page
-      .getByLabel("Opportunity")
+      .getByLabel("Saved job")
       .locator("option")
       .filter({ hasText: roleTitle })
       .getAttribute("value");
     if (optionValue === null) throw new Error(`Missing ${roleTitle} option.`);
-    await page.getByLabel("Opportunity").selectOption(optionValue);
-    await page.getByRole("button", { name: "Run local demonstration" }).click();
+    await page.getByLabel("Saved job").selectOption(optionValue);
+    await page.getByRole("button", { name: "Check fit" }).click();
     await expect(
       page.locator(".evaluation-card").filter({ hasText: roleTitle }),
     ).toBeVisible();
@@ -1124,7 +1359,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     .getByRole("checkbox");
   expect(await importMappings.count()).toBeGreaterThan(1);
   await importMappings.last().uncheck();
-  await page.getByRole("button", { name: "Confirm and import" }).click();
+  await page.getByRole("button", { name: "Import selected" }).click();
   await expect(
     page.getByText("already imported", { exact: true }),
   ).toBeVisible();
@@ -1148,7 +1383,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await page.getByRole("link", { name: "Career" }).click();
   await page
     .locator(".profile-record-details")
-    .filter({ hasText: "Confirmed career record" })
+    .filter({ hasText: "Your career record" })
     .locator(":scope > summary")
     .click();
   const verified = page
@@ -1156,13 +1391,13 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     .filter({ hasText: "TypeScript services" });
   await verified
     .getByRole("button", {
-      name: "Correct verified fact Avery Example built TypeScript services",
+      name: "Edit saved career detail Avery Example built TypeScript services",
     })
     .click();
   await expect(verified).toContainText(
-    "dependent evaluation or artifact records stale",
+    "dependent items will be marked out of date",
   );
-  await verified.getByLabel("Corrected value").fill("JavaScript services");
+  await verified.getByLabel("Updated value").fill("JavaScript services");
   await verified
     .getByRole("button", {
       name: "Save correction for Avery Example built TypeScript services",
@@ -1170,12 +1405,24 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     .click();
   await expect(
     page.locator(".fact-card").filter({ hasText: "JavaScript services" }),
-  ).toContainText("verified");
+  ).toContainText("saved");
 
   await openMoreDestination(page, "Evaluations");
-  await expect(evaluation).toContainText("Stale:");
-  await evaluation.getByRole("tab", { name: "Artifacts" }).click();
-  await expect(evaluation).toContainText("stale");
+  await page
+    .getByLabel("Saved job")
+    .selectOption({ label: "Platform Engineer · Synthetic Labs" });
+  await expect(
+    page.locator(".current-evaluation > .evaluation-card"),
+  ).toContainText("Stale:");
+  const evaluationHistory = page.locator(".evaluation-history");
+  await evaluationHistory.locator(":scope > summary").click();
+  const staleLocalEvaluation = evaluationHistory
+    .locator(".evaluation-card")
+    .filter({ hasText: "Fit estimate, not a recommendation." })
+    .first();
+  await expect(staleLocalEvaluation).toContainText("Stale:");
+  await staleLocalEvaluation.getByRole("tab", { name: "Artifacts" }).click();
+  await expect(staleLocalEvaluation).toContainText("stale");
 
   await openMoreDestination(page, "Compare");
   await expect(page.locator(".comparison-card").first()).toContainText("stale");
@@ -1184,9 +1431,9 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await expect(draft).toContainText("stale");
   await expect(draft).toContainText("was superseded");
 
-  await page.getByRole("link", { name: "Home" }).click();
+  await page.getByRole("link", { name: "Home", exact: true }).click();
   await page
-    .getByText("See the full journey and workspace details", { exact: true })
+    .getByText("Search or export your records", { exact: true })
     .click();
   await page.getByLabel("Search term").fill("platform");
   await page.getByRole("button", { name: "Search" }).click();
@@ -1365,6 +1612,218 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     path: join(evidenceRoot, "activity-recovered.png"),
     fullPage: true,
   });
+
+  await page.goto("/discover");
+  await page
+    .locator(".discovery-card")
+    .filter({ hasText: "Senior AI Platform Engineer 9" })
+    .getByRole("button", { name: "Save" })
+    .click();
+  const evaluationHandoff = page.getByRole("region", {
+    name: "Evaluate 1 saved job",
+  });
+  await expect(evaluationHandoff).toBeVisible();
+  await evaluationHandoff.getByRole("link", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/evaluations\?opportunity=/u);
+  await expect(
+    page.getByLabel("Saved job").locator("option:checked"),
+  ).toHaveText("Senior AI Platform Engineer 9 · Synthetic AI Company 9");
+});
+
+test("dark refresh keeps every canonical route readable and resilient", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await mkdir(evidenceRoot, { recursive: true });
+  await createWorkspaceIfNeeded(page);
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/overview");
+  const tokens = await page.evaluate(() => {
+    const style = getComputedStyle(document.documentElement);
+    return Object.fromEntries(
+      [
+        "--cw-canvas",
+        "--cw-sidebar",
+        "--cw-surface-1",
+        "--cw-surface-2",
+        "--cw-line",
+        "--cw-text",
+        "--cw-muted",
+        "--cw-phosphor",
+        "--cw-phosphor-ink",
+        "--cw-signal",
+        "--cw-warning",
+        "--cw-danger",
+        "--cw-focus",
+      ].map((name) => [name, style.getPropertyValue(name).trim()]),
+    );
+  });
+  expect(tokens).toEqual({
+    "--cw-canvas": "#0b0d0c",
+    "--cw-sidebar": "#080a09",
+    "--cw-surface-1": "#121512",
+    "--cw-surface-2": "#191d19",
+    "--cw-line": "#343a34",
+    "--cw-text": "#edf1e6",
+    "--cw-muted": "#a9b0a3",
+    "--cw-phosphor": "#c8f169",
+    "--cw-phosphor-ink": "#11150b",
+    "--cw-signal": "#9eb8ff",
+    "--cw-warning": "#f3bd78",
+    "--cw-danger": "#ff9b91",
+    "--cw-focus": "#ffe082",
+  });
+  await expect(page.locator("body")).toHaveCSS(
+    "background-color",
+    "rgb(11, 13, 12)",
+  );
+  await expect(page.locator(".workspace-identity")).toContainText(
+    "Local · private",
+  );
+  await expect(
+    page.getByRole("link", { name: "Go to overview" }),
+  ).toHaveAttribute("href", "/overview");
+  await page.goto("/settings");
+  await page.getByRole("link", { name: "Go to overview" }).click();
+  await expect(page).toHaveURL(/\/overview$/u);
+  await expect(page.locator(".focus-card .primary")).toHaveCount(1);
+  await expect(page.getByText(/Your progress/u)).toHaveCount(0);
+  await expect(page.locator(".workflow-grid")).toHaveCount(0);
+  await page.screenshot({
+    path: join(evidenceRoot, "dark-home.png"),
+    fullPage: true,
+  });
+
+  await page.goto("/overview");
+  await expect(
+    page.getByRole("heading", {
+      name: "Build the case for what comes next.",
+    }),
+  ).toBeVisible();
+  await page.keyboard.press("Tab");
+  const focusTarget = page.locator(":focus");
+  await expect(focusTarget).toHaveCount(1);
+  const focusStyle = await focusTarget.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      color: style.outlineColor,
+      style: style.outlineStyle,
+      width: style.outlineWidth,
+    };
+  });
+  expect(focusStyle.style).toBe("solid");
+  expect(focusStyle.width).toBe("3px");
+  expect(focusStyle.color).not.toBe("rgba(0, 0, 0, 0)");
+  expect(focusStyle.color).not.toBe("rgb(11, 13, 12)");
+
+  const screenshotRoutes = [
+    ["profile", "dark-career-intake.png"],
+    ["settings", "dark-settings.png"],
+    ["discover", "dark-jobs.png"],
+    ["activity", "dark-activity.png"],
+    ["diagnostics", "dark-diagnostics.png"],
+  ] as const;
+  for (const [route, filename] of screenshotRoutes) {
+    await page.goto(`/${route}`);
+    await expect(page.locator("h1")).toBeVisible();
+    await page.screenshot({
+      path: join(evidenceRoot, filename),
+      fullPage: true,
+    });
+  }
+
+  const widths = [320, 375, 768, 1024, 1440] as const;
+  const routes = [
+    "overview",
+    "profile",
+    "settings",
+    "discover",
+    "activity",
+    "diagnostics",
+  ] as const;
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const route of routes) {
+      await page.goto(`/${route}`);
+      await expect(page.locator("h1")).toBeVisible();
+      const layout = await page.evaluate(() => {
+        const controls = [
+          ...document.querySelectorAll<HTMLElement>(
+            'main input:not([type="checkbox"]):not([type="radio"]), main textarea',
+          ),
+        ].filter((element) => {
+          const box = element.getBoundingClientRect();
+          return element.checkVisibility() && box.width > 0 && box.height > 0;
+        });
+        return {
+          overflow:
+            document.documentElement.scrollWidth -
+            document.documentElement.clientWidth,
+          narrowestControl:
+            controls.length === 0
+              ? null
+              : Math.min(
+                  ...controls.map((element) =>
+                    Math.round(element.getBoundingClientRect().width),
+                  ),
+                ),
+        };
+      });
+      expect(
+        layout.overflow,
+        `${route} at ${String(width)}px`,
+      ).toBeLessThanOrEqual(0);
+      if (layout.narrowestControl !== null) {
+        expect(
+          layout.narrowestControl,
+          `${route} input width at ${String(width)}px`,
+        ).toBeGreaterThanOrEqual(280);
+      }
+    }
+  }
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/overview");
+  await page.screenshot({
+    path: join(evidenceRoot, "dark-home-375.png"),
+    fullPage: true,
+  });
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const reducedMotion = await page
+    .locator("button")
+    .first()
+    .evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        animationLimited: style.animationDuration
+          .split(",")
+          .every((value) => Number.parseFloat(value) <= 0.00001),
+        transitionLimited: style.transitionDuration
+          .split(",")
+          .every((value) => Number.parseFloat(value) <= 0.00001),
+      };
+    });
+  expect(reducedMotion.animationLimited).toBe(true);
+  expect(reducedMotion.transitionLimited).toBe(true);
+
+  await page.emulateMedia({
+    forcedColors: "active",
+    reducedMotion: "no-preference",
+  });
+  expect(
+    await page.evaluate(() => matchMedia("(forced-colors: active)").matches),
+  ).toBe(true);
+  await expect(page.locator(".focus-card")).toHaveCSS(
+    "border-left-style",
+    "solid",
+  );
+  await expect(page.locator(".focus-card .primary")).toHaveCSS(
+    "border-top-style",
+    "solid",
+  );
+  await page.emulateMedia({ forcedColors: "none" });
 });
 
 test("activity reconnection replaces a stale browser snapshot", async ({
@@ -1410,6 +1869,7 @@ test("@a11y key routes have no serious axe violations and support keyboard navig
 }) => {
   test.setTimeout(120_000);
   await createWorkspaceIfNeeded(page);
+  await completeCareerSetupIfNeeded(page);
   for (const route of [
     "overview",
     "profile",
@@ -1439,7 +1899,9 @@ test("@a11y key routes have no serious axe violations and support keyboard navig
 
   await page.goto("/overview");
   await expect(
-    page.getByRole("heading", { name: "One useful step at a time." }),
+    page.getByRole("heading", {
+      name: "Build the case for what comes next.",
+    }),
   ).toBeVisible();
   await page.keyboard.press("Tab");
   const skipLink = page.getByRole("link", { name: "Skip to main content" });

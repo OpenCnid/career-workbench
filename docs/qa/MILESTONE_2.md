@@ -45,6 +45,14 @@ Implemented behavior:
   mutation and Agent boundaries.
 - Responsive navigation, semantic forms, visible non-color state labels,
   reduced-motion behavior, keyboard focus, and WCAG contrast fixes.
+- The production React application now uses the specified dark workstation
+  presentation: semantic near-black surface tokens, warm text, phosphor-lime
+  primary actions, blue informational state, square eight-pixel controls,
+  one-pixel dividers, restrained notice treatments, and a visible three-pixel
+  focus ring. Home is a quiet single-focus composition with one primary next
+  action and an ordered six-stage journey rail. Career exposes four compact
+  intake modes and a single-column claim-review queue; Settings, Jobs, Activity,
+  Diagnostics, and the downstream records use the same subdued row language.
 
 Evidence commands and results:
 
@@ -55,7 +63,7 @@ Evidence commands and results:
 | `pnpm lint`             | pass                                     |
 | `pnpm test:all`         | pass, 333 tests across all Vitest suites |
 | `pnpm test:integration` | pass, including real TCP SSE and restart |
-| `pnpm test:e2e`         | pass, 3 Chromium tests                   |
+| `pnpm test:e2e`         | pass, 4 Chromium tests                   |
 | `pnpm test:a11y`        | pass, 1 Chromium test                    |
 
 The API integration suite uses real SQLite/filesystem storage and a real TCP SSE
@@ -66,13 +74,22 @@ unsupported methods, unknown routes, and the complete sealed-artifact flow.
 
 The browser suite stores screenshots under `docs/qa/generated/milestone-2/`,
 including `profile-claim-review.png`, `profile-settings.png`, and
-`profile-settings-narrow-editor.png`. The last artifact captures the open name
-editor at an 880-pixel viewport; its focused test requires the input to remain
-wider than 300 pixels. The in-app qualitative pass inspected onboarding, the
-desktop overview, the compact claim review, Settings, the mobile profile form,
-focus/state legibility, and console output. Console errors and warnings: zero.
-Axe serious/critical violations across overview, profile, settings,
-opportunities, evaluations, activity, and diagnostics: zero.
+`profile-settings-narrow-editor.png`. The dark-refresh evidence adds
+`dark-home.png`, `dark-home-375.png`, `dark-career-intake.png`,
+`dark-settings.png`, `dark-jobs.png`, `dark-activity.png`, and
+`dark-diagnostics.png`. The existing narrow-editor artifact captures the open
+name editor at an 880-pixel viewport; its focused test requires the input to
+remain wider than 300 pixels.
+
+The browser assertions sweep Home, Career, Settings, Jobs, Activity, and
+Diagnostics at 320, 375, 768, 1024, and 1440 pixels. They check the exact dark
+token contract, page overflow, usable control widths, one Home primary action,
+the ordered journey, keyboard focus, reduced motion, and forced-colors
+boundaries. The in-app qualitative pass inspected those responsive compositions,
+the claim queue, and the focused name editor at 200% browser zoom. At 320
+pixels, the page and scrollbar remain within the client width. Console errors
+and warnings: zero. Axe serious/critical violations across overview, profile,
+settings, opportunities, evaluations, activity, and diagnostics: zero.
 
 No credential, cookie, absolute sensitive path, or personal data is retained in
 this record or the synthetic screenshots.

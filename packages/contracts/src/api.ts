@@ -101,6 +101,28 @@ export const ProfileOrganizationRunResponseSchema = Type.Object(
   { $id: "ProfileOrganizationRunResponse", additionalProperties: false },
 );
 
+export const StartJobDiscoveryBodySchema = Type.Object(
+  {
+    searchProfileId: EmbeddedEntityIdSchema,
+  },
+  { $id: "StartJobDiscoveryBody", additionalProperties: false },
+);
+
+export const JobDiscoveryRunResponseSchema = Type.Object(
+  {
+    contractVersion: Type.Literal("v1"),
+    searchProfileId: EmbeddedEntityIdSchema,
+    sessionId: Type.String({ minLength: 1, maxLength: 200 }),
+    operationId: EmbeddedEntityIdSchema,
+    state: Type.Literal("succeeded"),
+    leadIds: Type.Array(EmbeddedEntityIdSchema, { maxItems: 64 }),
+    provider: BoundedText(100),
+    model: BoundedText(200),
+    reasoningEffort: BoundedText(100),
+  },
+  { $id: "JobDiscoveryRunResponse", additionalProperties: false },
+);
+
 export const ProposeProfileFactBodySchema = Type.Object(
   {
     factType: BoundedText(80),
@@ -708,6 +730,10 @@ export type StartProfileOrganizationBody = Static<
 export type ProfileOrganizationRunResponse = Static<
   typeof ProfileOrganizationRunResponseSchema
 >;
+export type StartJobDiscoveryBody = Static<typeof StartJobDiscoveryBodySchema>;
+export type JobDiscoveryRunResponse = Static<
+  typeof JobDiscoveryRunResponseSchema
+>;
 export type ProposeProfileFactBody = Static<
   typeof ProposeProfileFactBodySchema
 >;
@@ -1140,6 +1166,8 @@ export const API_SCHEMAS = [
   UploadCandidateSourceBodySchema,
   StartProfileOrganizationBodySchema,
   ProfileOrganizationRunResponseSchema,
+  StartJobDiscoveryBodySchema,
+  JobDiscoveryRunResponseSchema,
   ProposeProfileFactBodySchema,
   AddCareerHistoryEntryBodySchema,
   ConfirmProfileFactBodySchema,

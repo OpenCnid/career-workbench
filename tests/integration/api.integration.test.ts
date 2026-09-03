@@ -235,6 +235,154 @@ describe("local /api/v1 boundary", () => {
     });
   });
 
+  it("runs job discovery in page and returns only canonical DSH inbox results", async () => {
+    await server.close();
+    let runnerClosed = false;
+    let dshSerial = 0;
+    const sessionId = "synthetic-in-page-discovery-session";
+    const dshHeaders = (operationId?: string) => ({
+      authorization: `CW-DSH ${DSH_TOKEN}`,
+      "content-type": "application/json",
+      "x-cw-dsh-session": sessionId,
+      "x-idempotency-key": `synthetic-discovery-runner-${String(++dshSerial).padStart(4, "0")}`,
+      ...(operationId === undefined ? {} : { "x-cw-operation": operationId }),
+    });
+    server = await createServer({
+      workspaceRoot: join(parent, "workspace"),
+      csrfToken: CSRF,
+      dshToken: DSH_TOKEN,
+      idFactory: new DeterministicIdFactory("J0B5RAN100"),
+      discoveryRunner: {
+        run: async (input, baseUrl, signal) => {
+          expect(baseUrl.href).toBe(`http://${HOST}/`);
+          expect(signal.aborted).toBe(false);
+          expect(input.criteria).toMatchObject({
+            targetRoles: ["AI Platform Engineer"],
+            locations: ["United States"],
+            workArrangements: ["remote"],
+          });
+          const operationResponse = await server.inject({
+            method: "POST",
+            url: "/api/v1/operations",
+            headers: dshHeaders(),
+            payload: {
+              kind: "job_discovery",
+              inputIdentity: input.searchProfileId,
+              requestedCapabilities: [
+                "external_research",
+                "discovery_lead.record",
+              ],
+              route: "ordinary_dsh",
+              dshSessionId: sessionId,
+              provider: "openai-codex",
+              model: "gpt-5.6-sol",
+              reasoningEffort: "low",
+            },
+          });
+          expect(operationResponse.statusCode, operationResponse.body).toBe(
+            201,
+          );
+          const operation = operationResponse.json<Identified>();
+          const postingText =
+            "Synthetic Systems seeks an AI Platform Engineer to build reliable production systems.";
+          const leadResponse = await server.inject({
+            method: "POST",
+            url: "/api/v1/discovery-leads",
+            headers: dshHeaders(operation.id),
+            payload: {
+              organization: "Synthetic Systems",
+              roleTitle: "AI Platform Engineer",
+              originalUrl: "https://jobs.example.test/ai-platform-engineer",
+              postingText,
+              location: "United States",
+              workArrangement: "remote",
+              requisitionId: "SYN-IN-PAGE-1",
+              whyFound: ["The role matches the saved target."],
+              matchedCriteria: ["AI Platform Engineer", "Remote"],
+              gaps: [],
+              risks: [],
+            },
+          });
+          expect(leadResponse.statusCode, leadResponse.body).toBe(201);
+          const lead = leadResponse.json<Identified>();
+          const terminalResponse = await server.inject({
+            method: "POST",
+            url: `/api/v1/operations/${operation.id}/terminal`,
+            headers: dshHeaders(operation.id),
+            payload: {
+              expectedRevision: operation.revision,
+              state: "succeeded",
+              category: "completed",
+              message: "Recorded one current synthetic listing.",
+              resultIds: [lead.id],
+              artifactIds: [],
+            },
+          });
+          expect(terminalResponse.statusCode, terminalResponse.body).toBe(200);
+          return {
+            sessionId,
+            provider: "openai-codex",
+            model: "gpt-5.6-sol",
+            reasoningEffort: "low",
+          };
+        },
+        close: () => {
+          runnerClosed = true;
+          return Promise.resolve();
+        },
+      },
+    });
+    await initialize();
+    const profileResponse = await injectMutation("/api/v1/search-profiles", {
+      targetRoles: ["AI Platform Engineer"],
+      seniority: ["flexible"],
+      locations: ["United States"],
+      workArrangements: ["remote"],
+      priorities: ["Career growth"],
+      exclusions: ["Commission-only roles"],
+      active: true,
+    });
+    expect(profileResponse.statusCode, profileResponse.body).toBe(200);
+    const profile = profileResponse.json<Identified>();
+
+    const discoveryResponse = await injectMutation("/api/v1/job-discoveries", {
+      searchProfileId: profile.id,
+    });
+    expect(discoveryResponse.statusCode, discoveryResponse.body).toBe(200);
+    expect(discoveryResponse.json()).toMatchObject({
+      contractVersion: "v1",
+      searchProfileId: profile.id,
+      sessionId,
+      state: "succeeded",
+      provider: "openai-codex",
+      model: "gpt-5.6-sol",
+      reasoningEffort: "low",
+      leadIds: [expect.stringMatching(/^discovery_lead_/u)],
+    });
+    const snapshot = (
+      await server.inject({ method: "GET", url: "/api/v1/snapshot" })
+    ).json<{
+      readonly discoveryLeads: readonly {
+        readonly roleTitle: string;
+        readonly state: string;
+      }[];
+    }>();
+    expect(snapshot.discoveryLeads).toEqual([
+      expect.objectContaining({
+        roleTitle: "AI Platform Engineer",
+        state: "new",
+      }),
+    ]);
+
+    await server.close();
+    expect(runnerClosed).toBe(true);
+    server = await createServer({
+      workspaceRoot: join(parent, "replacement-workspace"),
+      csrfToken: CSRF,
+      idFactory: new DeterministicIdFactory("C10SE0T100"),
+    });
+  });
+
   it("atomically creates guided identity, target preferences, and a selected rubric", async () => {
     const response = await injectMutation("/api/v1/workspaces", {
       displayName: "AI Engineering Search",
@@ -510,7 +658,7 @@ describe("local /api/v1 boundary", () => {
     expect(response.json<ErrorBody>().error).toMatchObject({
       code: "evidence_unsupported",
       message:
-        "Local demonstration requires a verified experience or achievement fact.",
+        "Local demonstration requires a saved experience or achievement.",
     });
     const snapshot = (
       await server.inject({ method: "GET", url: "/api/v1/snapshot" })
@@ -560,12 +708,16 @@ describe("local /api/v1 boundary", () => {
       ).statusCode,
     ).toBe(200);
 
+    const jobPosting =
+      "Synthetic Labs needs a Platform Engineer to build TypeScript services. " +
+      "Detailed role context remains part of the captured posting. ".repeat(50);
+    expect(jobPosting.length).toBeGreaterThan(2000);
     const jobSource = (
       await injectMutation("/api/v1/sources", {
         kind: "opportunity",
         trustClass: "external",
         mediaType: "text/plain",
-        text: "Synthetic Labs needs a Platform Engineer to build TypeScript services.",
+        text: jobPosting,
         originalLocator: "https://example.test/jobs/platform",
       })
     ).json<Identified>();
@@ -599,10 +751,35 @@ describe("local /api/v1 boundary", () => {
     ).json<{
       readonly evaluations: readonly { readonly state: string }[];
       readonly artifacts: readonly { readonly state: string }[];
+      readonly evidence: readonly {
+        readonly classification: string;
+        readonly claim: string;
+        readonly sourceId: string | null;
+        readonly locator: null | {
+          readonly start: number;
+          readonly end: number;
+          readonly quote: string;
+        };
+      }[];
       readonly events: readonly { readonly sequence: number }[];
     }>();
     expect(snapshot.evaluations).toHaveLength(1);
     expect(snapshot.artifacts[0]?.state).toBe("sealed");
+    const opportunityEvidence = snapshot.evidence.find(
+      (item) =>
+        item.classification === "opportunity_fact" &&
+        item.sourceId === jobSource.id,
+    );
+    expect(opportunityEvidence?.claim).toHaveLength(2000);
+    expect(opportunityEvidence?.locator?.quote).toBe(
+      opportunityEvidence?.claim,
+    );
+    expect(
+      jobPosting.slice(
+        opportunityEvidence?.locator?.start,
+        opportunityEvidence?.locator?.end,
+      ),
+    ).toBe(opportunityEvidence?.claim);
     expect(
       snapshot.events.every(
         (event, index) =>
