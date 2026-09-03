@@ -326,7 +326,7 @@ export function createCareerWorkbenchTools(
   const start = tool({
     name: TOOL_NAMES[1],
     description:
-      "Admit one ordinary DSH evaluation for this exact live Agent and return bounded source context. Call once before proposing evidence.",
+      "Start one ordinary DSH evaluation for this exact live Agent and return bounded career and role context. Call once before recording evaluation inputs.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -383,7 +383,7 @@ export function createCareerWorkbenchTools(
   const propose = tool({
     name: TOOL_NAMES[2],
     description:
-      "Propose one bounded evidence item through the authoritative backend. Candidate claims require one complete verified fact and exact locator.",
+      "Record one bounded evaluation input through the authoritative backend. Candidate details must come from one current career detail the user chose to keep.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -392,11 +392,13 @@ export function createCareerWorkbenchTools(
         operationId: idSchema("Running ordinary DSH operation."),
         classification: { type: "string", enum: [...CLASSIFICATIONS] },
         claim: stringSchema(
-          "Complete evidence claim; runtime maximum 2,000 characters.",
+          "Complete evaluation detail; runtime maximum 2,000 characters.",
         ),
         sourceId: idSchema("Captured source identity."),
         locator: locatorSchema,
-        candidateFactId: idSchema("Verified candidate fact identity."),
+        candidateFactId: idSchema(
+          "Current user-chosen career detail identity.",
+        ),
       },
       required: ["contractVersion", "operationId", "classification", "claim"],
     },
@@ -404,10 +406,10 @@ export function createCareerWorkbenchTools(
       schema: outputSchema(
         {
           contractVersion: contractVersionSchema,
-          id: idSchema("Evidence identity."),
+          id: idSchema("Evaluation input identity."),
           revision: { type: "integer" },
           decision: stringSchema("Current decision state."),
-          classification: stringSchema("Evidence classification."),
+          classification: stringSchema("Evaluation input classification."),
           claim: stringSchema("Stored claim."),
         },
         [
@@ -485,14 +487,14 @@ export function createCareerWorkbenchTools(
   const decide = tool({
     name: TOOL_NAMES[3],
     description:
-      "Accept or reject one proposed evidence revision. Acceptance remains subject to deterministic backend evidence validation.",
+      "Keep or leave out one proposed evaluation input. The backend enforces revision and state consistency.",
     parameters: {
       type: "object",
       additionalProperties: false,
       properties: {
         contractVersion: contractVersionSchema,
         operationId: idSchema("Running ordinary DSH operation."),
-        evidenceId: idSchema("Proposed evidence identity."),
+        evidenceId: idSchema("Proposed evaluation input identity."),
         expectedRevision: { type: "integer" },
         decision: { type: "string", enum: ["accepted", "rejected"] },
         reason: stringSchema(
@@ -512,10 +514,10 @@ export function createCareerWorkbenchTools(
       schema: outputSchema(
         {
           contractVersion: contractVersionSchema,
-          id: idSchema("Evidence identity."),
+          id: idSchema("Evaluation input identity."),
           revision: { type: "integer" },
           decision: stringSchema("Accepted or rejected."),
-          classification: stringSchema("Evidence classification."),
+          classification: stringSchema("Evaluation input classification."),
           claim: stringSchema("Stored claim."),
         },
         [
@@ -586,7 +588,7 @@ export function createCareerWorkbenchTools(
               },
               evidenceIds: {
                 type: "array",
-                items: idSchema("Accepted evidence identity."),
+                items: idSchema("Selected evaluation input identity."),
               },
               disposition: {
                 oneOf: [
@@ -629,7 +631,7 @@ export function createCareerWorkbenchTools(
           ),
           acceptedEvidenceIds: {
             type: "array",
-            items: idSchema("Accepted evidence identity."),
+            items: idSchema("Selected evaluation input identity."),
           },
           gaps: {
             type: "array",
@@ -982,7 +984,7 @@ export function createCareerWorkbenchTools(
 
   const inspectEvaluation = inspectionTool(
     TOOL_NAMES[9],
-    "Inspect one evaluation, its accepted evidence projections, and authoritative operation state.",
+    "Inspect one evaluation, its selected inputs, and authoritative operation state.",
     "evaluation",
     "evaluationId",
   );
@@ -1107,7 +1109,7 @@ export function createCareerWorkbenchTools(
   const recordGap = tool({
     name: TOOL_NAMES[11],
     description:
-      "Record one explicit bounded information gap on an evaluation operation. This creates a proposed gap evidence item, not a fact.",
+      "Record one explicit bounded information gap on an evaluation operation. This creates a proposed gap input, not a career detail.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -1122,7 +1124,7 @@ export function createCareerWorkbenchTools(
       schema: outputSchema(
         {
           contractVersion: contractVersionSchema,
-          id: idSchema("Gap evidence identity."),
+          id: idSchema("Gap input identity."),
           revision: { type: "integer" },
           decision: stringSchema("Current decision state."),
           classification: { type: "string", const: "gap" },
@@ -1295,7 +1297,7 @@ export function createCareerWorkbenchTools(
   const draftArtifact = tool({
     name: TOOL_NAMES[14],
     description:
-      "Create a staged candidate draft from verified facts with accepted candidate evidence. The result requires explicit human review and performs no external action.",
+      "Create a staged candidate draft from current career details the user chose to keep. The result stays under human control and performs no external action.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -1305,7 +1307,7 @@ export function createCareerWorkbenchTools(
         opportunityId: idSchema("Opportunity identity."),
         factIds: {
           type: "array",
-          items: idSchema("Verified profile fact identity."),
+          items: idSchema("Current user-chosen career detail identity."),
         },
         styleNote: stringSchema(
           "Optional non-factual style direction; runtime maximum 1,000 characters.",
@@ -1388,7 +1390,7 @@ export function createCareerWorkbenchTools(
 
   const inspectArtifact = inspectionTool(
     TOOL_NAMES[15],
-    "Inspect bounded staged or sealed text artifact content and provenance. Staged content is not approved for use.",
+    "Inspect bounded staged or sealed draft content and its saved source links. Staged content is not approved for use.",
     "artifact",
     "artifactId",
   );
@@ -1798,7 +1800,7 @@ export function createCareerWorkbenchTools(
   const proposeProfileFact = tool({
     name: TOOL_NAMES[21],
     description:
-      "Propose one exact candidate fact from the source bound to a running profile organization operation. The proposal remains unverified until the user confirms it.",
+      "Organize one exact career detail from the source bound to a running profile organization operation. The suggestion waits for the user to keep, edit, or leave it out.",
     parameters: {
       type: "object",
       additionalProperties: false,

@@ -194,7 +194,7 @@ async function createFixture(label: string): Promise<{
       dimensions: [
         {
           key: "skills",
-          label: "Skills evidence",
+          label: "Skills match",
           weightBasisPoints: 7000,
           missingInput: "block",
           criticalMinimumBasisPoints: null,

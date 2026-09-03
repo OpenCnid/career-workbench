@@ -585,8 +585,8 @@ function storyMappings(
       originalStatus: provenance ?? "derived-unverified",
       originalScore: null,
       note: supported
-        ? "Story prose was preserved with explicit source provenance; claims still require Workbench evidence acceptance."
-        : "Story prose was preserved as candidate-derived context; quantified claims are not accepted evidence.",
+        ? "Story prose was saved with its original source note and remains yours to use or leave out."
+        : "Story prose was saved as user-authored context and remains yours to use or leave out.",
     };
   });
 }
@@ -633,7 +633,7 @@ export async function discoverCareerOps(
   }
   if (!selected.has("cv.md")) {
     warnings.push(
-      "cv.md was not found; candidate evidence cannot be confirmed from a primary CV source.",
+      "cv.md was not found; profile details can still be reviewed from the available user-authored files.",
     );
   }
   const trackerPath = selected.has("data/applications.md")

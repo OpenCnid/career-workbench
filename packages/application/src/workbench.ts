@@ -563,7 +563,7 @@ export class WorkbenchService {
             dimensions: [
               {
                 key: "skills",
-                label: "Skills evidence",
+                label: "Skills match",
                 weightBasisPoints: 7_000,
                 missingInput: "block",
                 criticalMinimumBasisPoints: null,
@@ -1177,7 +1177,7 @@ export class WorkbenchService {
     assertDomain(
       fact.status === "proposed" || fact.status === "derived_unverified",
       "invalid_transition",
-      "Only an unverified fact can use the confirmation flow.",
+      "Only a suggested career detail can use this review flow.",
     );
     const now = this.clock.now();
     if (outcome.kind === "correct") {
@@ -1189,7 +1189,7 @@ export class WorkbenchService {
       assertDomain(
         source.trustClass === "candidate_primary",
         "evidence_unsupported",
-        "A corrected candidate fact requires primary evidence or a user-entered primary source.",
+        "An updated career detail must remain linked to its saved source or direct user entry.",
       );
       const prior = updated(fact, now, { status: "superseded" });
       const correction: ProfileFact = {
@@ -1246,7 +1246,7 @@ export class WorkbenchService {
       assertDomain(
         fact.sourceLocators.length > 0,
         "evidence_unsupported",
-        "A verified fact requires a source locator.",
+        "A saved career detail must remain linked to its source.",
       );
       for (const locator of fact.sourceLocators) {
         const source = await this.repository.get("source", locator.sourceId);
@@ -1254,7 +1254,7 @@ export class WorkbenchService {
         assertDomain(
           source.trustClass === "candidate_primary",
           "evidence_unsupported",
-          "A verified fact requires candidate primary evidence.",
+          "A saved career detail must come from the user's own career material.",
         );
       }
     }
@@ -2871,7 +2871,7 @@ export class WorkbenchService {
               (locator) => locator.sourceId === operation.inputIdentity,
             ),
           "invalid_request",
-          "Profile organization may return only unverified Agent proposals from its bound source.",
+          "Profile organization may return only new Agent suggestions from its bound source.",
         );
       }
       assertDomain(
@@ -3237,7 +3237,7 @@ export class WorkbenchService {
       `Score: ${evaluation.displayScore}`,
       `Deterministic total: ${String(evaluation.aggregateScoreBasisPoints)} basis points`,
       "",
-      "## Accepted evidence",
+      "## Details used",
       ...acceptedEvidence.map((item) => `- ${item.claim} [${item.id}]`),
       "",
       "## Gaps",
@@ -3311,7 +3311,7 @@ export class WorkbenchService {
     assertDomain(
       fact.status === "verified",
       "invalid_transition",
-      "Only a verified fact can be corrected.",
+      "Only a current career detail can be updated.",
     );
     assertDomain(
       fact.revision === expectedRevision,
@@ -3323,7 +3323,7 @@ export class WorkbenchService {
     assertDomain(
       source.trustClass === "candidate_primary",
       "evidence_unsupported",
-      "Correction requires candidate primary evidence.",
+      "An update must remain linked to the user's saved career material.",
     );
     const now = this.clock.now();
     const oldFact = updated(fact, now, { status: "superseded" });
@@ -4393,7 +4393,7 @@ export class WorkbenchService {
     assertDomain(
       facts.every((fact) => fact.status === "verified"),
       "evidence_unsupported",
-      "Candidate drafts require current verified profile facts.",
+      "Candidate drafts require current career details chosen by the user.",
     );
     const allEvidence = await this.repository.list(
       "evidence",
@@ -4416,30 +4416,27 @@ export class WorkbenchService {
         (item): item is EvidenceItem => item !== undefined,
       ),
       "evidence_unsupported",
-      "Every candidate-facing fact requires accepted candidate evidence.",
+      "Every candidate-facing detail must remain linked to the user's saved career material.",
     );
     const titleByKind: Readonly<Record<CandidateArtifactKind, string>> = {
-      draft_cv: "CV evidence draft",
-      draft_cover_letter: "Cover-letter evidence draft",
-      draft_outreach: "Outreach evidence draft",
-      draft_interview_prep: "Interview-preparation evidence draft",
+      draft_cv: "CV draft",
+      draft_cover_letter: "Cover-letter draft",
+      draft_outreach: "Outreach draft",
+      draft_interview_prep: "Interview-preparation draft",
     };
     const styleNote = input.styleNote?.trim();
     const lines = [
       `# ${titleByKind[input.kind]}`,
       "",
-      "DRAFT — explicit human review required before use.",
+      "DRAFT. Human review required before use.",
       "",
-      `Opportunity context: ${opportunity.roleTitle} at ${opportunity.organization} [source ${opportunity.sourceDocumentId}]`,
+      `Opportunity context: ${opportunity.roleTitle} at ${opportunity.organization}`,
       "",
-      "## Evidence-backed candidate statements",
-      ...facts.map(
-        (fact, index) =>
-          `- ${renderProfileFactClaim(fact)} [fact ${fact.id}; evidence ${acceptedEvidence[index]?.id ?? "unreachable"}]`,
-      ),
+      "## Career details",
+      ...facts.map((fact) => `- ${renderProfileFactClaim(fact)}`),
       "",
       "## Non-factual style direction",
-      `[NON-FACTUAL STYLE] ${styleNote === undefined || styleNote.length === 0 ? "Clear, concise, and grounded only in the evidence above." : styleNote}`,
+      `[NON-FACTUAL STYLE] ${styleNote === undefined || styleNote.length === 0 ? "Clear, concise, and based only on the career details above." : styleNote}`,
       "",
       "No application was submitted and no message was sent by generating this draft.",
       "",

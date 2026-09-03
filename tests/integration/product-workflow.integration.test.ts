@@ -245,8 +245,7 @@ describe("coherent day-to-day product workflow", () => {
     ).json<Entity & { state: string }>();
     expect(draftA).toMatchObject({ state: "staged", factIds: [factA.id] });
     expect(draftA.evidenceIds).toHaveLength(1);
-    const draftAEvidenceId = draftA.evidenceIds[0];
-    if (draftAEvidenceId === undefined) {
+    if (draftA.evidenceIds[0] === undefined) {
       throw new Error("Expected one accepted evidence identity.");
     }
 
@@ -291,10 +290,11 @@ describe("coherent day-to-day product workflow", () => {
     });
     expect(content.statusCode).toBe(200);
     const markdown = content.json<{ text: string }>().text;
-    expect(markdown).toContain("DRAFT — explicit human review required");
-    expect(markdown).toContain(
-      `[fact ${factA.id}; evidence ${draftAEvidenceId}]`,
-    );
+    expect(markdown).toContain("DRAFT. Human review required");
+    expect(markdown).toContain("## Career details");
+    expect(markdown).toContain("Avery Example built TypeScript services");
+    expect(markdown).not.toContain(factA.id);
+    expect(markdown).not.toContain(draftA.evidenceIds[0]);
     expect(markdown).toContain("[NON-FACTUAL STYLE]");
     expect(markdown).toContain("No application was submitted");
     expect(markdown.match(/^# /gmu)).toHaveLength(1);

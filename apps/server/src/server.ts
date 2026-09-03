@@ -14,12 +14,16 @@ import {
   ContractValidationError,
   CreateWorkspaceBodySchema,
   DiagnosticsResponseSchema,
+  JobDiscoveryRunResponseSchema,
   ProfileOrganizationRunResponseSchema,
+  StartJobDiscoveryBodySchema,
   StartProfileOrganizationBodySchema,
   parseJsonWithoutDuplicateKeys,
   type CreateWorkspaceBody,
   type DiagnosticsResponse,
+  type JobDiscoveryRunResponse,
   type ProfileOrganizationRunResponse,
+  type StartJobDiscoveryBody,
   type StartProfileOrganizationBody,
 } from "@career-workbench/contracts";
 import {
@@ -39,6 +43,11 @@ import {
 } from "./compatibility.js";
 import { registerDomainRoutes } from "./routes.js";
 import {
+  DiscoveryRunError,
+  EmbeddedDiscoveryRunner,
+  type DiscoveryRunner,
+} from "./discovery-runner.js";
+import {
   EmbeddedProfileOrganizationRunner,
   ProfileOrganizationRunError,
   type ProfileOrganizationRunner,
@@ -53,6 +62,7 @@ export interface ServerOptions {
   readonly rlmEnabled?: boolean;
   readonly idFactory?: IdFactory;
   readonly profileOrganizationRunner?: ProfileOrganizationRunner;
+  readonly discoveryRunner?: DiscoveryRunner;
   readonly dshProvider?: string;
   readonly dshModel?: string;
   readonly dshReasoningEffort?: string;
@@ -65,6 +75,7 @@ export interface Runtime {
   workspace: Workspace | null;
   recentErrorCategories: DomainError["code"][];
   profileOrganizationsInFlight: Set<string>;
+  jobDiscoveriesInFlight: Set<string>;
   careerOpsPreviews: Map<
     string,
     {
@@ -92,6 +103,7 @@ const knownApiPaths = [
   /^\/api\/v1\/workspaces$/u,
   /^\/api\/v1\/(?:sources|profile-facts|search-profiles|discovery-leads|opportunities|evidence|rubrics|evaluations|artifacts|operations)$/u,
   /^\/api\/v1\/profile-organizations$/u,
+  /^\/api\/v1\/job-discoveries$/u,
   /^\/api\/v1\/(?:applications|search|export)$/u,
   /^\/api\/v1\/approvals(?:\/[^/]+\/decision)?$/u,
   /^\/api\/v1\/applications\/[^/]+\/transitions$/u,
@@ -348,6 +360,7 @@ export async function createServer(
     workspace: null,
     recentErrorCategories: [],
     profileOrganizationsInFlight: new Set(),
+    jobDiscoveriesInFlight: new Set(),
     careerOpsPreviews: new Map(),
   };
   const profileOrganizationRunner =
@@ -355,6 +368,16 @@ export async function createServer(
     (options.dshToken === undefined
       ? null
       : new EmbeddedProfileOrganizationRunner({
+          serviceToken: options.dshToken,
+          provider: options.dshProvider ?? "openai-codex",
+          model: options.dshModel ?? "gpt-5.6-sol",
+          reasoningEffort: options.dshReasoningEffort ?? "low",
+        }));
+  const discoveryRunner =
+    options.discoveryRunner ??
+    (options.dshToken === undefined
+      ? null
+      : new EmbeddedDiscoveryRunner({
           serviceToken: options.dshToken,
           provider: options.dshProvider ?? "openai-codex",
           model: options.dshModel ?? "gpt-5.6-sol",
@@ -661,6 +684,132 @@ export async function createServer(
     },
   );
 
+  server.post<{ Body: StartJobDiscoveryBody }>(
+    "/api/v1/job-discoveries",
+    {
+      schema: {
+        body: StartJobDiscoveryBodySchema,
+        response: { 200: JobDiscoveryRunResponseSchema },
+      },
+    },
+    async (request): Promise<JobDiscoveryRunResponse> => {
+      commandContext(request, ids);
+      requireService(runtime);
+      const repository = requireStore(runtime);
+      if (discoveryRunner === null) {
+        throw new DomainError(
+          "capability_unavailable",
+          "In-page job discovery is not configured. Start Career Workbench with DSH enabled.",
+        );
+      }
+      const searchProfile = await repository.get(
+        "searchProfile",
+        request.body.searchProfileId,
+      );
+      if (!searchProfile.active) {
+        throw new DomainError(
+          "invalid_request",
+          "Activate the saved search before finding jobs.",
+        );
+      }
+      if (runtime.jobDiscoveriesInFlight.has(searchProfile.id)) {
+        throw new DomainError(
+          "duplicate_identity",
+          "This saved search is already looking for current jobs.",
+        );
+      }
+      const origin = request.headers.origin;
+      if (origin === undefined) {
+        throw new DomainError(
+          "external_content_rejected",
+          "In-page job discovery requires an explicit same-origin request.",
+        );
+      }
+      const careerContext = (
+        await repository.list("profileFact", searchProfile.workspaceId)
+      )
+        .filter(
+          (fact) =>
+            fact.status === "verified" &&
+            ["experience", "achievement", "education", "skill"].includes(
+              fact.factType,
+            ),
+        )
+        .slice(0, 48)
+        .map((fact) => ({
+          factType: fact.factType,
+          subject: fact.subject,
+          predicate: fact.predicate,
+          value: fact.value,
+        }));
+      const controller = new AbortController();
+      const abort = (): void => controller.abort();
+      request.raw.once("aborted", abort);
+      runtime.jobDiscoveriesInFlight.add(searchProfile.id);
+      try {
+        const run = await discoveryRunner.run(
+          {
+            searchProfileId: searchProfile.id,
+            criteria: {
+              targetRoles: searchProfile.targetRoles,
+              seniority: searchProfile.seniority,
+              locations: searchProfile.locations,
+              workArrangements: searchProfile.workArrangements,
+              minimumCompensation: searchProfile.minimumCompensation,
+              compensationCurrency: searchProfile.compensationCurrency,
+              aiFocus: searchProfile.aiFocus,
+              priorities: searchProfile.priorities,
+              exclusions: searchProfile.exclusions,
+            },
+            careerContext,
+          },
+          new URL(`${origin}/`),
+          controller.signal,
+        );
+        const operation = (
+          await repository.list("operation", searchProfile.workspaceId)
+        ).find(
+          (item) =>
+            item.kind === "job_discovery" &&
+            item.inputIdentity === searchProfile.id &&
+            item.dshSessionId === run.sessionId &&
+            item.state === "succeeded",
+        );
+        if (operation === undefined) {
+          throw new DomainError(
+            "operation_indeterminate",
+            "DSH ended without a completed job discovery operation. Retry the search.",
+          );
+        }
+        return {
+          contractVersion: "v1",
+          searchProfileId: searchProfile.id,
+          sessionId: run.sessionId,
+          operationId: operation.id,
+          state: "succeeded",
+          leadIds: [...operation.resultIds],
+          provider: run.provider,
+          model: run.model,
+          reasoningEffort: run.reasoningEffort,
+        };
+      } catch (error) {
+        if (error instanceof DiscoveryRunError) {
+          if (error.code === "CAPABILITY_UNAVAILABLE") {
+            throw new DomainError("capability_unavailable", error.message);
+          }
+          if (error.code === "RUN_ABORTED") {
+            throw new DomainError("operation_canceled", error.message);
+          }
+          throw new DomainError("operation_indeterminate", error.message);
+        }
+        throw error;
+      } finally {
+        request.raw.off("aborted", abort);
+        runtime.jobDiscoveriesInFlight.delete(searchProfile.id);
+      }
+    },
+  );
+
   server.get(
     "/api/v1/diagnostics",
     { schema: { response: { 200: DiagnosticsResponseSchema } } },
@@ -697,6 +846,7 @@ export async function createServer(
   registerEventRoutes(server, runtime);
 
   server.addHook("onClose", async () => {
+    await discoveryRunner?.close();
     await profileOrganizationRunner?.close();
     await runtime.store?.close();
   });

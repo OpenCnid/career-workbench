@@ -120,7 +120,7 @@ describe("candidate evidence admission", () => {
   ])("rejects %s even with a valid-looking locator", (_label, claim) => {
     expect(() =>
       validateEvidenceForAcceptance({ ...evidence, claim }, source, fact),
-    ).toThrow(/complete fact/u);
+    ).toThrow(/complete item/u);
   });
 
   it.each(["derived_unverified", "user_cannot_confirm", "rejected"] as const)(
@@ -128,7 +128,7 @@ describe("candidate evidence admission", () => {
     (status) => {
       expect(() =>
         validateEvidenceForAcceptance(evidence, source, { ...fact, status }),
-      ).toThrow(/verified fact/u);
+      ).toThrow(/current career detail/u);
     },
   );
 

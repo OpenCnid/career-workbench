@@ -37,6 +37,10 @@ No v0.1 capability submits forms or applications, sends email or messages,
 purchases, accepts, rejects, withdraws, or posts publicly.
 
 Read-only job discovery runs only through the authenticated owning DSH Agent.
+The in-page runner exposes one fixed-origin search tool for Remotive's public
+job API, with at most two searches, eight returned items per search, eight
+recorded leads, a 20-second fetch deadline, and a 2 MiB source-response limit.
+It sends no Career Workbench credential or browser state to the listing source.
 The backend binds each run and each resulting lead to the exact active search
 profile revision and SHA-256 digest; a profile edit, pause, or cancellation
 request fences later writes. External posting text is preserved as untrusted

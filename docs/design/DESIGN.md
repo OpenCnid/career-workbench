@@ -76,11 +76,11 @@ without documentation:
 7. Prepare reviewed materials and record pipeline state without taking an
    external action.
 
-Home presents only the next incomplete action by default. The six-stage guide,
-information-use map, workspace statistics, search, and export remain available
-inside **See the full journey and workspace details**. The interface derives
-completion from canonical backend state rather than browser storage and
-refreshes it whenever the ordered activity stream reconnects.
+Home opens with one outcome-led hook and the next incomplete action. The compact
+six-stage guide and workspace counts remain inside **Your progress**; search and
+export sit one disclosure deeper. The interface derives completion from
+canonical backend state rather than browser storage and refreshes it whenever
+the ordered activity stream reconnects.
 
 ## Reference provenance
 
