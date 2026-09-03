@@ -990,11 +990,9 @@ h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
 }
-.discovery-basics > label,
+.discovery-role-field,
 .discovery-location-field {
   grid-template-rows: auto 1fr;
-}
-.discovery-location-field {
   display: grid;
   gap: 0.35rem;
 }

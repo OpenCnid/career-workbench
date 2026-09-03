@@ -3210,8 +3210,10 @@ function Discover({
             {(!hasDiscoveryLeads || searchEditorOpen) && (
               <>
                 <div className="discovery-basics">
-                  <label htmlFor="discovery-target-roles">
-                    Roles <span>one per line</span>
+                  <div className="discovery-role-field">
+                    <label htmlFor="discovery-target-roles">
+                      Roles <span>one per line</span>
+                    </label>
                     <textarea
                       className="discovery-field-control"
                       id="discovery-target-roles"
@@ -3222,7 +3224,7 @@ function Discover({
                       rows={2}
                       required
                     />
-                  </label>
+                  </div>
                   <div className="discovery-location-field">
                     <label htmlFor="discovery-location-picker">
                       Locations <span>choose any</span>
