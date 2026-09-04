@@ -18,6 +18,7 @@ import {
   FolderInput,
   ListPlus,
   Menu,
+  Pencil,
   RefreshCw,
   Scale,
   Search,
@@ -63,20 +64,195 @@ import {
 
 const primaryNav = [
   { to: "/overview", label: "Home", icon: CircleGauge },
-  { to: "/profile", label: "Career", icon: UserRound },
-  { to: "/discover", label: "Jobs", icon: Search },
+  { to: "/profile", label: "Career record", icon: UserRound },
+  { to: "/discover", label: "Find roles", icon: Search },
 ] as const;
 
-const moreNav = [
-  { to: "/opportunities", label: "Opportunities", icon: BriefcaseBusiness },
-  { to: "/evaluations", label: "Evaluations", icon: FileCheck2 },
-  { to: "/comparisons", label: "Compare", icon: Scale },
-  { to: "/pipeline", label: "Pipeline", icon: Columns3 },
-  { to: "/drafts", label: "Drafts", icon: FilePenLine },
-  { to: "/imports", label: "Import", icon: FolderInput },
-  { to: "/activity", label: "Activity", icon: Activity },
-  { to: "/settings", label: "Settings", icon: Settings2 },
-  { to: "/diagnostics", label: "Diagnostics", icon: Database },
+const moreNavGroups = [
+  {
+    label: "Collect",
+    items: [
+      {
+        to: "/opportunities",
+        label: "Saved jobs",
+        description: "Postings preserved for analysis",
+        icon: BriefcaseBusiness,
+      },
+    ],
+  },
+  {
+    label: "Decide",
+    items: [
+      {
+        to: "/evaluations",
+        label: "Fit analysis",
+        description: "Evidence, fit, and gaps",
+        icon: FileCheck2,
+      },
+      {
+        to: "/comparisons",
+        label: "Compare roles",
+        description: "Trade-offs across roles",
+        icon: Scale,
+      },
+    ],
+  },
+  {
+    label: "Prepare",
+    items: [
+      {
+        to: "/pipeline",
+        label: "Application progress",
+        description: "States and next actions",
+        icon: Columns3,
+      },
+      {
+        to: "/drafts",
+        label: "Materials",
+        description: "Evidence-grounded drafts",
+        icon: FilePenLine,
+      },
+    ],
+  },
+  {
+    label: "Maintain",
+    items: [
+      {
+        to: "/imports",
+        label: "Import data",
+        description: "Bring supported records forward",
+        icon: FolderInput,
+      },
+      {
+        to: "/activity",
+        label: "Agent activity",
+        description: "Work, progress, and recovery",
+        icon: Activity,
+      },
+      {
+        to: "/settings",
+        label: "Preferences",
+        description: "Identity and search direction",
+        icon: Settings2,
+      },
+      {
+        to: "/diagnostics",
+        label: "System status",
+        description: "Local analysis readiness",
+        icon: Database,
+      },
+    ],
+  },
+] as const;
+
+const pageStories = {
+  profile: {
+    helps:
+      "Build one trusted record so every fit check and draft starts from experience you approved.",
+    uses: "Your résumé and experience",
+    creates: "Verified career evidence",
+    next: { label: "Next: Find roles", to: "/discover" },
+  },
+  discover: {
+    helps:
+      "Use your evidence and priorities to focus on roles that deserve your time.",
+    uses: "Career evidence and direction",
+    creates: "A focused role shortlist",
+  },
+  opportunities: {
+    helps:
+      "Preserve the posting you actually saw so later analysis stays tied to its source.",
+    uses: "A job posting",
+    creates: "A saved opportunity",
+  },
+  evaluations: {
+    helps:
+      "Understand why a role fits, what supports that view, and what is still unknown.",
+    uses: "Career evidence and a saved job",
+    creates: "An explainable fit view",
+  },
+  comparisons: {
+    helps:
+      "Compare trade-offs across roles while keeping the final career decision yours.",
+    uses: "Evaluated roles and priorities",
+    creates: "A decision-ready comparison",
+  },
+  pipeline: {
+    helps:
+      "Keep every application state and next move clear without submitting anything for you.",
+    uses: "A role you chose to pursue",
+    creates: "A clear next action",
+  },
+  drafts: {
+    helps:
+      "Prepare reviewable materials grounded only in career evidence you approved.",
+    uses: "Verified evidence and fit analysis",
+    creates: "A reviewable local draft",
+  },
+  imports: {
+    helps:
+      "Bring supported Career Ops records into one durable workbench after a safe preview.",
+    uses: "A Career Ops workspace",
+    creates: "Selected local records",
+  },
+  activity: {
+    helps:
+      "See what changed, what is still running, and where your attention is needed.",
+    uses: "Workbench and agent operations",
+    creates: "Traceable progress",
+  },
+  settings: {
+    helps:
+      "Set the identity and priorities that keep search and matching aligned with your direction.",
+    uses: "Your identity and priorities",
+    creates: "Consistent search defaults",
+  },
+  diagnostics: {
+    helps:
+      "Know whether local research and analysis are ready before you depend on them.",
+    uses: "Local service state",
+    creates: "A clear recovery step",
+  },
+} as const;
+
+const productJourney = [
+  {
+    title: "Career evidence",
+    description:
+      "Turn the experience you approve into a trusted career record.",
+    uses: "Your experience",
+    creates: "Verified evidence",
+    to: "/profile",
+  },
+  {
+    title: "Find roles",
+    description: "Use that record and your direction to focus the search.",
+    uses: "Evidence and priorities",
+    creates: "Focused roles",
+    to: "/discover",
+  },
+  {
+    title: "Evaluate and compare",
+    description: "See fit, gaps, and trade-offs without surrendering judgment.",
+    uses: "Evidence and postings",
+    creates: "Explainable decisions",
+    to: "/evaluations",
+  },
+  {
+    title: "Track",
+    description: "Keep application states and next moves in one place.",
+    uses: "Roles you choose",
+    creates: "Clear next actions",
+    to: "/pipeline",
+  },
+  {
+    title: "Prepare",
+    description:
+      "Draft from verified facts, then inspect and approve the result.",
+    uses: "Approved evidence",
+    creates: "Reviewable materials",
+    to: "/drafts",
+  },
 ] as const;
 
 const roleOptions = [
@@ -482,6 +658,11 @@ function Onboarding({
           CW_
         </div>
         <h1 id="welcome-title">Turn your experience into your next move.</h1>
+        <p className="welcome-promise">
+          Build a trusted career record, research fitting roles, compare the
+          evidence, and prepare your next move. Records are stored in your
+          private local workspace; nothing is sent or submitted automatically.
+        </p>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -525,19 +706,41 @@ function Layout({
 }): React.JSX.Element {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const desktopMoreRef = useRef<HTMLDetailsElement>(null);
+  const desktopMoreSummaryRef = useRef<HTMLElement>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const firstMoreLinkRef = useRef<HTMLAnchorElement>(null);
-  const moreRouteIsActive = moreNav.some(
-    (item) => item.to === location.pathname,
+  const lastMoreLinkRef = useRef<HTMLAnchorElement>(null);
+  const moreRouteIsActive = moreNavGroups.some((group) =>
+    group.items.some((item) => item.to === location.pathname),
   );
   const setupComplete = careerSetupComplete(snapshot);
   useEffect(() => {
-    if (!mobileMenuOpen) return;
-    firstMoreLinkRef.current?.focus();
+    if (mobileMenuOpen) firstMoreLinkRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
+      if (mobileMenuOpen && event.key === "Tab") {
+        if (event.shiftKey && event.target === firstMoreLinkRef.current) {
+          event.preventDefault();
+          lastMoreLinkRef.current?.focus();
+        } else if (
+          !event.shiftKey &&
+          event.target === lastMoreLinkRef.current
+        ) {
+          event.preventDefault();
+          firstMoreLinkRef.current?.focus();
+        }
+        return;
+      }
       if (event.key !== "Escape") return;
-      setMobileMenuOpen(false);
-      moreButtonRef.current?.focus();
+      if (mobileMenuOpen) {
+        setMobileMenuOpen(false);
+        moreButtonRef.current?.focus();
+        return;
+      }
+      if (desktopMoreRef.current?.open === true) {
+        desktopMoreRef.current.open = false;
+        desktopMoreSummaryRef.current?.focus();
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -558,7 +761,10 @@ function Layout({
               <span className="brand-mark" aria-hidden="true">
                 CW_
               </span>
-              <span>Career Workbench</span>
+              <span className="brand-copy">
+                <strong>Career Workbench</strong>
+                <small>Evidence-backed career decisions.</small>
+              </span>
             </Link>
           </header>
           <div
@@ -569,7 +775,7 @@ function Layout({
             <strong>
               {snapshot.workspace?.displayName ?? "Local workbench"}
             </strong>
-            <small>Local · private</small>
+            <small>Local records · private · nothing sent automatically</small>
           </div>
           <nav className="desktop-primary-nav" aria-label="Primary">
             {primaryNav.map(({ to, label, icon: Icon }) => (
@@ -578,18 +784,46 @@ function Layout({
                 <span>{label}</span>
               </NavLink>
             ))}
-            <details className="desktop-more-nav">
-              <summary className={moreRouteIsActive ? "active" : ""}>
+            <details ref={desktopMoreRef} className="desktop-more-nav">
+              <summary
+                ref={desktopMoreSummaryRef}
+                className={moreRouteIsActive ? "active" : ""}
+              >
                 <Menu aria-hidden="true" />
                 <span>More</span>
               </summary>
-              <div>
-                {moreNav.map(({ to, label, icon: Icon }) => (
-                  <NavLink key={to} to={to}>
-                    <Icon aria-hidden="true" />
-                    <span>{label}</span>
-                  </NavLink>
-                ))}
+              <div className="more-menu" aria-label="More destinations">
+                <header>
+                  <strong>More tools</strong>
+                  <small>Follow the work from capture to upkeep.</small>
+                </header>
+                <div className="more-menu-groups">
+                  {moreNavGroups.map((group) => (
+                    <section key={group.label}>
+                      <h2>{group.label}</h2>
+                      <div>
+                        {group.items.map(
+                          ({ to, label, description, icon: Icon }) => (
+                            <NavLink
+                              key={to}
+                              to={to}
+                              onClick={() => {
+                                if (desktopMoreRef.current !== null)
+                                  desktopMoreRef.current.open = false;
+                              }}
+                            >
+                              <Icon aria-hidden="true" />
+                              <span>
+                                <strong>{label}</strong>
+                                <small aria-hidden="true">{description}</small>
+                              </span>
+                            </NavLink>
+                          ),
+                        )}
+                      </div>
+                    </section>
+                  ))}
+                </div>
               </div>
             </details>
           </nav>
@@ -625,24 +859,43 @@ function Layout({
             <div
               className="mobile-more-panel"
               id="mobile-more-destinations"
-              role="region"
+              role="dialog"
+              aria-modal="true"
               aria-label="More destinations"
             >
               <header>
-                <strong>More destinations</strong>
-                <small>All Workbench tools remain available.</small>
+                <strong>More tools</strong>
+                <small>Follow the work from capture to upkeep.</small>
               </header>
               <nav aria-label="More destinations">
-                {moreNav.map(({ to, label, icon: Icon }, index) => (
-                  <NavLink
-                    key={to}
-                    ref={index === 0 ? firstMoreLinkRef : undefined}
-                    to={to}
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <Icon aria-hidden="true" />
-                    <span>{label}</span>
-                  </NavLink>
+                {moreNavGroups.map((group) => (
+                  <section key={group.label}>
+                    <h2>{group.label}</h2>
+                    <div>
+                      {group.items.map(
+                        ({ to, label, description, icon: Icon }) => (
+                          <NavLink
+                            key={to}
+                            ref={
+                              to === "/opportunities"
+                                ? firstMoreLinkRef
+                                : to === "/diagnostics"
+                                  ? lastMoreLinkRef
+                                  : undefined
+                            }
+                            to={to}
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            <Icon aria-hidden="true" />
+                            <span>
+                              <strong>{label}</strong>
+                              <small aria-hidden="true">{description}</small>
+                            </span>
+                          </NavLink>
+                        ),
+                      )}
+                    </div>
+                  </section>
                 ))}
               </nav>
             </div>
@@ -655,11 +908,33 @@ function Layout({
             to="/overview"
             aria-label="Go to setup"
           >
-            CW_
+            <span aria-hidden="true">CW_</span>
+            <span className="brand-copy">
+              <strong>Career Workbench</strong>
+              <small>Evidence-backed career decisions.</small>
+            </span>
           </Link>
         </header>
       )}
-      <main className="content" id="main-content" tabIndex={-1}>
+      <main
+        className="content"
+        id="main-content"
+        tabIndex={-1}
+        onFocusCapture={(event) => {
+          if (!window.matchMedia("(max-width: 720px)").matches) return;
+          const focused = event.target;
+          if (!(focused instanceof HTMLElement)) return;
+          window.requestAnimationFrame(() => {
+            const footer = document.querySelector<HTMLElement>(".sidebar");
+            if (footer === null) return;
+            const overlap =
+              focused.getBoundingClientRect().bottom +
+              6 -
+              footer.getBoundingClientRect().top;
+            if (overlap > 0) window.scrollBy({ top: overlap + 10 });
+          });
+        }}
+      >
         <Routes>
           <Route path="/overview" element={<Overview snapshot={snapshot} />} />
           <Route path="/profile" element={<Profile snapshot={snapshot} />} />
@@ -698,17 +973,116 @@ function PageHeader({
   eyebrow,
   title,
   description,
+  story,
+  journeyStep,
 }: {
   readonly eyebrow: string;
   readonly title: string;
   readonly description: string;
+  readonly story?: {
+    readonly helps: string;
+    readonly uses: string;
+    readonly creates: string;
+    readonly next?: { readonly label: string; readonly to: string };
+  };
+  readonly journeyStep?: number;
 }): React.JSX.Element {
   return (
     <header className="page-header">
       <p className="eyebrow">{eyebrow}</p>
       <h1>{title}</h1>
-      <p>{description}</p>
+      <p className="page-description">{description}</p>
+      {story !== undefined && (
+        <>
+          <nav className="journey-rail" aria-label="Career workflow">
+            {productJourney.map((step, index) => (
+              <Link
+                key={step.title}
+                to={step.to}
+                aria-current={journeyStep === index + 1 ? "step" : undefined}
+              >
+                <span>{index + 1}</span>
+                {step.title}
+              </Link>
+            ))}
+          </nav>
+          <section className="page-story" aria-label="How this page helps">
+            <div className="page-story-benefit">
+              <span>How this helps</span>
+              <p>{story.helps}</p>
+              {story.next !== undefined && (
+                <Link className="page-story-next" to={story.next.to}>
+                  {story.next.label} <ArrowRight aria-hidden="true" />
+                </Link>
+              )}
+            </div>
+            <div
+              className="page-story-flow"
+              aria-label={`${story.uses} becomes ${story.creates}`}
+            >
+              <span>
+                <small>Uses</small>
+                <strong>{story.uses}</strong>
+              </span>
+              <ArrowRight aria-hidden="true" />
+              <span>
+                <small>Creates</small>
+                <strong>{story.creates}</strong>
+              </span>
+            </div>
+          </section>
+        </>
+      )}
     </header>
+  );
+}
+
+function ProgressiveDetails({
+  summary,
+  hint,
+  children,
+  className = "",
+}: {
+  readonly summary: string;
+  readonly hint: string;
+  readonly children: React.ReactNode;
+  readonly className?: string;
+}): React.JSX.Element {
+  return (
+    <details
+      className={`progressive-details${className.length > 0 ? ` ${className}` : ""}`}
+    >
+      <summary>
+        <span>{summary}</span>
+        <small>{hint}</small>
+      </summary>
+      <div className="progressive-details-body">{children}</div>
+    </details>
+  );
+}
+
+function TaskDisclosure({
+  collapsed,
+  summary,
+  hint,
+  children,
+}: {
+  readonly collapsed: boolean;
+  readonly summary: string;
+  readonly hint: string;
+  readonly children: React.ReactNode;
+}): React.JSX.Element {
+  if (!collapsed) return <>{children}</>;
+  return (
+    <details className="task-disclosure">
+      <summary>
+        <span>
+          <strong>{summary}</strong>
+          <small>{hint}</small>
+        </span>
+      </summary>
+      <div className="task-disclosure-body">{children}</div>
+    </details>
   );
 }
 
@@ -763,6 +1137,19 @@ function Overview({
   const activeSearchProfile = snapshot.searchProfiles.find(
     (profile) => profile.active,
   );
+  const currentJourneyStep =
+    verifiedCareerHistory === 0
+      ? 0
+      : activeSearchProfile === undefined
+        ? 1
+        : snapshot.discoveryLeads.length === 0 &&
+            snapshot.opportunities.length === 0
+          ? 1
+          : snapshot.evaluations.length === 0
+            ? 2
+            : snapshot.applications.length === 0
+              ? 3
+              : 4;
   const organizerOperation = [...snapshot.operations]
     .reverse()
     .find(
@@ -905,13 +1292,66 @@ function Overview({
         <PageHeader
           eyebrow={
             candidateFirstName.length > 0
-              ? `Welcome, ${candidateFirstName}`
-              : (snapshot.workspace?.displayName ?? "Career Workbench")
+              ? `Your workflow · Welcome, ${candidateFirstName}`
+              : "Your workflow"
           }
-          title="Build the case for what comes next."
-          description="Your experience is the starting point. You decide where it leads."
+          title="Make your next move with evidence, not guesswork."
+          description="Career Workbench turns the experience you approve into focused role research, explainable decisions, organized applications, and reviewable materials—with local records and user-controlled actions."
         />
       </div>
+      <section className="product-journey" aria-labelledby="journey-title">
+        <header>
+          <div>
+            <p className="eyebrow">How Career Workbench works</p>
+            <h2 id="journey-title">
+              One evidence trail. Five clearer decisions.
+            </h2>
+            <p>
+              Each step reuses what you approved, so the work gets more useful
+              without becoming harder to trust.
+            </p>
+          </div>
+          <div className="journey-boundary">
+            <ShieldCheck aria-hidden="true" />
+            <span>
+              <strong>Records stay local and private.</strong> AI runs only when
+              you start it; nothing is submitted automatically.
+            </span>
+          </div>
+        </header>
+        <ol>
+          {productJourney.map((step, index) => (
+            <li
+              key={step.title}
+              className={
+                index < currentJourneyStep
+                  ? "complete"
+                  : index === currentJourneyStep
+                    ? "current"
+                    : ""
+              }
+              aria-current={index === currentJourneyStep ? "step" : undefined}
+            >
+              <span className="journey-index">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <div>
+                <h3>{step.title}</h3>
+                <p>{step.description}</p>
+                <div className="journey-flow">
+                  <span>{step.uses}</span>
+                  <ArrowRight aria-hidden="true" />
+                  <strong>{step.creates}</strong>
+                </div>
+              </div>
+              <Link to={step.to}>
+                {index === currentJourneyStep ? "Continue here" : "Open"}
+                <ArrowRight aria-hidden="true" />
+              </Link>
+            </li>
+          ))}
+        </ol>
+      </section>
       <section className="focus-card" aria-labelledby="focus-title">
         <header className="focus-card-head">
           <div>
@@ -1105,10 +1545,15 @@ function Overview({
                 }
               >
                 {diagnostics.data?.capabilities["dsh"] === true
-                  ? "DSH connected"
-                  : "DSH unavailable"}
+                  ? "AI ready"
+                  : "AI unavailable"}
               </StatusPill>
             </div>
+            <p className="ai-action-boundary">
+              Starting AI sends this source to your configured provider through
+              the local agent service. You review every proposed detail before
+              it enters your record.
+            </p>
             {organizerOperation !== undefined && (
               <p className="operation-note">
                 Latest organization run:{" "}
@@ -1433,6 +1878,109 @@ function affectedOutputCount(
   return affectedEvaluationIds.size + affectedArtifactCount;
 }
 
+const careerFactSections = [
+  { factType: "experience", label: "Experience" },
+  { factType: "achievement", label: "Achievements" },
+  { factType: "education", label: "Education" },
+  { factType: "skill", label: "Skills" },
+] as const;
+
+interface CareerRecordDisclosure {
+  readonly factId: string;
+  readonly kind: "edit" | "source";
+}
+
+function CareerFactCollection({
+  facts,
+  snapshot,
+  showStatus = false,
+}: {
+  readonly facts: readonly ProfileFactView[];
+  readonly snapshot: SnapshotResponse;
+  readonly showStatus?: boolean;
+}): React.JSX.Element {
+  const [activeDisclosure, setActiveDisclosure] =
+    useState<CareerRecordDisclosure | null>(null);
+  const knownFactTypes = new Set(
+    careerFactSections.map((section) => section.factType as string),
+  );
+  const groups = [
+    ...careerFactSections.map((section) => ({
+      ...section,
+      facts: facts.filter((fact) => fact.factType === section.factType),
+    })),
+    {
+      factType: "other",
+      label: "Other",
+      facts: facts.filter((fact) => !knownFactTypes.has(fact.factType)),
+    },
+  ].filter((section) => section.facts.length > 0);
+  return (
+    <div className="career-fact-groups">
+      {groups.map((group) => {
+        const visible = group.facts.slice(0, 3);
+        const additional = group.facts.slice(3);
+        return (
+          <section
+            className="career-fact-group"
+            aria-labelledby={`career-fact-group-${group.factType}${showStatus ? "-history" : ""}`}
+            key={group.factType}
+          >
+            <header>
+              <h3
+                id={`career-fact-group-${group.factType}${showStatus ? "-history" : ""}`}
+              >
+                {group.label}
+              </h3>
+              <span>{group.facts.length}</span>
+            </header>
+            <div className="career-fact-rows">
+              {visible.map((fact) => (
+                <FactCard
+                  key={fact.id}
+                  fact={fact}
+                  sources={snapshot.sources}
+                  affectedOutputs={affectedOutputCount(snapshot, fact.id)}
+                  recordRow
+                  showStatus={showStatus}
+                  recordDisclosure={activeDisclosure}
+                  onRecordDisclosureChange={setActiveDisclosure}
+                />
+              ))}
+              {additional.length > 0 && (
+                <details className="career-fact-overflow">
+                  <summary>
+                    <span className="career-more-closed">
+                      Show {additional.length} more
+                    </span>
+                    <span className="career-more-open">
+                      Hide additional details
+                    </span>
+                  </summary>
+                  <div className="career-fact-rows">
+                    {additional.map((fact) => (
+                      <FactCard
+                        key={fact.id}
+                        fact={fact}
+                        sources={snapshot.sources}
+                        affectedOutputs={affectedOutputCount(snapshot, fact.id)}
+                        recordRow
+                        showStatus={showStatus}
+                        recordDisclosure={activeDisclosure}
+                        onRecordDisclosureChange={setActiveDisclosure}
+                      />
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 function Profile({
   snapshot,
 }: {
@@ -1463,10 +2011,8 @@ function Profile({
     completedProfileOrganizationFactIds(snapshot);
   const visibleCareerFacts = snapshot.profileFacts.filter(
     (fact) =>
-      (fact.factType === "experience" ||
-        fact.factType === "achievement" ||
-        fact.factType === "education" ||
-        fact.factType === "skill") &&
+      fact.factType !== "identity" &&
+      fact.factType !== "preference" &&
       !(
         fact.status === "proposed" &&
         fact.proposedBy === "agent" &&
@@ -1689,7 +2235,7 @@ function Profile({
   if (setupComplete && location.hash === "#profile-summary-review") {
     return (
       <section className="guided-summary-complete">
-        <p className="eyebrow">Résumé ready</p>
+        <p className="eyebrow">Career record ready</p>
         <h1>Now, tell us what you want next.</h1>
         <Link className="button-link primary" to="/overview">
           Choose your direction <ArrowRight aria-hidden="true" />
@@ -1700,9 +2246,15 @@ function Profile({
   return (
     <>
       <PageHeader
-        eyebrow="Candidate record"
-        title="Add your career history"
-        description="Start with a résumé, rough notes, or one role. Workbench organizes it into a summary you can keep, edit, or leave out. Identity and search preferences live in Settings."
+        eyebrow="Step 1 of 5 · Build your record"
+        title={setupComplete ? "Your career record" : "Add your career history"}
+        description={
+          setupComplete
+            ? "Review the experience Workbench can use, or add more when something changes."
+            : "Start with a résumé, rough notes, or one role. Review what Workbench finds before anything becomes part of your record."
+        }
+        story={pageStories.profile}
+        journeyStep={1}
       />
       {proposedCareerFacts.length > 0 && (
         <section
@@ -1753,393 +2305,395 @@ function Profile({
           <ErrorNotice error={confirmSummary.error} />
         </section>
       )}
-      <div className="profile-settings-link">
-        <Settings2 aria-hidden="true" />
-        <span>
-          Looking for your name, target roles, or location preferences?{" "}
-          <Link to="/settings">Manage them in Settings.</Link>
-        </span>
-      </div>
-      <section className="panel history-intake">
-        <header className="history-intake-head">
-          <div>
-            <p className="eyebrow">Step 1 · Bring in your experience</p>
-            <h2>How would you like to start?</h2>
-            <p>
-              Use the path that requires the least effort today. You can add
-              more sources and roles later.
-            </p>
-          </div>
-          <StatusPill>
-            {careerSources.length} career{" "}
-            {careerSources.length === 1 ? "source" : "sources"}
-          </StatusPill>
-        </header>
-        <Tabs.Root
-          className="history-tabs"
-          value={careerInputMode}
-          onValueChange={(value) =>
-            setCareerInputMode(
-              value as "upload" | "resume" | "story" | "manual",
-            )
-          }
-        >
-          <Tabs.List aria-label="Career history input method">
-            <Tabs.Trigger value="upload">
-              <FileText aria-hidden="true" /> Upload résumé
-            </Tabs.Trigger>
-            <Tabs.Trigger value="resume" aria-label="Paste résumé or CV">
-              <FileText aria-hidden="true" /> Paste text
-            </Tabs.Trigger>
-            <Tabs.Trigger value="story">
-              <Sparkles aria-hidden="true" /> Tell my story
-            </Tabs.Trigger>
-            <Tabs.Trigger value="manual" aria-label="Add a role manually">
-              <ListPlus aria-hidden="true" /> Add role
-            </Tabs.Trigger>
-          </Tabs.List>
-          <Tabs.Content value="upload">
-            <form
-              className="resume-file-upload career-file-upload"
-              onSubmit={(event) => {
-                event.preventDefault();
-                uploadCandidateFile.mutate();
-              }}
-            >
-              <div>
-                <FileText aria-hidden="true" />
-                <div>
-                  <label htmlFor="career-resume-file">
-                    Upload a résumé file
-                  </label>
-                  <p>PDF or plain text · up to 5 MB</p>
-                </div>
-              </div>
-              <input
-                ref={candidateFileInputRef}
-                id="career-resume-file"
-                type="file"
-                accept=".pdf,.txt,application/pdf,text/plain"
-                onChange={(event) =>
-                  setCandidateFile(event.target.files?.[0] ?? null)
-                }
-              />
-              {candidateFile !== null && (
-                <p className="selected-file" role="status">
-                  Selected: {candidateFile.name} ·{" "}
-                  {(candidateFile.size / 1024).toLocaleString(undefined, {
-                    maximumFractionDigits: 0,
-                  })}{" "}
-                  KB
-                </p>
-              )}
-              <button
-                className="primary"
-                type="submit"
-                disabled={
-                  candidateFile === null || uploadCandidateFile.isPending
-                }
-              >
-                {uploadCandidateFile.isPending
-                  ? "Reading résumé…"
-                  : "Upload résumé"}
-              </button>
-              <p className="field-help">
-                The file stays local. AI can organize it into a summary you
-                control.
-              </p>
-              <ErrorNotice error={uploadCandidateFile.error} />
-            </form>
-            {uploadCandidateFile.data !== undefined && (
-              <div className="notice" role="status">
-                <Check aria-hidden="true" />
-                <span>
-                  Résumé saved locally. Continue with AI to organize it, or
-                  choose another intake mode.
-                </span>
-              </div>
-            )}
-          </Tabs.Content>
-          <Tabs.Content value="resume">
-            <div className="history-method-grid">
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  capture.mutate();
-                }}
-              >
-                <label htmlFor="candidate-source">Résumé or CV text</label>
-                <textarea
-                  id="candidate-source"
-                  className="resume-text"
-                  value={sourceText}
-                  onChange={(event) => setSourceText(event.target.value)}
-                  placeholder="Paste the text from your résumé or CV here. Formatting does not need to be perfect."
-                  required
-                />
-                <p className="field-help">
-                  Saved locally as your career history.
-                </p>
-                <button
-                  className="primary"
-                  type="submit"
-                  disabled={capture.isPending}
-                >
-                  {capture.isPending ? "Saving…" : "Save résumé text"}
-                </button>
-              </form>
-              <aside className="assist-boundary">
-                <Sparkles aria-hidden="true" />
-                <h3>Where AI can help</h3>
-                <p>
-                  The DSH-backed organizer turns your text into a concise
-                  summary. You choose what to keep, edit, or leave out.
-                </p>
-                {latestCareerSource !== undefined && (
-                  <button
-                    className="secondary"
-                    type="button"
-                    onClick={() => organizeCareerSource.mutate()}
-                    disabled={organizeCareerSource.isPending}
-                  >
-                    {organizeCareerSource.isPending
-                      ? "Organizing in this window…"
-                      : "Continue with AI"}
-                  </button>
-                )}
-                <small>
-                  This browser asks the server to run one DSH-owned turn; it
-                  never calls an LLM provider directly.
-                </small>
-                {organizeCareerSource.isPending && (
-                  <div
-                    className="ai-run-progress"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <RefreshCw className="spin" aria-hidden="true" />
-                    <div>
-                      <strong>DSH is organizing this source now.</strong>
-                      <p>The review list will update here when it finishes.</p>
-                    </div>
-                  </div>
-                )}
-                {organizeCareerSource.data?.proposedFactIds.length === 0 && (
-                  <div className="notice warning" role="status">
-                    <AlertTriangle aria-hidden="true" />
-                    <span>
-                      AI finished but found no clear career details in this
-                      source. Add clearer résumé text or use the manual form.
-                    </span>
-                  </div>
-                )}
-                <ErrorNotice error={organizeCareerSource.error} />
-              </aside>
-            </div>
-            {capture.data !== undefined && (
-              <div className="notice" role="status">
-                <Check aria-hidden="true" />
-                <span>
-                  Résumé text saved locally. Choose Continue with AI to organize
-                  it here, or add a role manually.
-                </span>
-              </div>
-            )}
-            <ErrorNotice error={capture.error} />
-          </Tabs.Content>
-          <Tabs.Content value="story">
-            <div className="history-method-grid">
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  capture.mutate();
-                }}
-              >
-                <label htmlFor="candidate-story">
-                  Describe your work in your own words
-                </label>
-                <textarea
-                  id="candidate-story"
-                  className="resume-text"
-                  value={sourceText}
-                  onChange={(event) => setSourceText(event.target.value)}
-                  placeholder="Rough notes are fine. Describe the roles, projects, and outcomes you remember."
-                  required
-                />
-                <p className="field-help">
-                  Workbench saves your words locally. AI may organize them, and
-                  you choose what stays in your career record.
-                </p>
-                <button
-                  className="primary"
-                  type="submit"
-                  disabled={capture.isPending}
-                >
-                  {capture.isPending ? "Saving…" : "Save career story"}
-                </button>
-              </form>
-              <aside className="assist-boundary">
-                <Sparkles aria-hidden="true" />
-                <h3>Organize without rewriting your story</h3>
-                <p>
-                  The DSH-backed organizer turns what you wrote into a concise
-                  summary without adding new details.
-                </p>
-                {latestCareerSource !== undefined && (
-                  <button
-                    className="secondary"
-                    type="button"
-                    onClick={() => organizeCareerSource.mutate()}
-                    disabled={organizeCareerSource.isPending}
-                  >
-                    {organizeCareerSource.isPending
-                      ? "Organizing in this window…"
-                      : "Continue with AI"}
-                  </button>
-                )}
-                <small>
-                  The browser never contacts an LLM provider directly.
-                </small>
-              </aside>
-            </div>
-            {capture.data !== undefined && careerInputMode === "story" && (
-              <div className="notice" role="status">
-                <Check aria-hidden="true" />
-                <span>Career story saved as an immutable local source.</span>
-              </div>
-            )}
-            <ErrorNotice error={capture.error} />
-          </Tabs.Content>
-          <Tabs.Content value="manual">
-            <form
-              className="history-entry-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                addHistory.mutate();
-              }}
-            >
-              <div className="field-row">
-                <label>
-                  Your name
-                  <input
-                    value={personName}
-                    onChange={(event) => setPersonName(event.target.value)}
-                    autoComplete="name"
-                    required
-                  />
-                </label>
-                <label>
-                  Role title
-                  <input
-                    value={roleTitle}
-                    onChange={(event) => setRoleTitle(event.target.value)}
-                    placeholder="Senior Product Designer"
-                    required
-                  />
-                </label>
-              </div>
-              <div className="field-row">
-                <label>
-                  Organization
-                  <input
-                    value={organization}
-                    onChange={(event) => setOrganization(event.target.value)}
-                    placeholder="Example Company"
-                    required
-                  />
-                </label>
-                <label>
-                  Dates
-                  <input
-                    value={dateRange}
-                    onChange={(event) => setDateRange(event.target.value)}
-                    placeholder="March 2021 to present"
-                    required
-                  />
-                </label>
-              </div>
-              <label htmlFor="career-achievements">
-                Achievements <span className="optional">optional</span>
-              </label>
-              <textarea
-                id="career-achievements"
-                value={achievementsText}
-                onChange={(event) => setAchievementsText(event.target.value)}
-                placeholder={
-                  "Start each line with an action verb.\nBuilt a reusable design system\nReduced onboarding time by 30%"
-                }
-              />
-              <p className="field-help">
-                One achievement per line. You can edit or leave out anything in
-                the summary before moving on.
-              </p>
-              <button
-                className="primary"
-                type="submit"
-                disabled={addHistory.isPending}
-              >
-                {addHistory.isPending ? "Adding…" : "Add role for review"}
-              </button>
-            </form>
-            {addHistory.data !== undefined && (
-              <div className="notice" role="status">
-                <Check aria-hidden="true" />
-                <span>
-                  Role added. Review the organized summary in the next section.
-                </span>
-              </div>
-            )}
-            <ErrorNotice error={addHistory.error} />
-          </Tabs.Content>
-        </Tabs.Root>
-      </section>
       {verifiedCareerFacts.length > 0 && (
         <details
           className="panel profile-record-details"
           id="confirmed-career-record"
+          open={setupComplete}
         >
           <summary>
             <span>
               <strong>Your career record</strong>
-              <small>The details you chose to keep.</small>
+              <small>
+                Scan the essentials. Edit or check a source only when needed.
+              </small>
             </span>
             <StatusPill tone="good">
               {verifiedCareerFacts.length} saved
             </StatusPill>
           </summary>
-          <div className="compact-fact-list">
-            {verifiedCareerFacts.map((fact) => (
-              <FactCard
-                key={fact.id}
-                fact={fact}
-                sources={snapshot.sources}
-                affectedOutputs={affectedOutputCount(snapshot, fact.id)}
-              />
-            ))}
-          </div>
+          <CareerFactCollection
+            facts={verifiedCareerFacts}
+            snapshot={snapshot}
+          />
         </details>
       )}
       {historicalCareerFacts.length > 0 && (
-        <details className="panel profile-record-details">
+        <details className="panel profile-record-details profile-record-history">
           <summary>
             <span>
-              <strong>Past decisions and replaced details</strong>
-              <small>Kept in history; not used in your current record.</small>
+              <strong>Past decisions</strong>
+              <small>Replaced or omitted details; not used now.</small>
             </span>
             <StatusPill>{historicalCareerFacts.length} archived</StatusPill>
           </summary>
-          <div className="compact-fact-list">
-            {historicalCareerFacts.map((fact) => (
-              <FactCard
-                key={fact.id}
-                fact={fact}
-                sources={snapshot.sources}
-                affectedOutputs={affectedOutputCount(snapshot, fact.id)}
-              />
-            ))}
-          </div>
+          <CareerFactCollection
+            facts={historicalCareerFacts}
+            snapshot={snapshot}
+            showStatus
+          />
         </details>
       )}
+      <div className="profile-settings-link">
+        <Settings2 aria-hidden="true" />
+        <span>
+          Looking for your name, target roles, or location preferences?{" "}
+          <Link to="/settings">Manage identity and search preferences.</Link>
+        </span>
+      </div>
+      <TaskDisclosure
+        collapsed={setupComplete && verifiedCareerFacts.length > 0}
+        summary="Add more career history"
+        hint="Upload, paste, tell your story, or add a role"
+      >
+        <section className="panel history-intake">
+          <header className="history-intake-head">
+            <div>
+              <p className="eyebrow">Step 1 · Bring in your experience</p>
+              <h2>How would you like to start?</h2>
+              <p>
+                Use the path that requires the least effort today. You can add
+                more sources and roles later.
+              </p>
+            </div>
+            <StatusPill>
+              {careerSources.length} career{" "}
+              {careerSources.length === 1 ? "source" : "sources"}
+            </StatusPill>
+          </header>
+          <Tabs.Root
+            className="history-tabs"
+            value={careerInputMode}
+            onValueChange={(value) =>
+              setCareerInputMode(
+                value as "upload" | "resume" | "story" | "manual",
+              )
+            }
+          >
+            <Tabs.List aria-label="Career history input method">
+              <Tabs.Trigger value="upload">
+                <FileText aria-hidden="true" /> Upload résumé
+              </Tabs.Trigger>
+              <Tabs.Trigger value="resume" aria-label="Paste résumé or CV">
+                <FileText aria-hidden="true" /> Paste text
+              </Tabs.Trigger>
+              <Tabs.Trigger value="story">
+                <Sparkles aria-hidden="true" /> Tell my story
+              </Tabs.Trigger>
+              <Tabs.Trigger value="manual" aria-label="Add a role manually">
+                <ListPlus aria-hidden="true" /> Add role
+              </Tabs.Trigger>
+            </Tabs.List>
+            <Tabs.Content value="upload">
+              <form
+                className="resume-file-upload career-file-upload"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  uploadCandidateFile.mutate();
+                }}
+              >
+                <div>
+                  <FileText aria-hidden="true" />
+                  <div>
+                    <label htmlFor="career-resume-file">
+                      Upload a résumé file
+                    </label>
+                    <p>PDF or plain text · up to 5 MB</p>
+                  </div>
+                </div>
+                <input
+                  ref={candidateFileInputRef}
+                  id="career-resume-file"
+                  type="file"
+                  accept=".pdf,.txt,application/pdf,text/plain"
+                  onChange={(event) =>
+                    setCandidateFile(event.target.files?.[0] ?? null)
+                  }
+                />
+                {candidateFile !== null && (
+                  <p className="selected-file" role="status">
+                    Selected: {candidateFile.name} ·{" "}
+                    {(candidateFile.size / 1024).toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                    })}{" "}
+                    KB
+                  </p>
+                )}
+                <button
+                  className="primary"
+                  type="submit"
+                  disabled={
+                    candidateFile === null || uploadCandidateFile.isPending
+                  }
+                >
+                  {uploadCandidateFile.isPending
+                    ? "Reading résumé…"
+                    : "Upload résumé"}
+                </button>
+                <p className="field-help">
+                  The file is stored locally. Starting AI sends its text to your
+                  configured provider; you review every proposed detail.
+                </p>
+                <ErrorNotice error={uploadCandidateFile.error} />
+              </form>
+              {uploadCandidateFile.data !== undefined && (
+                <div className="notice" role="status">
+                  <Check aria-hidden="true" />
+                  <span>
+                    Résumé saved locally. Continue with AI to organize it, or
+                    choose another intake mode.
+                  </span>
+                </div>
+              )}
+            </Tabs.Content>
+            <Tabs.Content value="resume">
+              <div className="history-method-grid">
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    capture.mutate();
+                  }}
+                >
+                  <label htmlFor="candidate-source">Résumé or CV text</label>
+                  <textarea
+                    id="candidate-source"
+                    className="resume-text"
+                    value={sourceText}
+                    onChange={(event) => setSourceText(event.target.value)}
+                    placeholder="Paste the text from your résumé or CV here. Formatting does not need to be perfect."
+                    required
+                  />
+                  <p className="field-help">
+                    Saved locally as your career history.
+                  </p>
+                  <button
+                    className="primary"
+                    type="submit"
+                    disabled={capture.isPending}
+                  >
+                    {capture.isPending ? "Saving…" : "Save résumé text"}
+                  </button>
+                </form>
+                <aside className="assist-boundary">
+                  <Sparkles aria-hidden="true" />
+                  <h3>Where AI can help</h3>
+                  <p>
+                    AI can turn the selected source into proposed career
+                    details. You choose what to keep, edit, or leave out.
+                  </p>
+                  {latestCareerSource !== undefined && (
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={() => organizeCareerSource.mutate()}
+                      disabled={organizeCareerSource.isPending}
+                    >
+                      {organizeCareerSource.isPending
+                        ? "Organizing in this window…"
+                        : "Continue with AI"}
+                    </button>
+                  )}
+                  <small>
+                    Starting this sends the selected source to your configured
+                    AI provider through the local agent service.
+                  </small>
+                  {organizeCareerSource.isPending && (
+                    <div
+                      className="ai-run-progress"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <RefreshCw className="spin" aria-hidden="true" />
+                      <div>
+                        <strong>AI is organizing this source now.</strong>
+                        <p>
+                          The review list will update here when it finishes.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {organizeCareerSource.data?.proposedFactIds.length === 0 && (
+                    <div className="notice warning" role="status">
+                      <AlertTriangle aria-hidden="true" />
+                      <span>
+                        AI finished but found no clear career details in this
+                        source. Add clearer résumé text or use the manual form.
+                      </span>
+                    </div>
+                  )}
+                  <ErrorNotice error={organizeCareerSource.error} />
+                </aside>
+              </div>
+              {capture.data !== undefined && (
+                <div className="notice" role="status">
+                  <Check aria-hidden="true" />
+                  <span>
+                    Résumé text saved locally. Choose Continue with AI to
+                    organize it here, or add a role manually.
+                  </span>
+                </div>
+              )}
+              <ErrorNotice error={capture.error} />
+            </Tabs.Content>
+            <Tabs.Content value="story">
+              <div className="history-method-grid">
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    capture.mutate();
+                  }}
+                >
+                  <label htmlFor="candidate-story">
+                    Describe your work in your own words
+                  </label>
+                  <textarea
+                    id="candidate-story"
+                    className="resume-text"
+                    value={sourceText}
+                    onChange={(event) => setSourceText(event.target.value)}
+                    placeholder="Rough notes are fine. Describe the roles, projects, and outcomes you remember."
+                    required
+                  />
+                  <p className="field-help">
+                    Workbench saves your words locally. AI may organize them,
+                    and you choose what stays in your career record.
+                  </p>
+                  <button
+                    className="primary"
+                    type="submit"
+                    disabled={capture.isPending}
+                  >
+                    {capture.isPending ? "Saving…" : "Save career story"}
+                  </button>
+                </form>
+                <aside className="assist-boundary">
+                  <Sparkles aria-hidden="true" />
+                  <h3>Organize without rewriting your story</h3>
+                  <p>
+                    AI can turn what you wrote into proposed career details
+                    without adding new claims.
+                  </p>
+                  {latestCareerSource !== undefined && (
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={() => organizeCareerSource.mutate()}
+                      disabled={organizeCareerSource.isPending}
+                    >
+                      {organizeCareerSource.isPending
+                        ? "Organizing in this window…"
+                        : "Continue with AI"}
+                    </button>
+                  )}
+                  <small>
+                    Starting this sends the selected source to your configured
+                    AI provider through the local agent service.
+                  </small>
+                </aside>
+              </div>
+              {capture.data !== undefined && careerInputMode === "story" && (
+                <div className="notice" role="status">
+                  <Check aria-hidden="true" />
+                  <span>Career story saved as an immutable local source.</span>
+                </div>
+              )}
+              <ErrorNotice error={capture.error} />
+            </Tabs.Content>
+            <Tabs.Content value="manual">
+              <form
+                className="history-entry-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  addHistory.mutate();
+                }}
+              >
+                <div className="field-row">
+                  <label>
+                    Your name
+                    <input
+                      value={personName}
+                      onChange={(event) => setPersonName(event.target.value)}
+                      autoComplete="name"
+                      required
+                    />
+                  </label>
+                  <label>
+                    Role title
+                    <input
+                      value={roleTitle}
+                      onChange={(event) => setRoleTitle(event.target.value)}
+                      placeholder="Senior Product Designer"
+                      required
+                    />
+                  </label>
+                </div>
+                <div className="field-row">
+                  <label>
+                    Organization
+                    <input
+                      value={organization}
+                      onChange={(event) => setOrganization(event.target.value)}
+                      placeholder="Example Company"
+                      required
+                    />
+                  </label>
+                  <label>
+                    Dates
+                    <input
+                      value={dateRange}
+                      onChange={(event) => setDateRange(event.target.value)}
+                      placeholder="March 2021 to present"
+                      required
+                    />
+                  </label>
+                </div>
+                <label htmlFor="career-achievements">
+                  Achievements <span className="optional">optional</span>
+                </label>
+                <textarea
+                  id="career-achievements"
+                  value={achievementsText}
+                  onChange={(event) => setAchievementsText(event.target.value)}
+                  placeholder={
+                    "Start each line with an action verb.\nBuilt a reusable design system\nReduced onboarding time by 30%"
+                  }
+                />
+                <p className="field-help">
+                  One achievement per line. You can edit or leave out anything
+                  in the summary before moving on.
+                </p>
+                <button
+                  className="primary"
+                  type="submit"
+                  disabled={addHistory.isPending}
+                >
+                  {addHistory.isPending ? "Adding…" : "Add role for review"}
+                </button>
+              </form>
+              {addHistory.data !== undefined && (
+                <div className="notice" role="status">
+                  <Check aria-hidden="true" />
+                  <span>
+                    Role added. Review the organized summary in the next
+                    section.
+                  </span>
+                </div>
+              )}
+              <ErrorNotice error={addHistory.error} />
+            </Tabs.Content>
+          </Tabs.Root>
+        </section>
+      </TaskDisclosure>
       <details className="panel exact-fact-builder">
         <summary>Advanced: add an exact statement from a saved source</summary>
         <p>
@@ -2210,6 +2764,10 @@ function FactCard({
   sources,
   affectedOutputs,
   compact = false,
+  recordRow = false,
+  showStatus = false,
+  recordDisclosure = null,
+  onRecordDisclosureChange,
   included = true,
   onIncludedChange,
 }: {
@@ -2217,6 +2775,12 @@ function FactCard({
   readonly sources: readonly SourceView[];
   readonly affectedOutputs: number;
   readonly compact?: boolean;
+  readonly recordRow?: boolean;
+  readonly showStatus?: boolean;
+  readonly recordDisclosure?: CareerRecordDisclosure | null;
+  readonly onRecordDisclosureChange?: (
+    disclosure: CareerRecordDisclosure | null,
+  ) => void;
   readonly included?: boolean;
   readonly onIncludedChange?: (included: boolean) => void;
 }): React.JSX.Element {
@@ -2224,12 +2788,35 @@ function FactCard({
   const [corrected, setCorrected] = useState(String(fact.value ?? ""));
   const [showCorrection, setShowCorrection] = useState(false);
   const factClaim = `${fact.subject} ${fact.predicate} ${String(fact.value)}`;
+  const [showFullClaim, setShowFullClaim] = useState(false);
+  const [claimIsOverflowing, setClaimIsOverflowing] = useState(false);
+  const claimRef = useRef<HTMLParagraphElement>(null);
+  const recordSourceId = `record-source-${fact.id}`;
+  const correctionVisible = recordRow
+    ? recordDisclosure?.factId === fact.id && recordDisclosure.kind === "edit"
+    : showCorrection;
+  const recordSourceVisible =
+    recordRow &&
+    recordDisclosure?.factId === fact.id &&
+    recordDisclosure.kind === "source";
   useEffect(() => {
     setCorrected(String(fact.value ?? ""));
+    setShowFullClaim(false);
     if (fact.status !== "verified" && fact.status !== "proposed") {
       setShowCorrection(false);
     }
   }, [fact.revision, fact.status, fact.value]);
+  useEffect(() => {
+    const claim = claimRef.current;
+    if (claim === null || showFullClaim) return;
+    const measure = (): void => {
+      setClaimIsOverflowing(claim.scrollHeight > claim.clientHeight + 1);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(claim);
+    return () => observer.disconnect();
+  }, [factClaim, showFullClaim]);
   const decide = useMutation({
     mutationFn: (kind: "confirm" | "narrative_only" | "cannot_confirm") =>
       mutate(`/api/v1/profile-facts/${fact.id}/confirm`, {
@@ -2247,6 +2834,7 @@ function FactCard({
       }),
     onSuccess: async () => {
       setShowCorrection(false);
+      onRecordDisclosureChange?.(null);
       await refresh();
     },
   });
@@ -2283,9 +2871,7 @@ function FactCard({
                 <small>
                   {source === undefined
                     ? "Saved source unavailable"
-                    : source.kind === "candidate"
-                      ? "From your saved career material"
-                      : "From a saved source"}
+                    : `${source.kind === "candidate" ? "Career source" : "Saved source"} · captured ${new Date(source.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })} · ID ${source.id} · fingerprint ${source.contentDigest.slice(0, 10)}`}
                 </small>
               </li>
             );
@@ -2294,6 +2880,116 @@ function FactCard({
       )}
     </div>
   );
+  if (recordRow) {
+    return (
+      <article className={`fact-card fact-card-${fact.status} career-fact-row`}>
+        <div className="career-fact-row-main">
+          {showStatus && <StatusPill tone={tone}>{statusLabel}</StatusPill>}
+          {!showStatus && <span className="sr-only">{statusLabel}</span>}
+          <p
+            ref={claimRef}
+            className={`career-fact-claim${showFullClaim ? " career-fact-claim-expanded" : ""}`}
+          >
+            {fact.subject} <span>{fact.predicate}</span> {String(fact.value)}
+          </p>
+          {(claimIsOverflowing || showFullClaim) && (
+            <button
+              className="career-fact-expand"
+              type="button"
+              aria-expanded={showFullClaim}
+              onClick={() => setShowFullClaim((visible) => !visible)}
+            >
+              {showFullClaim ? "Show less" : "Show full detail"}
+            </button>
+          )}
+        </div>
+        <div className="career-fact-row-actions">
+          {fact.status === "verified" && (
+            <button
+              className="career-icon-button"
+              type="button"
+              aria-label={`Edit saved career detail ${factClaim}`}
+              aria-expanded={correctionVisible}
+              title="Edit detail"
+              onClick={() => {
+                onRecordDisclosureChange?.(
+                  correctionVisible ? null : { factId: fact.id, kind: "edit" },
+                );
+              }}
+            >
+              <Pencil aria-hidden="true" />
+            </button>
+          )}
+          <button
+            className="career-icon-button"
+            type="button"
+            aria-label={`Check source for ${factClaim}`}
+            aria-expanded={recordSourceVisible}
+            aria-controls={recordSourceId}
+            title="Check source"
+            onClick={() => {
+              onRecordDisclosureChange?.(
+                recordSourceVisible
+                  ? null
+                  : { factId: fact.id, kind: "source" },
+              );
+            }}
+          >
+            <FileText aria-hidden="true" />
+          </button>
+        </div>
+        {correctionVisible && (
+          <div className="correction-preview career-row-expansion">
+            <p>
+              This updates your career record.{" "}
+              {affectedOutputs === 0 ? (
+                <>Nothing else will be marked out of date.</>
+              ) : (
+                <>
+                  {affectedOutputs} dependent{" "}
+                  {affectedOutputs === 1 ? "item will" : "items will"} be marked
+                  out of date.
+                </>
+              )}{" "}
+              The previous version stays in history.
+            </p>
+            <form
+              className="inline-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                correct.mutate();
+              }}
+            >
+              <label htmlFor={`correct-${fact.id}`}>Updated value</label>
+              <input
+                id={`correct-${fact.id}`}
+                value={corrected}
+                onChange={(event) => setCorrected(event.target.value)}
+              />
+              <button
+                aria-label={`Save correction for ${factClaim}`}
+                className="primary"
+                type="submit"
+                disabled={correct.isPending}
+              >
+                {correct.isPending ? "Saving…" : "Save correction"}
+              </button>
+            </form>
+          </div>
+        )}
+        {recordSourceVisible && (
+          <div
+            className="career-row-expansion career-row-source"
+            id={recordSourceId}
+          >
+            {sourceExcerpt}
+            <small>Career detail revision {fact.revision}</small>
+          </div>
+        )}
+        <ErrorNotice error={correct.error} />
+      </article>
+    );
+  }
   if (compact) {
     return (
       <article
@@ -2366,7 +3062,6 @@ function FactCard({
             {fact.subject} <span>{fact.predicate}</span> {String(fact.value)}
           </h3>
         </div>
-        <small>Revision {fact.revision}</small>
       </div>
       {fact.status === "proposed" && (
         <div className="actions" aria-label="Career detail choices">
@@ -2418,6 +3113,7 @@ function FactCard({
           Check source
         </summary>
         {sourceExcerpt}
+        <small>Career detail revision {fact.revision}</small>
       </details>
       {showCorrection && (
         <div className="correction-preview">
@@ -2507,7 +3203,6 @@ function SettingFactRow({
           <span className="setting-fact-label">{label}</span>
           <strong>{value}</strong>
         </div>
-        <small>Revision {fact.revision}</small>
       </header>
       {fact.status === "proposed" && (
         <div className="setting-pending">
@@ -2545,6 +3240,7 @@ function SettingFactRow({
               ? ` and marks ${String(affectedOutputs)} dependent result${affectedOutputs === 1 ? "" : "s"} for refresh.`
               : "."}
           </p>
+          <small>Current record revision {fact.revision}</small>
           <label htmlFor={`setting-${fact.id}`}>{label}</label>
           <input
             id={`setting-${fact.id}`}
@@ -2686,9 +3382,10 @@ function Settings({
   return (
     <>
       <PageHeader
-        eyebrow="Workspace settings"
+        eyebrow="Support · Preferences"
         title="Identity and search preferences"
-        description="Keep your name and search preferences here, separate from your career history."
+        description="Keep the few choices that shape job search and matching up to date."
+        story={pageStories.settings}
       />
       <div className="settings-grid">
         <section
@@ -2701,14 +3398,15 @@ function Settings({
             </span>
             <div>
               <h2 id="identity-title">Identity</h2>
-              <p>
-                Your name labels this workbench and the materials you create.
-              </p>
+              <p>The name used across this workbench.</p>
             </div>
           </header>
           <div className="compact-fact-list">
             {displayedIdentityFacts.length === 0 ? (
-              <Empty>No identity record is available.</Empty>
+              <Empty>
+                No identity record is available.{" "}
+                <Link to="/profile">Add your career record</Link>.
+              </Empty>
             ) : (
               displayedIdentityFacts.map((fact) => (
                 <SettingFactRow
@@ -2730,10 +3428,7 @@ function Settings({
             </span>
             <div>
               <h2 id="preference-title">Search preferences</h2>
-              <p>
-                Target roles, priorities, and work style prefill Jobs and guide
-                matching. These are your choices and are used as-is.
-              </p>
+              <p>Targets and priorities used to guide job matching.</p>
             </div>
           </header>
           {displayedPreferenceFacts.length > 0 && (
@@ -2755,13 +3450,10 @@ function Settings({
               {hasVerifiedTarget
                 ? "Add another target or preference"
                 : targetWasDeferred
-                  ? "Finish your deferred search direction"
+                  ? "Add your search direction"
                   : "Add your first target role"}
             </summary>
-            <p>
-              These are your choices and Workbench uses them as-is to find and
-              compare roles.
-            </p>
+            <p>Choose only what matters now. You can change it later.</p>
             <form
               className="preference-entry-form"
               onSubmit={(event) => {
@@ -2806,6 +3498,11 @@ function Settings({
               <button
                 className="primary"
                 type="submit"
+                aria-describedby={
+                  targetRoleText.trim().length === 0
+                    ? "settings-target-role-help"
+                    : undefined
+                }
                 disabled={
                   completePreferences.isPending ||
                   targetRoleText.trim().length === 0
@@ -2815,12 +3512,18 @@ function Settings({
                   ? "Saving preferences…"
                   : "Save search preferences"}
               </button>
+              {targetRoleText.trim().length === 0 && (
+                <p id="settings-target-role-help" className="field-help">
+                  Enter a target role before saving these preferences.
+                </p>
+              )}
             </form>
             {completePreferences.isSuccess && (
               <div className="notice" role="status">
                 <Check aria-hidden="true" />
                 <span>
-                  Search preferences saved. Jobs will use them as defaults.
+                  Search preferences saved. Role research will use them as
+                  defaults.
                 </span>
               </div>
             )}
@@ -2865,6 +3568,27 @@ function appendLine(value: string, option: string): string {
     return lines.join("\n");
   }
   return [...lines, cleanOption].join("\n");
+}
+
+function uniqueSignals(values: readonly string[]): readonly string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const value of values) {
+    const clean = value.trim();
+    const normalized = clean.toLocaleLowerCase();
+    if (normalized.length === 0 || seen.has(normalized)) continue;
+    seen.add(normalized);
+    unique.push(clean);
+  }
+  return unique;
+}
+
+function listingSourceHost(originalUrl: string): string {
+  try {
+    return new URL(originalUrl).hostname.replace(/^www\./u, "");
+  } catch {
+    return "the original listing";
+  }
 }
 
 function Discover({
@@ -2927,6 +3651,7 @@ function Discover({
   const [discoveryNotice, setDiscoveryNotice] = useState("");
   const [triageNotice, setTriageNotice] = useState("");
   const [triageNotes, setTriageNotes] = useState<Record<string, string>>({});
+  const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
   const hasDiscoveryLeads = snapshot.discoveryLeads.length > 0;
   const [searchEditorOpen, setSearchEditorOpen] = useState(!hasDiscoveryLeads);
   const [selectedInboxState, setSelectedInboxState] = useState<
@@ -3023,6 +3748,7 @@ function Discover({
           : {}),
       }),
     onSuccess: async (_result, { lead, decision }) => {
+      setExpandedLeadId(null);
       setPageByState((pages) => ({ ...pages, [lead.state]: 0 }));
       setTriageNotice(
         decision === "new"
@@ -3113,6 +3839,8 @@ function Discover({
   const selectedLocations = splitLines(locations);
   const selectedPriorities = splitLines(priorities);
   const selectedExclusions = splitLines(exclusions);
+  const missingSearchBasics =
+    splitLines(targetRoles).length === 0 || workArrangements.length === 0;
   const searchRoleSummary =
     splitLines(targetRoles).join(", ") || "Choose a role";
   const searchContextSummary = [
@@ -3159,9 +3887,11 @@ function Discover({
   return (
     <>
       <PageHeader
-        eyebrow="Jobs"
-        title="Find your next role."
-        description="Start broad. You can narrow the search anytime."
+        eyebrow="Step 2 of 5 · Find roles"
+        title="Research roles worth considering."
+        description="Use your direction to find and save roles that merit a closer look."
+        story={pageStories.discover}
+        journeyStep={2}
       />
       {!candidateReady && (
         <section className="notice warning discovery-readiness">
@@ -3198,12 +3928,20 @@ function Discover({
               </div>
               {hasDiscoveryLeads && (
                 <button
-                  className="search-editor-toggle"
+                  className={`search-editor-toggle${searchEditorOpen ? "" : " icon-only"}`}
                   type="button"
+                  aria-label={
+                    searchEditorOpen
+                      ? "Finish editing search criteria"
+                      : "Edit search criteria"
+                  }
+                  title={
+                    searchEditorOpen ? "Finish editing" : "Edit search criteria"
+                  }
                   disabled={searchEditorOpen && hasUnsavedChanges}
                   onClick={() => setSearchEditorOpen((open) => !open)}
                 >
-                  {searchEditorOpen ? "Done" : "Edit"}
+                  {searchEditorOpen ? "Done" : <Pencil aria-hidden="true" />}
                 </button>
               )}
             </header>
@@ -3511,10 +4249,14 @@ function Discover({
                   <button
                     className="primary"
                     type="submit"
+                    aria-describedby={
+                      missingSearchBasics
+                        ? "discovery-search-required-help"
+                        : undefined
+                    }
                     disabled={
                       save.isPending ||
-                      splitLines(targetRoles).length === 0 ||
-                      workArrangements.length === 0 ||
+                      missingSearchBasics ||
                       (current !== undefined && !hasUnsavedChanges)
                     }
                   >
@@ -3527,6 +4269,12 @@ function Discover({
                           : "Saved"}
                   </button>
                 </div>
+                {missingSearchBasics && (
+                  <p id="discovery-search-required-help" className="field-help">
+                    Add at least one role and choose a work style before saving
+                    this search.
+                  </p>
+                )}
                 {hasUnsavedChanges && (
                   <p className="notice warning" role="status">
                     Save your changes before finding jobs.
@@ -3546,16 +4294,27 @@ function Discover({
             {current?.active &&
               !hasUnsavedChanges &&
               (hasDiscoveryLeads && !searchEditorOpen ? (
-                <button
-                  ref={searchActionRef}
-                  className="primary discovery-refresh-button"
-                  type="button"
-                  disabled={discover.isPending || !dshAvailable}
-                  onClick={() => discover.mutate()}
-                >
-                  <Sparkles aria-hidden="true" />
-                  {discover.isPending ? "Finding jobs…" : "Find new matches"}
-                </button>
+                <div className="discovery-refresh-action">
+                  {dshAvailable ? (
+                    <button
+                      ref={searchActionRef}
+                      className="primary discovery-refresh-button"
+                      type="button"
+                      disabled={discover.isPending}
+                      onClick={() => discover.mutate()}
+                    >
+                      <Sparkles aria-hidden="true" />
+                      {discover.isPending
+                        ? "Researching roles…"
+                        : "Research again"}
+                    </button>
+                  ) : (
+                    <small role="note">
+                      <Sparkles aria-hidden="true" /> Role research is
+                      unavailable. <Link to="/diagnostics">System status</Link>
+                    </small>
+                  )}
+                </div>
               ) : (
                 <section
                   className="discovery-next-action"
@@ -3563,7 +4322,9 @@ function Discover({
                 >
                   <div>
                     <p className="step-kicker">Next</p>
-                    <h3 id="discovery-next-action-title">Find matching jobs</h3>
+                    <h3 id="discovery-next-action-title">
+                      Research roles from this direction
+                    </h3>
                   </div>
                   <button
                     ref={searchActionRef}
@@ -3573,7 +4334,9 @@ function Discover({
                     onClick={() => discover.mutate()}
                   >
                     <Sparkles aria-hidden="true" />
-                    {discover.isPending ? "Finding jobs…" : "Find jobs"}
+                    {discover.isPending
+                      ? "Researching roles…"
+                      : "Ask AI to research roles"}
                   </button>
                 </section>
               ))}
@@ -3600,7 +4363,7 @@ function Discover({
                   ref={inboxTitleRef}
                   tabIndex={-1}
                 >
-                  Matches
+                  Roles to consider
                 </h2>
               </div>
               <StatusPill
@@ -3696,13 +4459,38 @@ function Discover({
                     ) : (
                       <div className="discovery-card-grid">
                         {visible.map((lead) => {
-                          const fitReasons = lead.whyFound.filter(
-                            (reason) =>
-                              !reason.startsWith("Current listing from "),
+                          const sourceReasons = uniqueSignals(
+                            lead.whyFound.filter((reason) =>
+                              reason
+                                .trim()
+                                .toLocaleLowerCase()
+                                .startsWith("current listing from "),
+                            ),
+                          );
+                          const fitReasons = uniqueSignals(
+                            lead.whyFound.filter(
+                              (reason) =>
+                                !reason
+                                  .trim()
+                                  .toLocaleLowerCase()
+                                  .startsWith("current listing from "),
+                            ),
                           );
                           const primaryReason =
                             fitReasons[0] ?? "Matches your saved search.";
-                          const additionalReasons = fitReasons.slice(1);
+                          const concerns = uniqueSignals([
+                            ...lead.gaps,
+                            ...lead.risks,
+                          ]);
+                          const primaryConcern =
+                            concerns[0] ??
+                            "No specific concern recorded — verify the listing before saving.";
+                          const detailsOpen = expandedLeadId === lead.id;
+                          const detailsId = `discovery-lead-details-${lead.id}`;
+                          const sourceSummary =
+                            sourceReasons.length > 0
+                              ? sourceReasons.join(" ")
+                              : `Current listing from ${listingSourceHost(lead.originalUrl)}.`;
                           return (
                             <article className="discovery-card" key={lead.id}>
                               <header>
@@ -3720,7 +4508,23 @@ function Discover({
                                   .filter((item) => item !== null)
                                   .join(" · ") || "Details not stated"}
                               </p>
-                              <p className="lead-summary">{primaryReason}</p>
+                              <div className="lead-quick-read">
+                                <section className="lead-signal">
+                                  <h4>Why it surfaced</h4>
+                                  <p className="lead-summary">
+                                    {primaryReason}
+                                  </p>
+                                </section>
+                                <section className="lead-signal lead-key-check">
+                                  <h4>
+                                    Check first
+                                    {concerns.length > 1 && (
+                                      <span>+{concerns.length - 1} more</span>
+                                    )}
+                                  </h4>
+                                  <p>{primaryConcern}</p>
+                                </section>
+                              </div>
                               <div className="lead-actions">
                                 <a
                                   className="lead-job-link"
@@ -3736,6 +4540,7 @@ function Discover({
                                     <button
                                       className="primary"
                                       type="button"
+                                      aria-label={`Save ${lead.roleTitle} at ${lead.organization}`}
                                       disabled={triage.isPending}
                                       onClick={() =>
                                         triage.mutate({
@@ -3748,6 +4553,7 @@ function Discover({
                                     </button>
                                     <button
                                       type="button"
+                                      aria-label={`Pass on ${lead.roleTitle} at ${lead.organization}`}
                                       disabled={triage.isPending}
                                       onClick={() =>
                                         triage.mutate({
@@ -3763,6 +4569,7 @@ function Discover({
                                 {lead.state === "dismissed" && (
                                   <button
                                     type="button"
+                                    aria-label={`Move ${lead.roleTitle} at ${lead.organization} to New`}
                                     disabled={triage.isPending}
                                     onClick={() =>
                                       triage.mutate({ lead, decision: "new" })
@@ -3774,20 +4581,54 @@ function Discover({
                                 {lead.resultOpportunityId !== null && (
                                   <Link
                                     to={`/evaluations?opportunity=${encodeURIComponent(lead.resultOpportunityId)}`}
+                                    aria-label={`Evaluate ${lead.roleTitle} at ${lead.organization}`}
                                   >
                                     Evaluate
                                   </Link>
                                 )}
+                                <button
+                                  className="lead-more-toggle"
+                                  type="button"
+                                  aria-label={`${detailsOpen ? "Hide" : "Review"} details for ${lead.roleTitle} at ${lead.organization}`}
+                                  aria-expanded={detailsOpen}
+                                  aria-controls={detailsId}
+                                  onClick={() =>
+                                    setExpandedLeadId((activeId) =>
+                                      activeId === lead.id ? null : lead.id,
+                                    )
+                                  }
+                                >
+                                  {detailsOpen ? "Hide details" : "Details"}
+                                  <span>
+                                    {concerns.length === 0
+                                      ? "Context"
+                                      : concerns.length === 1
+                                        ? "1 check"
+                                        : `${String(concerns.length)} checks`}
+                                  </span>
+                                </button>
                               </div>
-                              <details className="lead-more">
-                                <summary>More</summary>
-                                <div className="lead-more-content">
-                                  {additionalReasons.length > 0 && (
+                              {detailsOpen && (
+                                <div
+                                  className="lead-more-content"
+                                  id={detailsId}
+                                >
+                                  {fitReasons.length > 0 && (
                                     <section>
-                                      <h4>Why it might fit</h4>
+                                      <h4>Why it surfaced</h4>
                                       <ul>
-                                        {additionalReasons.map((reason) => (
+                                        {fitReasons.map((reason) => (
                                           <li key={reason}>{reason}</li>
+                                        ))}
+                                      </ul>
+                                    </section>
+                                  )}
+                                  {concerns.length > 0 && (
+                                    <section>
+                                      <h4>Things to verify</h4>
+                                      <ul>
+                                        {concerns.map((concern) => (
+                                          <li key={concern}>{concern}</li>
                                         ))}
                                       </ul>
                                     </section>
@@ -3798,22 +4639,9 @@ function Discover({
                                       <p>{lead.matchedCriteria.join(" · ")}</p>
                                     </section>
                                   )}
-                                  {(lead.gaps.length > 0 ||
-                                    lead.risks.length > 0) && (
-                                    <section>
-                                      <h4>Things to check</h4>
-                                      <ul>
-                                        {[...lead.gaps, ...lead.risks].map(
-                                          (item) => (
-                                            <li key={item}>{item}</li>
-                                          ),
-                                        )}
-                                      </ul>
-                                    </section>
-                                  )}
                                   <p className="lead-source-note">
-                                    Found on Remotive. Open the job for the full
-                                    listing.
+                                    <strong>Source</strong> {sourceSummary} Open
+                                    the job for the full listing.
                                   </p>
                                   {lead.state === "new" && (
                                     <div className="lead-decision">
@@ -3821,6 +4649,7 @@ function Discover({
                                         Add a note <span>optional</span>
                                         <input
                                           id={`triage-note-${lead.id}`}
+                                          aria-label={`Note for ${lead.roleTitle} at ${lead.organization}`}
                                           value={triageNotes[lead.id] ?? ""}
                                           onChange={(event) =>
                                             setTriageNotes((notes) => ({
@@ -3834,7 +4663,7 @@ function Discover({
                                     </div>
                                   )}
                                 </div>
-                              </details>
+                              )}
                             </article>
                           );
                         })}
@@ -3946,121 +4775,142 @@ function Opportunities({
   return (
     <>
       <PageHeader
-        eyebrow="Opportunity intelligence"
+        eyebrow="Step 2 of 5 · Save roles"
         title="Captured opportunities"
-        description="Save the original posting before comparing it with your career history."
+        description="Save job postings here before you evaluate them."
+        story={pageStories.opportunities}
+        journeyStep={2}
       />
-      <section className="panel">
-        <form
-          className="opportunity-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            capture.mutate();
-          }}
-        >
-          <div className="field-row">
-            <label htmlFor="opportunity-organization">
-              Organization
-              <input
-                id="opportunity-organization"
-                value={organization}
-                onChange={(event) => setOrganization(event.target.value)}
-                placeholder="Company or organization"
-                maxLength={300}
-                required
-              />
-            </label>
-            <label htmlFor="opportunity-role">
-              Role title
-              <input
-                id="opportunity-role"
-                value={roleTitle}
-                onChange={(event) => setRoleTitle(event.target.value)}
-                placeholder="Senior AI Platform Engineer"
-                maxLength={300}
-                required
-              />
-            </label>
-          </div>
-          <div className="field-row">
-            <label htmlFor="posting-url">
-              Posting URL <span>optional</span>
-              <input
-                id="posting-url"
-                type="url"
-                value={postingUrl}
-                onChange={(event) => setPostingUrl(event.target.value)}
-                placeholder="https://company.example/jobs/123"
-                maxLength={2048}
-              />
-            </label>
-            <label htmlFor="requisition-id">
-              Requisition ID <span>optional</span>
-              <input
-                id="requisition-id"
-                value={requisitionId}
-                onChange={(event) => setRequisitionId(event.target.value)}
-                placeholder="REQ-12345"
-                maxLength={200}
-              />
-            </label>
-          </div>
-          <div className="field-row">
-            <label htmlFor="opportunity-location">
-              Location <span>optional</span>
-              <input
-                id="opportunity-location"
-                value={location}
-                onChange={(event) => setLocation(event.target.value)}
-                placeholder="Chicago, IL · United States"
-                maxLength={300}
-              />
-            </label>
-            <label htmlFor="work-arrangement">
-              Work arrangement <span>optional</span>
-              <select
-                id="work-arrangement"
-                value={workArrangement}
-                onChange={(event) => setWorkArrangement(event.target.value)}
-              >
-                <option value="">Not stated</option>
-                <option value="remote">Remote</option>
-                <option value="hybrid">Hybrid</option>
-                <option value="on-site">On-site</option>
-                <option value="flexible">Flexible</option>
-              </select>
-            </label>
-          </div>
-          <label htmlFor="advertised-compensation">
-            Advertised compensation <span>optional</span>
-            <input
-              id="advertised-compensation"
-              value={advertisedCompensation}
-              onChange={(event) =>
-                setAdvertisedCompensation(event.target.value)
-              }
-              placeholder="$180,000–$230,000 plus equity"
-              maxLength={300}
-            />
-          </label>
-          <label htmlFor="job-source">Posting text</label>
-          <textarea
-            id="job-source"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="Paste the complete job description here. Career Workbench saves a local copy for comparison."
-            required
-          />
-          <button
-            className="primary"
-            type="submit"
-            disabled={capture.isPending}
+      <TaskDisclosure
+        collapsed={snapshot.opportunities.length > 0}
+        summary="Add another saved job"
+        hint="Paste the posting when you’re ready"
+      >
+        <section className="panel task-panel">
+          <header>
+            <div>
+              <p className="eyebrow">Do this now</p>
+              <h2>Add a saved job</h2>
+            </div>
+            <small>Role, organization, and posting text are enough.</small>
+          </header>
+          <form
+            className="opportunity-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              capture.mutate();
+            }}
           >
-            Capture opportunity
-          </button>
-        </form>
-        <ErrorNotice error={capture.error} />
-      </section>
+            <div className="field-row">
+              <label htmlFor="opportunity-organization">
+                Organization
+                <input
+                  id="opportunity-organization"
+                  value={organization}
+                  onChange={(event) => setOrganization(event.target.value)}
+                  placeholder="Company or organization"
+                  maxLength={300}
+                  required
+                />
+              </label>
+              <label htmlFor="opportunity-role">
+                Role title
+                <input
+                  id="opportunity-role"
+                  value={roleTitle}
+                  onChange={(event) => setRoleTitle(event.target.value)}
+                  placeholder="Senior AI Platform Engineer"
+                  maxLength={300}
+                  required
+                />
+              </label>
+            </div>
+            <label htmlFor="job-source">Posting text</label>
+            <textarea
+              id="job-source"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="Paste the complete job description here. Career Workbench saves a local copy for comparison."
+              required
+            />
+            <ProgressiveDetails
+              className="form-details"
+              summary="Add posting details"
+              hint="Optional · location, compensation, URL, and requisition"
+            >
+              <div className="field-row">
+                <label htmlFor="opportunity-location">
+                  Location <span>optional</span>
+                  <input
+                    id="opportunity-location"
+                    value={location}
+                    onChange={(event) => setLocation(event.target.value)}
+                    placeholder="Chicago, IL · United States"
+                    maxLength={300}
+                  />
+                </label>
+                <label htmlFor="work-arrangement">
+                  Work arrangement <span>optional</span>
+                  <select
+                    id="work-arrangement"
+                    value={workArrangement}
+                    onChange={(event) => setWorkArrangement(event.target.value)}
+                  >
+                    <option value="">Not stated</option>
+                    <option value="remote">Remote</option>
+                    <option value="hybrid">Hybrid</option>
+                    <option value="on-site">On-site</option>
+                    <option value="flexible">Flexible</option>
+                  </select>
+                </label>
+              </div>
+              <label htmlFor="advertised-compensation">
+                Advertised compensation <span>optional</span>
+                <input
+                  id="advertised-compensation"
+                  value={advertisedCompensation}
+                  onChange={(event) =>
+                    setAdvertisedCompensation(event.target.value)
+                  }
+                  placeholder="$180,000–$230,000 plus equity"
+                  maxLength={300}
+                />
+              </label>
+              <div className="field-row">
+                <label htmlFor="posting-url">
+                  Posting URL <span>optional</span>
+                  <input
+                    id="posting-url"
+                    type="url"
+                    value={postingUrl}
+                    onChange={(event) => setPostingUrl(event.target.value)}
+                    placeholder="https://company.example/jobs/123"
+                    maxLength={2048}
+                  />
+                </label>
+                <label htmlFor="requisition-id">
+                  Requisition ID <span>optional</span>
+                  <input
+                    id="requisition-id"
+                    value={requisitionId}
+                    onChange={(event) => setRequisitionId(event.target.value)}
+                    placeholder="REQ-12345"
+                    maxLength={200}
+                  />
+                </label>
+              </div>
+            </ProgressiveDetails>
+            <button
+              className="primary"
+              type="submit"
+              disabled={capture.isPending}
+            >
+              Capture opportunity
+            </button>
+          </form>
+          <ErrorNotice error={capture.error} />
+        </section>
+      </TaskDisclosure>
       <div className="card-grid">
         {snapshot.opportunities.length === 0 ? (
           <Empty>No opportunities captured yet.</Empty>
@@ -4123,89 +4973,93 @@ function OpportunityCard({
       </div>
       <h2>{opportunity.roleTitle}</h2>
       <p>{opportunity.organization}</p>
-      <dl>
-        <div>
-          <dt>Location</dt>
-          <dd>{opportunity.location ?? "Not stated"}</dd>
-        </div>
-        <div>
-          <dt>Arrangement</dt>
-          <dd>{opportunity.workArrangement ?? "Not stated"}</dd>
-        </div>
-        <div>
-          <dt>Compensation</dt>
-          <dd>{opportunity.advertisedCompensation ?? "Not stated"}</dd>
-        </div>
-        <div>
-          <dt>Requisition</dt>
-          <dd>{opportunity.requisitionId ?? "Not stated"}</dd>
-        </div>
-        <div>
-          <dt>Source URL</dt>
-          <dd className="source-url">
-            {opportunity.originalUrl ?? "Pasted without a URL"}
-          </dd>
-        </div>
-      </dl>
-      <details className="source-inspection">
-        <summary>View saved posting</summary>
-        <div className="source-inspection-body">
-          {source === undefined ? (
-            <Empty>The preserved source is unavailable in this snapshot.</Empty>
-          ) : (
-            <>
-              {source.inlineText === null ? (
-                <Empty>The saved posting text is not shown here.</Empty>
-              ) : (
-                <pre>{source.inlineText}</pre>
-              )}
-            </>
-          )}
-        </div>
-      </details>
-      <form
-        className="signal-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          update.mutate();
-        }}
+      <div className="record-snapshot" aria-label="Opportunity summary">
+        <span>{opportunity.location ?? "Location not stated"}</span>
+        <span>{opportunity.workArrangement ?? "Arrangement not stated"}</span>
+        <span>
+          {opportunity.advertisedCompensation ?? "Compensation not stated"}
+        </span>
+      </div>
+      <Link
+        className="button-link secondary opportunity-evaluate-link"
+        to={`/evaluations?opportunity=${opportunity.id}`}
       >
-        <label>
-          Posting liveness
-          <select
-            value={sourceStatus}
-            onChange={(event) => setSourceStatus(event.target.value)}
-          >
-            {["unknown", "active", "expired", "unavailable"].map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Legitimacy signals
-          <select
-            value={legitimacyStatus}
-            onChange={(event) => setLegitimacyStatus(event.target.value)}
-          >
-            {["unknown", "high_confidence", "needs_review", "concern"].map(
-              (value) => (
-                <option key={value} value={value}>
-                  {value.replaceAll("_", " ")}
-                </option>
-              ),
+        Evaluate this job <ArrowRight aria-hidden="true" />
+      </Link>
+      <ProgressiveDetails
+        summary="Review posting and signals"
+        hint="Saved source, identifiers, and verification controls"
+      >
+        <dl>
+          <div>
+            <dt>Requisition</dt>
+            <dd>{opportunity.requisitionId ?? "Not stated"}</dd>
+          </div>
+          <div>
+            <dt>Source URL</dt>
+            <dd className="source-url">
+              {opportunity.originalUrl ?? "Pasted without a URL"}
+            </dd>
+          </div>
+        </dl>
+        <details className="source-inspection">
+          <summary>View saved posting text</summary>
+          <div className="source-inspection-body">
+            {source === undefined ? (
+              <Empty>
+                The preserved source is unavailable in this snapshot.
+              </Empty>
+            ) : source.inlineText === null ? (
+              <Empty>The saved posting text is not shown here.</Empty>
+            ) : (
+              <pre>{source.inlineText}</pre>
             )}
-          </select>
-        </label>
-        <button type="submit" disabled={update.isPending}>
-          Save signals
-        </button>
-      </form>
-      <small>
-        Revision {opportunity.revision}. Liveness and legitimacy are
-        independent.
-      </small>
+          </div>
+        </details>
+        <form
+          className="signal-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            update.mutate();
+          }}
+        >
+          <label>
+            Posting liveness
+            <select
+              value={sourceStatus}
+              onChange={(event) => setSourceStatus(event.target.value)}
+            >
+              {["unknown", "active", "expired", "unavailable"].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Legitimacy signals
+            <select
+              value={legitimacyStatus}
+              onChange={(event) => setLegitimacyStatus(event.target.value)}
+            >
+              {["unknown", "high_confidence", "needs_review", "concern"].map(
+                (value) => (
+                  <option key={value} value={value}>
+                    {value.replaceAll("_", " ")}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+          <button type="submit" disabled={update.isPending}>
+            Save signals
+          </button>
+        </form>
+        <small>
+          Revision {opportunity.revision}. Liveness and legitimacy are
+          independent.
+        </small>
+      </ProgressiveDetails>
       <ErrorNotice error={update.error} />
     </article>
   );
@@ -4261,57 +5115,66 @@ function Evaluations({
   return (
     <>
       <PageHeader
-        eyebrow="Next step"
+        eyebrow="Step 3 of 5 · Check fit"
         title="Check the fit."
-        description="See how a saved job matches your experience."
+        description="Choose a saved job, then review its score, evidence, and gaps."
+        story={pageStories.evaluations}
+        journeyStep={3}
       />
-      <section className="panel run-panel">
-        <div>
-          <h2>Choose a saved job</h2>
-        </div>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            run.mutate();
-          }}
-        >
-          <label htmlFor="evaluation-opportunity">Saved job</label>
-          <select
-            id="evaluation-opportunity"
-            value={opportunityId}
-            onChange={(event) => setOpportunityId(event.target.value)}
-            required
+      <TaskDisclosure
+        collapsed={selectedEvaluation !== undefined}
+        summary="Choose a job or check again"
+        hint="Your latest result stays visible below"
+      >
+        <section className="panel run-panel task-panel">
+          <div>
+            <p className="eyebrow">Do this now</p>
+            <h2>Choose a saved job</h2>
+          </div>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              run.mutate();
+            }}
           >
-            <option value="" disabled>
-              Select an opportunity
-            </option>
-            {snapshot.opportunities.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.roleTitle} · {item.organization}
+            <label htmlFor="evaluation-opportunity">Saved job</label>
+            <select
+              id="evaluation-opportunity"
+              value={opportunityId}
+              onChange={(event) => setOpportunityId(event.target.value)}
+              required
+            >
+              <option value="" disabled>
+                Select an opportunity
               </option>
-            ))}
-          </select>
-          <button
-            className="primary"
-            type="submit"
-            disabled={
-              run.isPending || opportunityId === "" || !hasVerifiedCareerFact
-            }
-          >
-            {run.isPending
-              ? "Checking…"
-              : selectedEvaluation === undefined
-                ? "Check fit"
-                : "Check again"}
-          </button>
-        </form>
-        {!hasVerifiedCareerFact ? (
-          <p className="field-help">
-            Add your experience in Career before checking the fit.
-          </p>
-        ) : null}
-        <ErrorNotice error={run.error} />
-      </section>
+              {snapshot.opportunities.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.roleTitle} · {item.organization}
+                </option>
+              ))}
+            </select>
+            <button
+              className="primary"
+              type="submit"
+              disabled={
+                run.isPending || opportunityId === "" || !hasVerifiedCareerFact
+              }
+            >
+              {run.isPending
+                ? "Checking…"
+                : selectedEvaluation === undefined
+                  ? "Check fit"
+                  : "Check again"}
+            </button>
+          </form>
+          {!hasVerifiedCareerFact ? (
+            <p className="field-help">
+              Add your experience in Career before checking the fit.
+            </p>
+          ) : null}
+          <ErrorNotice error={run.error} />
+        </section>
+      </TaskDisclosure>
       <div className="card-list">
         {snapshot.opportunities.length === 0 ? (
           <Empty>Save a job first.</Empty>
@@ -4494,18 +5357,7 @@ function ApprovalGate({
       {approval !== undefined && (
         <div className="approval-receipt" aria-live="polite">
           <strong>{approval.summary}</strong>
-          <p>{approval.effectDescription}</p>
           <dl>
-            <div>
-              <dt>Effect</dt>
-              <dd>{approval.effectKind}</dd>
-            </div>
-            <div>
-              <dt>Target</dt>
-              <dd>
-                <code>{approval.targetId}</code>
-              </dd>
-            </div>
             <div>
               <dt>Bound revision</dt>
               <dd>{approval.expectedRevisions[targetId] ?? "unavailable"}</dd>
@@ -4519,6 +5371,31 @@ function ApprovalGate({
               </dd>
             </div>
           </dl>
+          <ProgressiveDetails
+            className="approval-technical"
+            summary="Technical receipt"
+            hint="Exact effect and machine identifiers"
+          >
+            <p>{approval.effectDescription}</p>
+            <dl>
+              <div>
+                <dt>Effect</dt>
+                <dd>{approval.effectKind}</dd>
+              </div>
+              <div>
+                <dt>Target</dt>
+                <dd>
+                  <code>{approval.targetId}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Effect digest</dt>
+                <dd>
+                  <code>{approval.effectDigest}</code>
+                </dd>
+              </div>
+            </dl>
+          </ProgressiveDetails>
           {!bindingIsCurrent && canRequest && (
             <p className="approval-binding-warning">
               This receipt is not bound to current target revision{" "}
@@ -4625,67 +5502,58 @@ function ComparisonCard({
       : comparison.state === "stale"
         ? "warning"
         : "neutral";
+  const highlights = comparison.scenarios.map((scenario, index) => {
+    const label = comparisonText(scenario, "label") || "Scenario";
+    const rankingValue = scenario["rankedEvaluationIds"];
+    const evaluationId = Array.isArray(rankingValue)
+      ? rankingValue.find((item): item is string => typeof item === "string")
+      : undefined;
+    const scoresValue = scenario["scoresBasisPoints"];
+    const scores =
+      typeof scoresValue === "object" &&
+      scoresValue !== null &&
+      !Array.isArray(scoresValue)
+        ? (scoresValue as Readonly<Record<string, unknown>>)
+        : {};
+    return {
+      key: `${label}-${String(index)}`,
+      label,
+      winner:
+        evaluationId === undefined
+          ? "No ranked opportunity"
+          : evaluationLabel(evaluationId),
+      score:
+        evaluationId === undefined
+          ? null
+          : comparisonNumber(scores, evaluationId) / 100,
+    };
+  });
   return (
     <article className={`comparison-card ${comparison.state}`}>
       <header>
         <div>
-          <p className="eyebrow">Policy {comparison.policyVersion}</p>
+          <p className="eyebrow">Sensitivity comparison</p>
           <h2>Three-opportunity sensitivity comparison</h2>
         </div>
         <StatusPill tone={tone}>{comparison.state}</StatusPill>
       </header>
-      <p className="comparison-binding">
-        Bound to exact evaluation revisions. Scenario scores below were
-        recomputed by Career Workbench; notebook output did not authorize this
-        record.
-      </p>
       {comparison.staleReason !== null && (
         <div className="notice warning" role="status">
           <RefreshCw aria-hidden="true" />
           <span>Stale: {comparison.staleReason}</span>
         </div>
       )}
-      <div className="comparison-tables">
-        {comparison.scenarios.map((scenario, index) => {
-          const label = comparisonText(scenario, "label") || "Scenario";
-          const scoresValue = scenario["scoresBasisPoints"];
-          const scores =
-            typeof scoresValue === "object" &&
-            scoresValue !== null &&
-            !Array.isArray(scoresValue)
-              ? (scoresValue as Readonly<Record<string, unknown>>)
-              : {};
-          const rankingValue = scenario["rankedEvaluationIds"];
-          const ranking = Array.isArray(rankingValue)
-            ? rankingValue.filter(
-                (item): item is string => typeof item === "string",
-              )
-            : [];
-          return (
-            <table key={`${label}-${String(index)}`}>
-              <caption>{label}</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Rank</th>
-                  <th scope="col">Opportunity</th>
-                  <th scope="col">Scenario score</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ranking.map((evaluationId, rank) => (
-                  <tr key={evaluationId}>
-                    <td>{rank + 1}</td>
-                    <th scope="row">{evaluationLabel(evaluationId)}</th>
-                    <td>{comparisonNumber(scores, evaluationId) / 100}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          );
-        })}
+      <div className="comparison-highlights" aria-label="Scenario leaders">
+        {highlights.map((highlight) => (
+          <section key={highlight.key}>
+            <span>{highlight.label}</span>
+            <strong>{highlight.winner}</strong>
+            {highlight.score !== null && <small>{highlight.score}% fit</small>}
+          </section>
+        ))}
       </div>
       {comparison.tradeoffs.length > 0 && (
-        <div className="tradeoffs">
+        <div className="tradeoffs comparison-critical-tradeoffs">
           <h3>Trade-offs to review</h3>
           <ul>
             {comparison.tradeoffs.map((tradeoff) => (
@@ -4694,6 +5562,55 @@ function ComparisonCard({
           </ul>
         </div>
       )}
+      <ProgressiveDetails
+        summary="Review exact rankings"
+        hint="All scenarios, exact scores, and record binding"
+      >
+        <p className="comparison-binding">
+          Bound to exact evaluation revisions. Scenario scores below were
+          recomputed by Career Workbench; notebook output did not authorize this
+          record. Policy {comparison.policyVersion}.
+        </p>
+        <div className="comparison-tables">
+          {comparison.scenarios.map((scenario, index) => {
+            const label = comparisonText(scenario, "label") || "Scenario";
+            const scoresValue = scenario["scoresBasisPoints"];
+            const scores =
+              typeof scoresValue === "object" &&
+              scoresValue !== null &&
+              !Array.isArray(scoresValue)
+                ? (scoresValue as Readonly<Record<string, unknown>>)
+                : {};
+            const rankingValue = scenario["rankedEvaluationIds"];
+            const ranking = Array.isArray(rankingValue)
+              ? rankingValue.filter(
+                  (item): item is string => typeof item === "string",
+                )
+              : [];
+            return (
+              <table key={`${label}-${String(index)}`}>
+                <caption>{label}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Rank</th>
+                    <th scope="col">Opportunity</th>
+                    <th scope="col">Scenario score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ranking.map((evaluationId, rank) => (
+                    <tr key={evaluationId}>
+                      <td>{rank + 1}</td>
+                      <th scope="row">{evaluationLabel(evaluationId)}</th>
+                      <td>{comparisonNumber(scores, evaluationId) / 100}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            );
+          })}
+        </div>
+      </ProgressiveDetails>
       {comparison.state !== "stale" && (
         <ApprovalGate
           effectKind="comparison.accept"
@@ -4739,25 +5656,27 @@ function Comparisons({
   return (
     <>
       <PageHeader
-        eyebrow="Decision support"
+        eyebrow="Step 3 of 5 · Compare"
         title="Opportunity comparisons"
-        description="Review sensitivity across user-defined priorities before explicitly accepting a durable result."
+        description="Compare evaluated roles using your priorities. You make the decision."
+        story={pageStories.comparisons}
+        journeyStep={3}
       />
       <div className="notice warning rlm-authority" role="note">
         <AlertTriangle aria-hidden="true" />
         <span>
-          RLM is optional. When enabled, IPython and its subprocesses have full
-          operating-system authority and are not sandboxed. Only validated
-          structured proposals can reach canonical Career Workbench state.
+          Advanced comparison is optional. When enabled, it can run local code
+          with access to your computer and is not sandboxed. Only results that
+          pass Workbench checks can update your records.
         </span>
       </div>
       <div className="card-list">
         {snapshot.comparisons.length === 0 ? (
           <section className="panel comparison-empty">
-            <h2>Prepare a three-opportunity comparison</h2>
+            <h2>Before you compare</h2>
             <p>
-              A comparison is proposed by the exact originating DSH Agent and
-              accepted here only after Career Workbench validates it.
+              Prepare three agent-evaluated roles and check that analysis is
+              ready.
             </p>
             <ul className="comparison-prerequisites">
               <li>
@@ -4766,7 +5685,7 @@ function Comparisons({
                 </StatusPill>
                 <span>
                   <strong>
-                    {Math.min(currentEvaluations, 3)} of 3 current evaluations
+                    {Math.min(currentEvaluations, 3)} of 3 agent-evaluated roles
                   </strong>
                   <Link to="/evaluations">Review evaluations</Link>
                 </span>
@@ -4781,7 +5700,7 @@ function Comparisons({
                 </StatusPill>
                 <span>
                   <strong>
-                    DSH {dshAvailable ? "available" : "unavailable"}
+                    Agent connection {dshAvailable ? "ready" : "unavailable"}
                   </strong>
                   <Link to="/diagnostics">Open diagnostics</Link>
                 </span>
@@ -4796,20 +5715,22 @@ function Comparisons({
                 </StatusPill>
                 <span>
                   <strong>
-                    RLM {rlmAvailable ? "available" : "unavailable"}
+                    Advanced analysis {rlmAvailable ? "ready" : "unavailable"}
                   </strong>
                   <Link to="/diagnostics">Open diagnostics</Link>
                 </span>
               </li>
             </ul>
             <div className="comparison-next-action">
-              <strong>Exact next action</strong>
+              <strong>Next action</strong>
               <p>
-                {currentEvaluations < 3
-                  ? "Complete three current evaluations, then return here."
+                {diagnostics.isLoading
+                  ? "Checking the agent and advanced analysis status…"
                   : !dshAvailable || !rlmAvailable
-                    ? "Enable DSH with RLM in the owning host profile, then ask the exact originating Agent to compare three current evaluations."
-                    : "Ask the exact originating DSH Agent to compare three current evaluations with RLM; the structured proposal will appear here for review."}
+                    ? "Open System status and reconnect the missing analysis tools first."
+                    : currentEvaluations < 3
+                      ? "Complete three agent-assisted evaluations, then return here."
+                      : "Ask your agent to compare the three roles. The result will appear here for review."}
               </p>
             </div>
           </section>
@@ -4935,140 +5856,167 @@ function EvaluationCard({
           <span>Stale: {evaluation.staleReason}</span>
         </div>
       )}
-      <Tabs.Root defaultValue="score">
-        <Tabs.List aria-label="Evaluation details">
-          <Tabs.Trigger value="score">Score</Tabs.Trigger>
-          <Tabs.Trigger value="evidence">Used</Tabs.Trigger>
-          <Tabs.Trigger value="gaps">Gaps</Tabs.Trigger>
-          <Tabs.Trigger value="artifacts">Artifacts</Tabs.Trigger>
-        </Tabs.List>
-        <Tabs.Content value="score">
-          {evaluation.dimensionScores.map((dimension) => (
-            <div className="dimension" key={dimension.dimensionKey}>
-              <div>
-                <strong>{dimension.dimensionKey}</strong>
-                <span>
-                  {dimension.inputBasisPoints / 100}% · weight{" "}
-                  {dimension.weightBasisPoints / 100}%
-                </span>
+      <div className="record-snapshot" aria-label="Evaluation summary">
+        <span>{evaluation.state.replaceAll("_", " ")}</span>
+        <span>{acceptedEvidence.length} evidence items used</span>
+        <span>
+          {evaluation.gaps.length === 0
+            ? "No blocking gaps"
+            : `${String(evaluation.gaps.length)} gap${evaluation.gaps.length === 1 ? "" : "s"} to review`}
+        </span>
+      </div>
+      {(evaluation.gaps.length > 0 || evaluation.contradictions.length > 0) && (
+        <section className="evaluation-critical-findings" role="note">
+          <strong>Review before deciding</strong>
+          <ul>
+            {[...evaluation.gaps, ...evaluation.contradictions].map(
+              (finding) => (
+                <li key={finding}>{finding}</li>
+              ),
+            )}
+          </ul>
+        </section>
+      )}
+      <ProgressiveDetails
+        className="evaluation-details"
+        summary="Review fit evidence"
+        hint="Score factors, supporting evidence, gaps, and report"
+      >
+        <Tabs.Root defaultValue="score">
+          <Tabs.List aria-label="Evaluation details">
+            <Tabs.Trigger value="score">Score</Tabs.Trigger>
+            <Tabs.Trigger value="evidence">Used</Tabs.Trigger>
+            <Tabs.Trigger value="gaps">Gaps</Tabs.Trigger>
+            <Tabs.Trigger value="artifacts">Artifacts</Tabs.Trigger>
+          </Tabs.List>
+          <Tabs.Content value="score">
+            {evaluation.dimensionScores.map((dimension) => (
+              <div className="dimension" key={dimension.dimensionKey}>
+                <div>
+                  <strong>{dimension.dimensionKey}</strong>
+                  <span>
+                    {dimension.inputBasisPoints / 100}% · weight{" "}
+                    {dimension.weightBasisPoints / 100}%
+                  </span>
+                </div>
+                <meter min="0" max="10000" value={dimension.inputBasisPoints}>
+                  {dimension.inputBasisPoints / 100}%
+                </meter>
               </div>
-              <meter min="0" max="10000" value={dimension.inputBasisPoints}>
-                {dimension.inputBasisPoints / 100}%
-              </meter>
-            </div>
-          ))}
-          <details className="evaluation-math">
-            <summary>How this was calculated</summary>
-            <p className="math">{evaluation.arithmeticExplanation}</p>
-          </details>
-        </Tabs.Content>
-        <Tabs.Content value="evidence">
-          <div className="evaluation-input-summary">
-            <section>
-              <Check aria-hidden="true" />
-              <div>
-                <h3>Your experience</h3>
-                {careerEvidence.slice(0, 2).map((evidence) => (
-                  <p key={evidence.id}>
-                    {compactEvaluationText(evidence.claim)}
-                  </p>
-                ))}
-                {careerEvidence.length > 2 && (
-                  <small>
-                    +{careerEvidence.length - 2} more career details
-                  </small>
-                )}
-              </div>
-            </section>
-            <section>
-              <Check aria-hidden="true" />
-              <div>
-                <h3>Saved job</h3>
-                <p>
-                  {opportunity?.roleTitle ?? "Role"}
-                  {opportunity?.organization === undefined
-                    ? ""
-                    : ` at ${opportunity.organization}`}
-                </p>
-                {additionalEvidenceCount > 0 && (
-                  <small>
-                    +{additionalEvidenceCount} additional matched{" "}
-                    {additionalEvidenceCount === 1 ? "detail" : "details"}
-                  </small>
-                )}
-              </div>
-            </section>
-          </div>
-          {rejectedEvidence.length > 0 && (
-            <details className="evaluation-unused-details">
-              <summary>Not used · {rejectedEvidence.length}</summary>
-              <ul className="evidence-list">
-                {rejectedEvidence.map((evidence) => (
-                  <li key={evidence.id}>
-                    <AlertTriangle aria-hidden="true" />
-                    <span>
-                      {evidence.claim}
-                      <small>
-                        {evidence.classification.replaceAll("_", " ")}
-                        {evidence.decisionReason === null
-                          ? " · rejected"
-                          : ` · ${evidence.decisionReason}`}
-                      </small>
-                    </span>
-                  </li>
-                ))}
-              </ul>
+            ))}
+            <details className="evaluation-math">
+              <summary>How this was calculated</summary>
+              <p className="math">{evaluation.arithmeticExplanation}</p>
             </details>
-          )}
-        </Tabs.Content>
-        <Tabs.Content value="gaps">
-          <div className="evaluation-findings">
-            <section>
-              <h3>Critical findings and gaps</h3>
-              {evaluation.gaps.length === 0 ? (
-                <Empty>
-                  No blocking gaps. Missing inputs received the rubric’s
-                  documented treatment.
-                </Empty>
-              ) : (
-                <ul>
-                  {evaluation.gaps.map((gap) => (
-                    <li key={gap}>{gap}</li>
+          </Tabs.Content>
+          <Tabs.Content value="evidence">
+            <div className="evaluation-input-summary">
+              <section>
+                <Check aria-hidden="true" />
+                <div>
+                  <h3>Your experience</h3>
+                  {careerEvidence.slice(0, 2).map((evidence) => (
+                    <p key={evidence.id}>
+                      {compactEvaluationText(evidence.claim)}
+                    </p>
+                  ))}
+                  {careerEvidence.length > 2 && (
+                    <small>
+                      +{careerEvidence.length - 2} more career details
+                    </small>
+                  )}
+                </div>
+              </section>
+              <section>
+                <Check aria-hidden="true" />
+                <div>
+                  <h3>Saved job</h3>
+                  <p>
+                    {opportunity?.roleTitle ?? "Role"}
+                    {opportunity?.organization === undefined
+                      ? ""
+                      : ` at ${opportunity.organization}`}
+                  </p>
+                  {additionalEvidenceCount > 0 && (
+                    <small>
+                      +{additionalEvidenceCount} additional matched{" "}
+                      {additionalEvidenceCount === 1 ? "detail" : "details"}
+                    </small>
+                  )}
+                </div>
+              </section>
+            </div>
+            {rejectedEvidence.length > 0 && (
+              <details className="evaluation-unused-details">
+                <summary>Not used · {rejectedEvidence.length}</summary>
+                <ul className="evidence-list">
+                  {rejectedEvidence.map((evidence) => (
+                    <li key={evidence.id}>
+                      <AlertTriangle aria-hidden="true" />
+                      <span>
+                        {evidence.claim}
+                        <small>
+                          {evidence.classification.replaceAll("_", " ")}
+                          {evidence.decisionReason === null
+                            ? " · rejected"
+                            : ` · ${evidence.decisionReason}`}
+                        </small>
+                      </span>
+                    </li>
                   ))}
                 </ul>
-              )}
-            </section>
-            <section>
-              <h3>Contradictions</h3>
-              {evaluation.contradictions.length === 0 ? (
-                <Empty>No contradictions recorded.</Empty>
-              ) : (
-                <ul>
-                  {evaluation.contradictions.map((contradiction) => (
-                    <li key={contradiction}>{contradiction}</li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          </div>
-        </Tabs.Content>
-        <Tabs.Content value="artifacts">
-          {artifacts.length === 0 ? (
-            <button
-              className="secondary"
-              onClick={() => seal.mutate()}
-              disabled={seal.isPending}
-            >
-              Seal immutable report
-            </button>
-          ) : (
-            artifacts.map((artifact) => (
-              <ArtifactRow key={artifact.id} artifact={artifact} />
-            ))
-          )}
-          <ErrorNotice error={seal.error} />
-        </Tabs.Content>
-      </Tabs.Root>
+              </details>
+            )}
+          </Tabs.Content>
+          <Tabs.Content value="gaps">
+            <div className="evaluation-findings">
+              <section>
+                <h3>Critical findings and gaps</h3>
+                {evaluation.gaps.length === 0 ? (
+                  <Empty>
+                    No blocking gaps. Missing inputs received the rubric’s
+                    documented treatment.
+                  </Empty>
+                ) : (
+                  <ul>
+                    {evaluation.gaps.map((gap) => (
+                      <li key={gap}>{gap}</li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+              <section>
+                <h3>Contradictions</h3>
+                {evaluation.contradictions.length === 0 ? (
+                  <Empty>No contradictions recorded.</Empty>
+                ) : (
+                  <ul>
+                    {evaluation.contradictions.map((contradiction) => (
+                      <li key={contradiction}>{contradiction}</li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+          </Tabs.Content>
+          <Tabs.Content value="artifacts">
+            {artifacts.length === 0 ? (
+              <button
+                className="secondary"
+                onClick={() => seal.mutate()}
+                disabled={seal.isPending}
+              >
+                Seal immutable report
+              </button>
+            ) : (
+              artifacts.map((artifact) => (
+                <ArtifactRow key={artifact.id} artifact={artifact} />
+              ))
+            )}
+            <ErrorNotice error={seal.error} />
+          </Tabs.Content>
+        </Tabs.Root>
+      </ProgressiveDetails>
     </article>
   );
 }
@@ -5176,49 +6124,70 @@ function Pipeline({
   return (
     <>
       <PageHeader
-        eyebrow="Human-controlled workflow"
+        eyebrow="Step 4 of 5 · Track progress"
         title="Application pipeline"
-        description="Track state transitions and next actions without submitting, messaging, accepting, rejecting, or withdrawing anything on an external service."
+        description="Keep each opportunity’s current status and next action clear. Nothing here submits externally."
+        story={pageStories.pipeline}
+        journeyStep={4}
       />
       {missing.length > 0 && (
-        <section className="panel run-panel">
-          <div>
-            <h2>Start tracking an opportunity</h2>
-            <p>The initial canonical state is considering.</p>
-          </div>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              create.mutate();
-            }}
-          >
-            <label htmlFor="pipeline-opportunity">Opportunity</label>
-            <select
-              id="pipeline-opportunity"
-              value={opportunityId}
-              onChange={(event) => setOpportunityId(event.target.value)}
-              required
+        <TaskDisclosure
+          collapsed={snapshot.applications.length > 0}
+          summary="Track another opportunity"
+          hint={`${String(snapshot.applications.length)} already in your pipeline`}
+        >
+          <section className="panel run-panel task-panel">
+            <div>
+              <p className="eyebrow">Do this now</p>
+              <h2>Start tracking an opportunity</h2>
+              <p>New records begin as considering.</p>
+            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                create.mutate();
+              }}
             >
-              {missing.map((opportunity) => (
-                <option key={opportunity.id} value={opportunity.id}>
-                  {opportunity.roleTitle} · {opportunity.organization}
-                </option>
-              ))}
-            </select>
-            <button
-              className="primary"
-              type="submit"
-              disabled={create.isPending}
-            >
-              Start pipeline record
-            </button>
-          </form>
-          <ErrorNotice error={create.error} />
-        </section>
+              <label htmlFor="pipeline-opportunity">Opportunity</label>
+              <select
+                id="pipeline-opportunity"
+                value={opportunityId}
+                onChange={(event) => setOpportunityId(event.target.value)}
+                required
+              >
+                {missing.map((opportunity) => (
+                  <option key={opportunity.id} value={opportunity.id}>
+                    {opportunity.roleTitle} · {opportunity.organization}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="primary"
+                type="submit"
+                disabled={create.isPending}
+              >
+                Start pipeline record
+              </button>
+            </form>
+            <ErrorNotice error={create.error} />
+          </section>
+        </TaskDisclosure>
       )}
       <div className="pipeline-board">
         {snapshot.applications.length === 0 ? (
-          <Empty>No applications are being tracked yet.</Empty>
+          snapshot.opportunities.length === 0 ? (
+            <section className="empty-next-action">
+              <h2>Save a job first</h2>
+              <p>Add a job you want to track, then return to the pipeline.</p>
+              <Link className="button-link primary" to="/opportunities">
+                Go to saved jobs <ArrowRight aria-hidden="true" />
+              </Link>
+            </section>
+          ) : (
+            <Empty>
+              Choose a saved opportunity above to start tracking it.
+            </Empty>
+          )
         ) : (
           snapshot.applications.map((application) => (
             <ApplicationCard
@@ -5295,12 +6264,15 @@ function ApplicationCard({
         <strong>Next action:</strong>{" "}
         <Link to={nextAction.to}>{nextAction.label}</Link>
       </p>
-      <small>
-        Entity revision {application.revision} · state revision{" "}
-        {application.stateRevision} · effective {application.effectiveDate}
-      </small>
-      {allowed.length > 0 && (
-        <>
+      <ProgressiveDetails
+        summary={allowed.length > 0 ? "Update status" : "Review history"}
+        hint={`${String(history.length)} recorded change${history.length === 1 ? "" : "s"}`}
+      >
+        <small>
+          Entity revision {application.revision} · state revision{" "}
+          {application.stateRevision} · effective {application.effectiveDate}
+        </small>
+        {allowed.length > 0 && (
           <form
             className="application-transition"
             onSubmit={(event) => {
@@ -5339,35 +6311,37 @@ function ApplicationCard({
                 : "Record transition"}
             </button>
           </form>
-          <ApprovalGate
-            effectKind="application.transition"
-            targetId={application.id}
-            targetRevision={application.revision}
-            actionLabel="Continue in DSH"
-            requestLabel={`Authorize ${nextState} for the DSH Agent`}
-            canRequest={nextState !== ""}
-            requestDetails={{
-              applicationTransition: {
-                state: nextState,
-                effectiveDate,
-                ...(note.trim().length === 0 ? {} : { note: note.trim() }),
-              },
-            }}
-            approvedMessage="Exact transition approved for five minutes. Return to the originating DSH conversation and ask it to continue; the approval is single-use."
-          />
-        </>
+        )}
+        <details>
+          <summary>Transition history ({history.length})</summary>
+          <ol className="compact-history">
+            {history.map((event) => (
+              <li key={event.sequence}>
+                <span>{event.eventKind.replaceAll("_", " ")}</span>
+                <time>{new Date(event.timestamp).toLocaleString()}</time>
+              </li>
+            ))}
+          </ol>
+        </details>
+      </ProgressiveDetails>
+      {allowed.length > 0 && (
+        <ApprovalGate
+          effectKind="application.transition"
+          targetId={application.id}
+          targetRevision={application.revision}
+          actionLabel="Continue in DSH"
+          requestLabel={`Authorize ${nextState} for the DSH Agent`}
+          canRequest={nextState !== ""}
+          requestDetails={{
+            applicationTransition: {
+              state: nextState,
+              effectiveDate,
+              ...(note.trim().length === 0 ? {} : { note: note.trim() }),
+            },
+          }}
+          approvedMessage="Exact transition approved for five minutes. Return to the originating DSH conversation and ask it to continue; the approval is single-use."
+        />
       )}
-      <details>
-        <summary>Transition history ({history.length})</summary>
-        <ol className="compact-history">
-          {history.map((event) => (
-            <li key={event.sequence}>
-              <span>{event.eventKind.replaceAll("_", " ")}</span>
-              <time>{new Date(event.timestamp).toLocaleString()}</time>
-            </li>
-          ))}
-        </ol>
-      </details>
       <ErrorNotice error={transition.error} />
     </article>
   );
@@ -5417,73 +6391,118 @@ function Drafts({
   return (
     <>
       <PageHeader
-        eyebrow="Application writing"
+        eyebrow="Step 5 of 5 · Prepare materials"
         title="Drafts and review"
-        description="Generate local drafts from the career details you selected. Style notes guide tone; every draft stays under your control and nothing is submitted."
+        description="Create a local draft, inspect it, and decide when it is ready. Nothing is submitted."
+        story={pageStories.drafts}
+        journeyStep={5}
       />
-      <section className="panel draft-builder">
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            generate.mutate();
-          }}
-        >
-          <div className="field-row">
-            <label>
-              Artifact type
-              <select
-                value={kind}
-                onChange={(event) => setKind(event.target.value)}
-              >
-                <option value="draft_cv">CV draft</option>
-                <option value="draft_cover_letter">Cover-letter draft</option>
-                <option value="draft_outreach">Outreach draft</option>
-                <option value="draft_interview_prep">
-                  Interview-preparation draft
-                </option>
-              </select>
-            </label>
-            <label>
-              Opportunity
-              <select
-                value={opportunityId}
-                onChange={(event) => setOpportunityId(event.target.value)}
-                required
-              >
-                {snapshot.opportunities.map((opportunity) => (
-                  <option key={opportunity.id} value={opportunity.id}>
-                    {opportunity.roleTitle} · {opportunity.organization}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <label>
-            Non-factual style direction
-            <textarea
-              value={styleNote}
-              maxLength={1_000}
-              onChange={(event) => setStyleNote(event.target.value)}
-            />
-          </label>
-          <p className="trust-note">
-            {eligibleFacts.length} career details are ready. Generation stores a
-            staged local draft; it sends nothing.
-          </p>
-          <button
-            className="primary"
-            type="submit"
-            disabled={
-              generate.isPending ||
-              opportunityId === "" ||
-              eligibleFacts.length === 0
-            }
+      <TaskDisclosure
+        collapsed={drafts.length > 0}
+        summary="Create another draft"
+        hint={`${String(drafts.length)} ${drafts.length === 1 ? "draft" : "drafts"} ready to review`}
+      >
+        <section className="panel draft-builder task-panel">
+          <header>
+            <div>
+              <p className="eyebrow">Do this now</p>
+              <h2>Prepare a draft</h2>
+            </div>
+            <small>Choose the material and the job it supports.</small>
+          </header>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              generate.mutate();
+            }}
           >
-            Generate staged draft
-          </button>
-        </form>
-        <ErrorNotice error={generate.error} />
-      </section>
+            <div className="field-row">
+              <label>
+                Artifact type
+                <select
+                  value={kind}
+                  onChange={(event) => setKind(event.target.value)}
+                >
+                  <option value="draft_cv">CV draft</option>
+                  <option value="draft_cover_letter">Cover-letter draft</option>
+                  <option value="draft_outreach">Outreach draft</option>
+                  <option value="draft_interview_prep">
+                    Interview-preparation draft
+                  </option>
+                </select>
+              </label>
+              <label>
+                Opportunity
+                <select
+                  value={opportunityId}
+                  onChange={(event) => setOpportunityId(event.target.value)}
+                  required
+                >
+                  {snapshot.opportunities.map((opportunity) => (
+                    <option key={opportunity.id} value={opportunity.id}>
+                      {opportunity.roleTitle} · {opportunity.organization}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <ProgressiveDetails
+              className="form-details"
+              summary="Adjust writing style"
+              hint="Optional · tone only, never candidate facts"
+            >
+              <label>
+                Non-factual style direction
+                <textarea
+                  value={styleNote}
+                  maxLength={1_000}
+                  onChange={(event) => setStyleNote(event.target.value)}
+                />
+              </label>
+            </ProgressiveDetails>
+            <p className="trust-note">
+              {eligibleFacts.length}{" "}
+              {eligibleFacts.length === 1
+                ? "career detail is"
+                : "career details are"}{" "}
+              ready. Generation stores a staged local draft; it sends nothing.
+            </p>
+            <button
+              className="primary"
+              type="submit"
+              aria-describedby={
+                opportunityId === "" || eligibleFacts.length === 0
+                  ? "draft-prerequisite-help"
+                  : undefined
+              }
+              disabled={
+                generate.isPending ||
+                opportunityId === "" ||
+                eligibleFacts.length === 0
+              }
+            >
+              Generate staged draft
+            </button>
+            {(opportunityId === "" || eligibleFacts.length === 0) && (
+              <div id="draft-prerequisite-help" className="prerequisite-help">
+                {opportunityId === "" && (
+                  <p>
+                    <Link to="/opportunities">Save a job first</Link> so the
+                    draft has a target.
+                  </p>
+                )}
+                {eligibleFacts.length === 0 && (
+                  <p>
+                    <Link to="/evaluations">Complete a fit check</Link> that
+                    uses accepted career evidence before drafting.
+                  </p>
+                )}
+              </div>
+            )}
+          </form>
+          <ErrorNotice error={generate.error} />
+        </section>
+      </TaskDisclosure>
       <div className="card-list">
         {[...drafts].reverse().map((artifact) => (
           <DraftCard
@@ -5525,7 +6544,7 @@ function DraftCard({
     <article className={`draft-card ${artifact.state}`}>
       <header>
         <div>
-          <p className="eyebrow">Revision {artifact.revision}</p>
+          <p className="eyebrow">Local material</p>
           <h2>{artifact.kind.replaceAll("_", " ")}</h2>
         </div>
         <StatusPill
@@ -5545,20 +6564,10 @@ function DraftCard({
           <RefreshCw aria-hidden="true" /> {artifact.staleReason}
         </div>
       )}
-      <div className="provenance-grid">
-        <div>
-          <strong>{artifact.factIds.length}</strong>
-          <span>career details</span>
-        </div>
-        <div>
-          <strong>{artifact.evidenceIds.length}</strong>
-          <span>supporting references</span>
-        </div>
-        <div>
-          <strong>{artifact.sourceIds.length}</strong>
-          <span>saved sources</span>
-        </div>
-      </div>
+      <p className="record-line">
+        Built from {artifact.factIds.length} verified career detail
+        {artifact.factIds.length === 1 ? "" : "s"}.
+      </p>
       <div className="actions">
         <button
           type="button"
@@ -5568,6 +6577,26 @@ function DraftCard({
           Inspect draft
         </button>
       </div>
+      <ProgressiveDetails
+        summary="Review supporting records"
+        hint="Career details, evidence, and saved sources"
+      >
+        <small>Artifact revision {artifact.revision}</small>
+        <div className="provenance-grid">
+          <div>
+            <strong>{artifact.factIds.length}</strong>
+            <span>career details</span>
+          </div>
+          <div>
+            <strong>{artifact.evidenceIds.length}</strong>
+            <span>supporting references</span>
+          </div>
+          <div>
+            <strong>{artifact.sourceIds.length}</strong>
+            <span>saved sources</span>
+          </div>
+        </div>
+      </ProgressiveDetails>
       {artifact.state !== "stale" && (
         <ApprovalGate
           effectKind="artifact.review"
@@ -5734,11 +6763,33 @@ function Imports({
   return (
     <>
       <PageHeader
-        eyebrow="Read-only migration"
+        eyebrow="Setup tool · Import"
         title="Import Career Ops"
-        description="Discover a local Career Ops directory, review every supported mapping, then confirm one exact source fingerprint. No Career Ops scripts, agents, credentials, or browser state are executed or imported."
+        description="Preview what can move into Workbench, choose the records, then import once."
+        story={pageStories.imports}
       />
-      <section className="panel import-discovery">
+      <ol className="process-strip" aria-label="Import process">
+        <li>
+          <span>1</span>
+          <strong>Choose folder</strong>
+        </li>
+        <li>
+          <span>2</span>
+          <strong>Review records</strong>
+        </li>
+        <li>
+          <span>3</span>
+          <strong>Confirm import</strong>
+        </li>
+      </ol>
+      <section className="panel import-discovery task-panel">
+        <header>
+          <div>
+            <p className="eyebrow">Step 1</p>
+            <h2>Choose your Career Ops folder</h2>
+          </div>
+          <small>Discovery is read-only.</small>
+        </header>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -5767,10 +6818,19 @@ function Imports({
             {discover.isPending ? "Discovering…" : "Discover read-only"}
           </button>
         </form>
-        <p className="trust-note">
-          The directory path stays server-side. The preview expires after 15
-          minutes, and apply fails if any selected byte changes.
+        <p className="trust-note import-safety-boundary">
+          Nothing is imported until you confirm. Scripts and agents are never
+          run; credentials and browser data are never imported.
         </p>
+        <ProgressiveDetails
+          summary="How the preview stays safe"
+          hint="Local path handling, expiry, and change detection"
+        >
+          <p>
+            The directory path stays server-side. The preview expires after 15
+            minutes, and apply fails if any selected byte changes.
+          </p>
+        </ProgressiveDetails>
         <ErrorNotice error={discover.error} />
       </section>
 
@@ -5785,9 +6845,6 @@ function Imports({
               {preview.alreadyImported ? "already imported" : "ready to import"}
             </StatusPill>
           </div>
-          <p className="import-identity">
-            Career Ops {preview.observedVersion ?? "version unavailable"}
-          </p>
           {preview.changedSource && (
             <div className="notice warning" role="alert">
               <RefreshCw aria-hidden="true" />
@@ -5804,9 +6861,29 @@ function Imports({
             </div>
           ))}
 
-          <div className="two-column import-columns">
+          {preview.unsupported.length > 0 && (
+            <section className="panel import-exclusions">
+              <h3>Never imported</h3>
+              <ul className="check-list">
+                {preview.unsupported.map((item) => (
+                  <li key={item}>
+                    <ShieldCheck aria-hidden="true" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <ProgressiveDetails
+            summary="Inspect selected source"
+            hint={`${String(preview.files.length)} supported file${preview.files.length === 1 ? "" : "s"}`}
+          >
             <article className="panel">
               <h3>Selected source bytes</h3>
+              <p className="import-identity">
+                Career Ops {preview.observedVersion ?? "version unavailable"}
+              </p>
               <ul className="import-list">
                 {preview.files.map((file) => (
                   <li key={file.relativePath}>
@@ -5819,18 +6896,7 @@ function Imports({
                 ))}
               </ul>
             </article>
-            <article className="panel">
-              <h3>Explicitly unsupported</h3>
-              <ul className="check-list">
-                {preview.unsupported.map((item) => (
-                  <li key={item}>
-                    <ShieldCheck aria-hidden="true" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </article>
-          </div>
+          </ProgressiveDetails>
 
           <section className="panel import-mapping-selection">
             <div className="section-head">
@@ -5879,9 +6945,7 @@ function Imports({
                   />
                   <span>
                     <strong>{mapping.label}</strong>
-                    <small>
-                      {mapping.type.replaceAll("_", " ")} · {mapping.source}
-                    </small>
+                    <small>{mapping.type.replaceAll("_", " ")}</small>
                     <small>{mapping.note}</small>
                   </span>
                 </label>
@@ -5889,36 +6953,41 @@ function Imports({
             </fieldset>
           </section>
 
-          <section className="panel import-table-wrap">
-            <h3>Application mappings</h3>
-            {preview.applications.length === 0 ? (
-              <Empty>No supported application rows were found.</Empty>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">Opportunity</th>
-                    <th scope="col">Career Ops status</th>
-                    <th scope="col">Workbench state</th>
-                    <th scope="col">Original score</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.applications.map((application) => (
-                    <tr key={application.sourceIdentity}>
-                      <th scope="row">
-                        {application.roleTitle}
-                        <small>{application.organization}</small>
-                      </th>
-                      <td>{application.originalStatus}</td>
-                      <td>{application.mappedState.replaceAll("_", " ")}</td>
-                      <td>{application.originalScore ?? "Not scored"}</td>
+          <ProgressiveDetails
+            summary="Review application state mapping"
+            hint={`${String(preview.applications.length)} application record${preview.applications.length === 1 ? "" : "s"}`}
+          >
+            <section className="import-table-wrap">
+              <h3>Application mappings</h3>
+              {preview.applications.length === 0 ? (
+                <Empty>No supported application rows were found.</Empty>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Opportunity</th>
+                      <th scope="col">Career Ops status</th>
+                      <th scope="col">Workbench state</th>
+                      <th scope="col">Original score</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
+                  </thead>
+                  <tbody>
+                    {preview.applications.map((application) => (
+                      <tr key={application.sourceIdentity}>
+                        <th scope="row">
+                          {application.roleTitle}
+                          <small>{application.organization}</small>
+                        </th>
+                        <td>{application.originalStatus}</td>
+                        <td>{application.mappedState.replaceAll("_", " ")}</td>
+                        <td>{application.originalScore ?? "Not scored"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+          </ProgressiveDetails>
 
           <section className="panel">
             <h3>Career details</h3>
@@ -5971,9 +7040,11 @@ function Imports({
                 mappings
               </small>
             </div>
-            <code>{manifest.sourceFingerprint.slice(0, 16)}…</code>
             <details>
               <summary>Mapping receipt ({manifest.mappings.length})</summary>
+              <p className="receipt-fingerprint">
+                Source fingerprint <code>{manifest.sourceFingerprint}</code>
+              </p>
               <ul className="compact-history import-mapping-receipt">
                 {manifest.mappings.map((mapping, index) => {
                   const identity =
@@ -6124,7 +7195,7 @@ function ActivityPage({
 }): React.JSX.Element {
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
-  const [operationLimit, setOperationLimit] = useState(5);
+  const [completedOperationLimit, setCompletedOperationLimit] = useState(3);
   const [olderEvents, setOlderEvents] = useState<readonly DomainEventView[]>(
     [],
   );
@@ -6164,156 +7235,214 @@ function ActivityPage({
   const rootOperations = snapshot.operations
     .filter((item) => item.parentOperationId === null)
     .reverse();
+  const operationById = new Map(
+    snapshot.operations.map((operation) => [operation.id, operation]),
+  );
+  const attentionRootIds = new Set<string>();
+  for (const operation of snapshot.operations.filter(
+    (item) => item.terminalAt === null,
+  )) {
+    let branch: OperationView | undefined = operation;
+    const visited = new Set<string>();
+    while (
+      branch?.parentOperationId !== null &&
+      branch?.parentOperationId !== undefined &&
+      !visited.has(branch.id)
+    ) {
+      visited.add(branch.id);
+      branch = operationById.get(branch.parentOperationId);
+    }
+    if (branch !== undefined) attentionRootIds.add(branch.id);
+  }
+  const attentionRootOperations = rootOperations.filter((operation) =>
+    attentionRootIds.has(operation.id),
+  );
+  const completedRootOperations = rootOperations.filter(
+    (operation) => !attentionRootIds.has(operation.id),
+  );
+  const visibleRootOperations = [
+    ...attentionRootOperations,
+    ...completedRootOperations.slice(0, completedOperationLimit),
+  ];
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
   return (
     <>
       <PageHeader
-        eyebrow="Ordered event log"
+        eyebrow="Support · Recent work"
         title="Activity"
-        description="The browser resumes from the last observed sequence after a disconnect."
+        description="See what changed recently and whether agent work still needs attention."
+        story={pageStories.activity}
       />
       <div className="notice">
         <span className={`stream-dot ${streamState}`} aria-hidden="true" />
         <span>
-          Live stream {streamState}. Latest sequence:{" "}
-          {snapshot.events.at(-1)?.sequence ?? 0}
+          Activity is {streamState}. New changes appear here automatically.
         </span>
       </div>
-      <section className="section-head activity-head">
-        <div>
-          <p className="eyebrow">Durable audit</p>
-          <h2>Ordered events</h2>
-          <p>
-            Newest events appear first. Move through a bounded page instead of
-            an endless log.
+      <ProgressiveDetails
+        className="activity-audit"
+        summary="View audit history"
+        hint={`${String(orderedEvents.length)} ordered changes`}
+      >
+        <section className="section-head activity-head">
+          <div>
+            <p className="eyebrow">Audit history</p>
+            <h2>Ordered events</h2>
+            <p>Newest changes appear first.</p>
+          </div>
+          <label className="page-size" htmlFor="activity-page-size">
+            Events per page
+            <select
+              id="activity-page-size"
+              value={pageSize}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value));
+                setPage(1);
+              }}
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+            </select>
+          </label>
+        </section>
+        <ol className="timeline">
+          {visibleEvents.map((event) => {
+            const resource = activityResource(event, snapshot);
+            return (
+              <li key={event.sequence}>
+                <span>{event.sequence}</span>
+                <div>
+                  <strong>{activityEventLabel(event.eventKind)}</strong>
+                  {resource !== null && (
+                    <Link className="activity-resource" to={resource.to}>
+                      {resource.label}
+                    </Link>
+                  )}
+                  <time>{new Date(event.timestamp).toLocaleString()}</time>
+                  <details className="event-details">
+                    <summary>Technical details</summary>
+                    <p>
+                      {event.eventKind} · record {event.aggregateId}
+                    </p>
+                  </details>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+        {visibleEvents.length === 0 && <Empty>No activity recorded yet.</Empty>}
+        <nav className="pagination" aria-label="Activity pages">
+          <p aria-live="polite">
+            Page {safePage} of {totalPages} · showing {visibleEvents.length} of{" "}
+            {orderedEvents.length} loaded events
           </p>
-        </div>
-        <label className="page-size" htmlFor="activity-page-size">
-          Events per page
-          <select
-            id="activity-page-size"
-            value={pageSize}
-            onChange={(event) => {
-              setPageSize(Number(event.target.value));
-              setPage(1);
-            }}
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-          </select>
-        </label>
-      </section>
-      <ol className="timeline">
-        {visibleEvents.map((event) => {
-          const resource = activityResource(event, snapshot);
-          return (
-            <li key={event.sequence}>
-              <span>{event.sequence}</span>
-              <div>
-                <strong>{activityEventLabel(event.eventKind)}</strong>
-                {resource !== null && (
-                  <Link className="activity-resource" to={resource.to}>
-                    {resource.label}
-                  </Link>
-                )}
-                <p>
-                  {event.eventKind} · record {event.aggregateId}
-                </p>
-                <time>{new Date(event.timestamp).toLocaleString()}</time>
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-      {visibleEvents.length === 0 && <Empty>No activity recorded yet.</Empty>}
-      <nav className="pagination" aria-label="Activity pages">
-        <p aria-live="polite">
-          Page {safePage} of {totalPages} · showing {visibleEvents.length} of{" "}
-          {orderedEvents.length} loaded events
-        </p>
-        <div>
-          <button
-            type="button"
-            disabled={safePage === 1}
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-          >
-            Newer
-          </button>
-          <button
-            type="button"
-            disabled={safePage === totalPages}
-            onClick={() =>
-              setPage((current) => Math.min(totalPages, current + 1))
-            }
-          >
-            Older
-          </button>
-        </div>
-      </nav>
-      {hasEarlierEvents && earliestSequence !== undefined && (
-        <div className="operation-controls">
-          <p>Earlier history is available on the server.</p>
-          <button
-            className="secondary"
-            type="button"
-            disabled={loadEarlier.isPending}
-            onClick={() => loadEarlier.mutate()}
-          >
-            {loadEarlier.isPending
-              ? "Loading earlier activity…"
-              : "Load up to 1,000 earlier events"}
-          </button>
-          <ErrorNotice error={loadEarlier.error} />
-        </div>
-      )}
+          <div>
+            <button
+              type="button"
+              disabled={safePage === 1}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+            >
+              Newer
+            </button>
+            <button
+              type="button"
+              disabled={safePage === totalPages}
+              onClick={() =>
+                setPage((current) => Math.min(totalPages, current + 1))
+              }
+            >
+              Older
+            </button>
+          </div>
+        </nav>
+        {hasEarlierEvents && earliestSequence !== undefined && (
+          <div className="operation-controls">
+            <p>Earlier history is available on the server.</p>
+            <button
+              className="secondary"
+              type="button"
+              disabled={loadEarlier.isPending}
+              onClick={() => loadEarlier.mutate()}
+            >
+              {loadEarlier.isPending
+                ? "Loading earlier activity…"
+                : "Load up to 1,000 earlier events"}
+            </button>
+            <ErrorNotice error={loadEarlier.error} />
+          </div>
+        )}
+      </ProgressiveDetails>
       <section className="section-head operation-head">
         <div>
-          <p className="eyebrow">Agent lineage</p>
-          <h2>Authoritative operations</h2>
+          <p className="eyebrow">
+            {attentionRootOperations.length > 0 ? "Needs attention" : "Recent"}
+          </p>
+          <h2>
+            {attentionRootOperations.length > 0
+              ? "Work in progress"
+              : "Recent work"}
+          </h2>
           <p>
-            Admission, inbox start, reports, cancellation, and terminal state
-            remain distinct.
+            Open a card only when you need its lifecycle or technical details.
           </p>
         </div>
-        <StatusPill>{snapshot.operations.length} operations</StatusPill>
+        <StatusPill
+          tone={attentionRootOperations.length > 0 ? "warning" : "neutral"}
+        >
+          {attentionRootOperations.length > 0
+            ? `${String(attentionRootOperations.length)} active`
+            : `${String(Math.min(3, completedRootOperations.length))} recent`}
+        </StatusPill>
       </section>
+      {attentionRootOperations.length > 0 && (
+        <div className="notice warning" role="status">
+          <span className="stream-dot connecting" aria-hidden="true" />
+          <span>
+            {attentionRootOperations.length} active operation{" "}
+            {attentionRootOperations.length === 1 ? "branch" : "branches"} shown
+            first.
+          </span>
+        </div>
+      )}
       <div className="operation-tree" aria-label="Agent operation lineage">
         {rootOperations.length === 0 ? (
           <Empty>No DSH operations recorded yet.</Empty>
         ) : (
-          rootOperations
-            .slice(0, operationLimit)
-            .map((operation) => (
-              <OperationNode
-                key={operation.id}
-                operation={operation}
-                snapshot={snapshot}
-                depth={0}
-              />
-            ))
+          visibleRootOperations.map((operation) => (
+            <OperationNode
+              key={operation.id}
+              operation={operation}
+              snapshot={snapshot}
+              depth={0}
+            />
+          ))
         )}
       </div>
-      {rootOperations.length > 5 && (
+      {completedRootOperations.length > 3 && (
         <div className="operation-controls">
           <p>
-            Showing {Math.min(operationLimit, rootOperations.length)} of{" "}
-            {rootOperations.length} root operations
+            {attentionRootOperations.length > 0 && (
+              <>All {attentionRootOperations.length} active shown · </>
+            )}
+            Showing{" "}
+            {Math.min(completedOperationLimit, completedRootOperations.length)}{" "}
+            of {completedRootOperations.length} completed
           </p>
           <button
             className="secondary"
             type="button"
             onClick={() =>
-              setOperationLimit((current) =>
-                current >= rootOperations.length ? 5 : current + 5,
+              setCompletedOperationLimit((current) =>
+                current >= completedRootOperations.length ? 3 : current + 3,
               )
             }
           >
-            {operationLimit >= rootOperations.length
-              ? "Show recent 5"
-              : "Show 5 more"}
+            {completedOperationLimit >= completedRootOperations.length
+              ? "Show recent 3 completed"
+              : "Show 3 older completed"}
           </button>
         </div>
       )}
@@ -6387,41 +7516,47 @@ function OperationNode({
       <article className="operation-card">
         <header>
           <div>
-            <span className="operation-route">
-              {operation.route.replaceAll("_", " ")}
-            </span>
             <h3>{operation.kind.replaceAll("_", " ")}</h3>
           </div>
           <StatusPill tone={tone}>
             {operation.state.replaceAll("_", " ")}
           </StatusPill>
         </header>
-        <dl>
-          <div>
-            <dt>Operation</dt>
-            <dd>{operation.id}</dd>
-          </div>
-          <div>
-            <dt>Started</dt>
-            <dd>
-              {operation.startedAt === null
-                ? "Admitted; waiting for inbox start"
-                : new Date(operation.startedAt).toLocaleString()}
-            </dd>
-          </div>
-          <div>
-            <dt>Last activity</dt>
-            <dd>{new Date(operation.lastActivityAt).toLocaleString()}</dd>
-          </div>
-          <div>
-            <dt>Lifecycle</dt>
-            <dd>
-              {events
-                .map((event) => event.eventKind.split(".").at(-1))
-                .join(" → ")}
-            </dd>
-          </div>
-        </dl>
+        <ProgressiveDetails
+          summary="Operation details"
+          hint={`Last updated ${new Date(operation.lastActivityAt).toLocaleString()}`}
+        >
+          <dl>
+            <div>
+              <dt>Execution route</dt>
+              <dd>{operation.route.replaceAll("_", " ")}</dd>
+            </div>
+            <div>
+              <dt>Operation</dt>
+              <dd>{operation.id}</dd>
+            </div>
+            <div>
+              <dt>Started</dt>
+              <dd>
+                {operation.startedAt === null
+                  ? "Admitted; waiting for inbox start"
+                  : new Date(operation.startedAt).toLocaleString()}
+              </dd>
+            </div>
+            <div>
+              <dt>Last activity</dt>
+              <dd>{new Date(operation.lastActivityAt).toLocaleString()}</dd>
+            </div>
+            <div>
+              <dt>Lifecycle</dt>
+              <dd>
+                {events
+                  .map((event) => event.eventKind.split(".").at(-1))
+                  .join(" → ")}
+              </dd>
+            </div>
+          </dl>
+        </ProgressiveDetails>
         {operation.cancellationRequestedAt !== null && !terminal && (
           <div className="notice warning" role="status">
             Cancellation requested; waiting for DSH terminal settlement.
@@ -6506,73 +7641,145 @@ function Diagnostics(): React.JSX.Element {
   return (
     <>
       <PageHeader
-        eyebrow="Compatibility and trust"
-        title="Diagnostics"
-        description="This surface reports capabilities without exposing credentials or sensitive paths."
+        eyebrow="Support · System status"
+        title="System status"
+        description="See what is ready, what is unavailable, and what you can do next."
+        story={pageStories.diagnostics}
       />
       {diagnostics.isLoading ? (
         <p role="status">Checking local services…</p>
       ) : diagnostics.error !== null ? (
-        <ErrorNotice error={diagnostics.error} />
+        <>
+          <ErrorNotice error={diagnostics.error} />
+          <div className="comparison-next-action diagnostic-next-action">
+            <div>
+              <strong>Next action</strong>
+              <p>Check the local server connection, then try again.</p>
+            </div>
+            <button
+              className="secondary"
+              disabled={diagnostics.isFetching}
+              onClick={() => void diagnostics.refetch()}
+            >
+              {diagnostics.isFetching ? "Checking…" : "Check again"}
+            </button>
+          </div>
+        </>
       ) : (
         diagnostics.data !== undefined && (
           <>
-            <section className="stat-grid">
-              <article>
-                <span>Storage</span>
-                <strong className="word">{diagnostics.data.storage}</strong>
-                <small>SQLite {diagnostics.data.journalMode}</small>
-              </article>
-              <article>
-                <span>Schema</span>
-                <strong>{diagnostics.data.schemaVersion}</strong>
-                <small>contract {diagnostics.data.contractVersion}</small>
-              </article>
-              <article>
-                <span>Workbench</span>
-                <strong className="word">{diagnostics.data.version}</strong>
-                <small>local preview</small>
-              </article>
+            <section className="panel diagnostic-overview">
+              <span className="diagnostic-icon" aria-hidden="true">
+                <ShieldCheck />
+              </span>
+              <div>
+                <p className="eyebrow">Local system</p>
+                <h2>Core workbench ready</h2>
+                <p>
+                  Your local records are available. Agent features are{" "}
+                  {diagnostics.data.capabilities["dsh"] === true
+                    ? "ready"
+                    : "currently unavailable"}
+                  .
+                </p>
+              </div>
             </section>
-            <section className="panel">
-              <h2>Trust boundary</h2>
-              <ul className="check-list">
-                <li>
-                  <Check aria-hidden="true" />
-                  Loopback-only HTTP and same-origin mutations
-                </li>
-                <li>
-                  <Check aria-hidden="true" />
-                  Canonical state lives in SQLite and immutable artifacts
-                </li>
-                <li>
-                  <AlertTriangle aria-hidden="true" />
-                  IPython, when enabled, has operating-system authority and is
-                  not a sandbox
-                </li>
-                <li>
-                  <ShieldCheck aria-hidden="true" />
-                  No v0.1 route performs consequential external actions
-                </li>
-              </ul>
-            </section>
-            <section className="panel">
-              <h2>Optional capabilities</h2>
-              <dl className="capabilities">
-                {Object.entries(diagnostics.data.capabilities).map(
-                  ([key, enabled]) => (
-                    <div key={key}>
-                      <dt>{key.replaceAll(/([A-Z])/gu, " $1")}</dt>
-                      <dd>
-                        <StatusPill tone={enabled ? "good" : "neutral"}>
-                          {enabled ? "available" : "unavailable"}
-                        </StatusPill>
-                      </dd>
-                    </div>
-                  ),
-                )}
-              </dl>
-            </section>
+            {diagnostics.data.capabilities["dsh"] !== true && (
+              <div className="comparison-next-action diagnostic-next-action">
+                <div>
+                  <strong>Next action</strong>
+                  <p>
+                    Start or reconnect the local agent service, then check its
+                    status again.
+                  </p>
+                </div>
+                <button
+                  className="secondary"
+                  type="button"
+                  disabled={diagnostics.isFetching}
+                  onClick={() => void diagnostics.refetch()}
+                >
+                  {diagnostics.isFetching ? "Checking…" : "Check again"}
+                </button>
+              </div>
+            )}
+            <div className="diagnostic-callouts">
+              <div className="notice warning" role="note">
+                <AlertTriangle aria-hidden="true" />
+                <span>
+                  Advanced analysis can run code with access to your computer
+                  when enabled. It is not sandboxed.
+                </span>
+              </div>
+              <div className="notice" role="note">
+                <ShieldCheck aria-hidden="true" />
+                <span>
+                  Workbench can prepare local work, but it cannot submit, send,
+                  purchase, accept, reject, or withdraw for you.
+                </span>
+              </div>
+            </div>
+            <ProgressiveDetails
+              summary="View technical details"
+              hint="Versions, trust boundaries, and optional capabilities"
+            >
+              <section className="stat-grid">
+                <article>
+                  <span>Storage</span>
+                  <strong className="word">{diagnostics.data.storage}</strong>
+                  <small>SQLite {diagnostics.data.journalMode}</small>
+                </article>
+                <article>
+                  <span>Schema</span>
+                  <strong>{diagnostics.data.schemaVersion}</strong>
+                  <small>contract {diagnostics.data.contractVersion}</small>
+                </article>
+                <article>
+                  <span>Workbench</span>
+                  <strong className="word">{diagnostics.data.version}</strong>
+                  <small>local preview</small>
+                </article>
+              </section>
+              <section className="diagnostic-section">
+                <h2>Trust boundary</h2>
+                <ul className="check-list">
+                  <li>
+                    <Check aria-hidden="true" />
+                    Loopback-only HTTP and same-origin mutations
+                  </li>
+                  <li>
+                    <Check aria-hidden="true" />
+                    Canonical state lives in SQLite and immutable artifacts
+                  </li>
+                  <li>
+                    <AlertTriangle aria-hidden="true" />
+                    IPython, when enabled, has operating-system authority and is
+                    not a sandbox
+                  </li>
+                  <li>
+                    <ShieldCheck aria-hidden="true" />
+                    No v0.1 route performs consequential external actions
+                  </li>
+                </ul>
+              </section>
+              <section className="diagnostic-section">
+                <h2>Optional capabilities</h2>
+                <dl className="capabilities">
+                  {Object.entries(diagnostics.data.capabilities).map(
+                    ([key, enabled]) => (
+                      <div key={key}>
+                        <dt>{key.replaceAll(/([A-Z])/gu, " $1")}</dt>
+                        <dd>
+                          <StatusPill tone={enabled ? "good" : "neutral"}>
+                            {enabled ? "available" : "unavailable"}
+                          </StatusPill>
+                        </dd>
+                      </div>
+                    ),
+                  )}
+                </dl>
+              </section>
+            </ProgressiveDetails>
           </>
         )
       )}
