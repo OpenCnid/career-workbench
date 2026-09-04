@@ -26,7 +26,7 @@ Final source and test hashes:
 | Artifact                          | SHA-256                                                            |
 | --------------------------------- | ------------------------------------------------------------------ |
 | `apps/web/src/App.tsx`            | `3C4ABFC3B9A75590C9563D39CA36FA7CC90A9753056EC85F1F2A5D0D40549FAF` |
-| `apps/web/src/styles.css`         | `5713ACFE43BEC1A85BE2B775DC2360BE7D3E5240FB1E260F6DE429A00D400874` |
+| `apps/web/src/styles.css`         | `29348562947D0FD52DFBA17E737FF4945EEBABC9E6BE113FC7CA59B0CF3635EA` |
 | `tests/browser/workbench.spec.ts` | `0A14BAE567884B9A5832B7299AEF91AC01E21CCDB42FB804F3DE7F770920AE1B` |
 
 ## Falsifiable property and cases

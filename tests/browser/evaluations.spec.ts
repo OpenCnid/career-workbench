@@ -67,7 +67,10 @@ async function expectInsideViewport(
     const sidebarBox = await fixedSidebar.boundingBox();
     if (sidebarBox === null)
       throw new Error("The visible mobile navigation must be measurable.");
-    expect(box.y + box.height).toBeLessThanOrEqual(sidebarBox.y + 0.5);
+    const portableFontBuffer = width === 320 ? 24 : 0;
+    expect(box.y + box.height).toBeLessThanOrEqual(
+      sidebarBox.y + 0.5 - portableFontBuffer,
+    );
   }
 }
 

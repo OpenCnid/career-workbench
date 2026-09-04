@@ -30,10 +30,10 @@ The final source and test freeze is:
 
 | File                              | SHA-256                                                            |
 | --------------------------------- | ------------------------------------------------------------------ |
-| `apps/web/src/App.tsx`            | `AB218FA0C0E111BAE6361DF241B40C94B99FE6BDB1B3A833B4A34E707FF85085` |
-| `apps/web/src/styles.css`         | `BDDF84DBB8C28DEF0D4E1D45C1F8D52CBF485C5B9DA596EA794BCF339A3CAD4C` |
-| `tests/browser/pipeline.spec.ts`  | `CED7F8964B41784A54487EB4C58E46E526DF8B08975EA12D8930436D7B79F032` |
-| `tests/browser/workbench.spec.ts` | `232D010AEDF7338137C12BC035DD9AC6CD91AE98BADB245254C8AB225B444A85` |
+| `apps/web/src/App.tsx`            | `3C4ABFC3B9A75590C9563D39CA36FA7CC90A9753056EC85F1F2A5D0D40549FAF` |
+| `apps/web/src/styles.css`         | `29348562947D0FD52DFBA17E737FF4945EEBABC9E6BE113FC7CA59B0CF3635EA` |
+| `tests/browser/pipeline.spec.ts`  | `065D95D39374009808F1478D217C4E2E71BCA13FDC9605EF9771155BB0DD764F` |
+| `tests/browser/workbench.spec.ts` | `0A14BAE567884B9A5832B7299AEF91AC01E21CCDB42FB804F3DE7F770920AE1B` |
 
 ## User-facing simplification
 
@@ -87,6 +87,12 @@ and case matrix in each review round.
    reproducible failure in the ordinary, pending approval, 50-job duplicate,
    long-string, empty, keyboard/accessibility, or multi-transition cases.
 
+The first PR portability run added one more counterexample: Linux font metrics
+placed the 320px approval control 1.8px below the fixed-navigation boundary.
+Narrow-screen spacing now leaves a deliberate reserve, and the focused test
+requires at least 6px of clearance rather than accepting an edge-aligned local
+pass.
+
 ## Focused browser assertions
 
 - At 1280×720, organization, role, current state, next action, and
@@ -114,7 +120,7 @@ and case matrix in each review round.
 | `pnpm exec playwright test tests/browser/pipeline.spec.ts`                                                                                                            |    0 | 5 passed, including four exact viewport captures and focused Axe checks.                               |
 | `pnpm exec playwright test tests/browser/workbench.spec.ts tests/browser/pipeline.spec.ts --grep "complete source-to-sealed-artifact\|pipeline hierarchy is compact"` |    0 | Failed integration path and previously passing hierarchy control both passed, 2/2.                     |
 | `pnpm check`                                                                                                                                                          |    0 | 26 Vitest files, 336 tests, contracts, provenance, patches, hygiene, docs, build, and packages passed. |
-| `pnpm test:e2e`                                                                                                                                                       |    0 | 33 Chromium tests passed in 1.4 minutes.                                                               |
+| `pnpm test:e2e`                                                                                                                                                       |    0 | 34 Chromium tests passed in 1.7 minutes.                                                               |
 
 The first full end-to-end attempt exposed two stale assertions for the previous
 pipeline choice separator and lowercase state text; a focused rerun then exposed
@@ -133,4 +139,4 @@ above.
 | 1280×720 | `docs/qa/generated/pipeline-selfplay/final/pipeline-1280x720.png` | `84D43342CF1A510FBDC177EC983878619933319C43CF774076EBAA47DC719CFC` |
 | 768×1024 | `docs/qa/generated/pipeline-selfplay/final/pipeline-768x1024.png` | `5DF1A2D230ECD306DD779B709B115B8AD599C2FA82E402F7A8797F51ECAE4E23` |
 |  375×812 | `docs/qa/generated/pipeline-selfplay/final/pipeline-375x812.png`  | `04AC0436147E1169330C6BDB81573134337E1B55C78C3D7977EF0AEFAAAA4875` |
-|  320×812 | `docs/qa/generated/pipeline-selfplay/final/pipeline-320x812.png`  | `555C12D67628FB24B708B32CFE2A9B24F1AE74CAF4868BD21D5DA94878F6032C` |
+|  320×812 | `docs/qa/generated/pipeline-selfplay/final/pipeline-320x812.png`  | `FB581E74BF63B764786EC6EAC04B4E13B264FF8B4B19D76B225D16E453B73F91` |

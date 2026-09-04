@@ -189,6 +189,14 @@ content. Both clean evaluators returned PASS on the frozen revision; one ran 22
 non-retaining evaluation tests, and the adversarial evaluator ran 14 targeted
 viewport/lifecycle/picker cases.
 
+The first PR portability run exposed a final cross-platform counterexample:
+Linux font metrics made the completed next action 16.5px taller than the fixed
+navigation boundary and the stale next action 29.1px taller, despite the same
+tests passing on Windows. A `max-width: 340px` density reserve now reduces only
+spacing and type scale while keeping every required message and hitbox. The
+320px regression also requires a 24px reserve above the fixed navigation so a
+locally passing edge cannot hide a Linux overflow.
+
 Focused assertions now require the shared DOM order, visible purpose band,
 left-aligned title and description, five 40×40-or-larger rail links, every
 decision element above the fixed navigation, and no horizontal overflow. The
@@ -205,13 +213,13 @@ each is less than the corresponding `window.innerHeight`.
 | 1280×720 |         381.0 |        377.0 |      535.9 |        542.6 |        578.5 |         618.6 |          666.2 |              719.8 |           n/a |               1280 / 1280 |
 | 768×1024 |         402.0 |        398.0 |      548.6 |        563.6 |        599.5 |         639.7 |          724.0 |              777.6 |           n/a |                 768 / 768 |
 | 375×812  |         270.1 |        266.1 |      385.5 |        390.8 |        426.1 |         474.8 |          546.5 |              600.6 |         691.7 |                 375 / 375 |
-| 320×812  |         326.1 |        322.1 |      441.6 |        446.8 |        482.1 |         530.8 |          618.4 |              672.4 |         691.7 |                 320 / 320 |
+| 320×812  |         279.9 |        275.9 |      389.7 |        395.0 |        427.9 |         468.7 |          545.9 |              595.4 |         691.7 |                 320 / 320 |
 
 At 1280×720, the shared header is 832px wide and its title and description both
 begin at x=254.4, after a symmetric 38.4px content gutter. The 768px gutter is
 24px. At mobile widths, the fixed-navigation top—not merely
 `window.innerHeight`—is the visibility boundary. The 375px and 320px next
-actions clear that boundary by 91.1px and 19.3px respectively. Minimum
+actions clear that boundary by 91.1px and 96.3px respectively. Minimum
 journey-link boxes were 166.4×40, 100.8×47.2, 71.8×56.4, and 60.8×68 across the
 four viewports.
 
@@ -239,10 +247,10 @@ captures, not full-page captures.
 | `docs/qa/generated/evaluations-selfplay/final/evaluations-1280x720-completed.png`         | 1280×720   | `AEC96A09490496B1DCA51F9C68BB40BE27D5E6453EBB4EF4D2D85071055B09FD` |
 | `docs/qa/generated/evaluations-selfplay/final/evaluations-768x1024-completed.png`         | 768×1024   | `A408F5C1667AEF08DC9E0C358631AFC76340FF977155CFDFC0CEB91CE69EE451` |
 | `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-completed.png`          | 375×812    | `ECB7E039F18FA28B0CE7BCFDBCF3238E184306BEEC788465D73E066EA0DC93E4` |
-| `docs/qa/generated/evaluations-selfplay/final/evaluations-320x812-completed.png`          | 320×812    | `508FC33E4C57E3D9FA8F51B0F2A77269E29639C93C18EBB2C1F402958F884CC9` |
-| `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-picker-50-jobs.png`     | 375×812    | `B6625212A598F5A5A99E20A5CB90395677A903812C158F24EC961047A7D5A778` |
-| `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-picker-duplicates.png`  | 375×812    | `E861B5F775165B6973FC7F49408363B90D52FE9B056F8FB407FF33063AEDCA55` |
-| `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-current-detail.png`     | 375×812    | `FEBB2EDBDF397BF0108AF2FB7F90C8E0DE3F1EAD40660AA0FD041E52807709ED` |
+| `docs/qa/generated/evaluations-selfplay/final/evaluations-320x812-completed.png`          | 320×812    | `F1077805BA1DE2AF7D68D7B110C1C1BDB7AAA4F9B8BF0BAD3F1A0C1D03CCB904` |
+| `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-picker-50-jobs.png`     | 375×812    | `C7FBA896ECD2B9911ACE071D2294DB3DADDD7335C133B75CD6F827DBF9DF5DE2` |
+| `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-picker-duplicates.png`  | 375×812    | `C4679B6A50C3FEFD6864BE69ABC0275142DC2A341FB572F61221C6804A4508CD` |
+| `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-current-detail.png`     | 375×812    | `6BE45F7AD43888A4449E893697C13BA3577F6C37C265A64732AA8D8C01F8E51C` |
 | `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-history-five-rows.png`  | 375×812    | `3E401F33EE1B954942A85A77EBC37F9983FCE23ECE407B015F54137BEE7AAAB8` |
 | `docs/qa/generated/evaluations-selfplay/final/evaluations-768x1024-history-five-rows.png` | 768×1024   | `DFC1C9AD5DBB79657FF5290771964576FB06AF40A5B1589F45E507F4623731F1` |
 | `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-history-detail.png`     | 375×812    | `CB4BE4C0718DAB9D1E590FD7DE757ED2A876FFF960999703B1318F75F88DC2A1` |
@@ -255,12 +263,12 @@ captures, not full-page captures.
 
 | File                                   | SHA-256                                                            |
 | -------------------------------------- | ------------------------------------------------------------------ |
-| `apps/web/src/App.tsx`                 | `C3770D734ED575A63712D3A3A0A8292D05C7EF7866EF9393958ABCDBB6D7C2AE` |
-| `apps/web/src/styles.css`              | `3890AA5A6EAB26FE6F5D04118863579BF1DFB30BCDF58E6DD366695A246F624E` |
+| `apps/web/src/App.tsx`                 | `3C4ABFC3B9A75590C9563D39CA36FA7CC90A9753056EC85F1F2A5D0D40549FAF` |
+| `apps/web/src/styles.css`              | `29348562947D0FD52DFBA17E737FF4945EEBABC9E6BE113FC7CA59B0CF3635EA` |
 | `packages/contracts/src/api.ts`        | `56FDFBCE2486D830C584E5A8DB676B4EBA8820CD77BAC60D2C865747E5B80719` |
 | `tests/support/evaluations-fixture.ts` | `1DD30BE18F6967C4A2489FC0C063CF2BDEE58D0F3D0D8102EF711DB36ED05654` |
-| `tests/browser/evaluations.spec.ts`    | `BCFE92CB7D050C525DD79B93114E83FCE847100DB81B5E22DFC179550E47AB27` |
-| `tests/browser/workbench.spec.ts`      | `52469B6612975A1918DFDF629BBF2194974366EC7D4F78083BEBB72CBF51628F` |
+| `tests/browser/evaluations.spec.ts`    | `7BD34A9A6BE8383E56BED2BAE3947CCFD222EDE07C998A5C4D49972E14ACFEBF` |
+| `tests/browser/workbench.spec.ts`      | `0A14BAE567884B9A5832B7299AEF91AC01E21CCDB42FB804F3DE7F770920AE1B` |
 
 ## Verification commands
 
@@ -268,7 +276,7 @@ captures, not full-page captures.
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pnpm exec playwright test tests/browser/evaluations.spec.ts --grep "content gutter geometry\|above the fold at 1280x720\|above the fold at 768x1024\|above the fold at 320x812"` |    0 | Four focused regression controls passed: shared desktop header/eyebrow/gutter geometry plus completed 1280px, 768px, and 320px viewport visibility                                                            |
 | `pnpm check`                                                                                                                                                                      |    0 | Format, ESLint, typecheck, 26 Vitest files / 336 tests, 45 schemas, provenance, four DSH patches, hygiene over 282 retained text files, 27 required docs, production build, and nine package manifests passed |
-| `pnpm test:e2e`                                                                                                                                                                   |    0 | 28 Chromium tests passed in 1.5m, including all 24 evaluation cases and route accessibility coverage                                                                                                          |
+| `pnpm test:e2e`                                                                                                                                                                   |    0 | 34 Chromium tests passed in 1.7m, including all evaluation, pipeline, More-navigation, and route accessibility coverage                                                                                       |
 
 Two intermediate commands intentionally returned exit 1 while self-play
 counterexamples remained: the first setup-complete lifecycle run failed seven

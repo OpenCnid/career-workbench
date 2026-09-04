@@ -146,8 +146,9 @@ async function expectAboveMobileNavigation(
   ]);
   expect(box).not.toBeNull();
   expect(navigationBox).not.toBeNull();
+  const portableFontBuffer = page.viewportSize()?.width === 320 ? 6 : 0;
   expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(
-    navigationBox?.y ?? 0,
+    (navigationBox?.y ?? 0) - portableFontBuffer,
   );
 }
 

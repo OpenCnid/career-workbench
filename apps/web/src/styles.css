@@ -7912,6 +7912,103 @@ summary:hover > .disclosure-cue {
   }
 }
 
+@media (max-width: 340px) {
+  .shell:not(.guided-shell) .page-header.evaluation-page-header {
+    margin-top: -1.35rem;
+  }
+
+  .evaluation-page-header > .eyebrow {
+    margin-bottom: 0.2rem;
+  }
+
+  .evaluation-page-header h1 {
+    margin-bottom: 0.2rem;
+    font-size: 1.85rem;
+  }
+
+  .evaluation-page-header > .page-description {
+    margin-top: 0.2rem;
+    font-size: 0.68rem;
+    line-height: 1.3;
+  }
+
+  .evaluation-page-header > .journey-rail {
+    margin-top: 0.25rem;
+  }
+
+  .evaluation-page-header > .page-story {
+    gap: 0.2rem;
+    margin-top: 0.25rem;
+    padding: 0.3rem;
+  }
+
+  .evaluation-page-header .page-story-benefit p {
+    margin-top: 0.1rem;
+    font-size: 0.68rem;
+    line-height: 1.25;
+  }
+
+  .evaluation-page-header .page-story-flow {
+    gap: 0.25rem;
+    padding: 0.25rem;
+  }
+
+  .evaluation-page-header .page-story-flow strong {
+    font-size: 0.6rem;
+    line-height: 1.25;
+  }
+
+  .evaluation-toolbar {
+    margin-bottom: 0.3rem;
+  }
+
+  .evaluation-summary-card {
+    gap: 0.3rem;
+    padding: 0.55rem;
+  }
+
+  .evaluation-caveat {
+    padding: 0.3rem 0.4rem;
+    font-size: 0.66rem;
+    line-height: 1.25;
+  }
+
+  .evaluation-primary-concern {
+    gap: 0.12rem;
+    padding-block: 0.3rem;
+  }
+
+  .evaluation-primary-concern p,
+  .evaluation-next-action strong {
+    line-height: 1.25;
+  }
+
+  .evaluation-next-action {
+    gap: 0.3rem;
+  }
+
+  .pipeline-page-header > .eyebrow {
+    margin-bottom: 0.25rem;
+  }
+
+  .pipeline-page-header h1 {
+    margin-bottom: 0.35rem;
+  }
+
+  .pipeline-page-header > .journey-rail {
+    margin-top: 0.4rem;
+  }
+
+  .pipeline-page-header > .page-story {
+    margin-top: 0.35rem;
+    padding-block: 0.35rem;
+  }
+
+  .application-card {
+    padding-block: 0.95rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html:focus-within {
     scroll-behavior: auto;
