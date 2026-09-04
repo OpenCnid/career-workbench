@@ -264,7 +264,7 @@ captures, not full-page captures.
 | File                                   | SHA-256                                                            |
 | -------------------------------------- | ------------------------------------------------------------------ |
 | `apps/web/src/App.tsx`                 | `D359EFE1F29D72F8237C3B7EDD46B39EEB8E7B8A26562E9BEAC080C596049F7E` |
-| `apps/web/src/styles.css`              | `36F7D7472554D941FF8EF9FAC0D84E62EFF40ACE7203838791F58C6DC1753CA7` |
+| `apps/web/src/styles.css`              | `A768A4CD81F247A4EC5D0A87E8C0DDAFCFC909C4CA881E9E1991933B17F6B3F2` |
 | `packages/contracts/src/api.ts`        | `56FDFBCE2486D830C584E5A8DB676B4EBA8820CD77BAC60D2C865747E5B80719` |
 | `tests/support/evaluations-fixture.ts` | `1DD30BE18F6967C4A2489FC0C063CF2BDEE58D0F3D0D8102EF711DB36ED05654` |
 | `tests/browser/evaluations.spec.ts`    | `FEA88E1CEC360E6546B04A61C6D7314F60248457F9BBC518ABA5AD739E1878BA` |

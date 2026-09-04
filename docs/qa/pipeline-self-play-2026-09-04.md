@@ -31,7 +31,7 @@ The final source and test freeze is:
 | File                              | SHA-256                                                            |
 | --------------------------------- | ------------------------------------------------------------------ |
 | `apps/web/src/App.tsx`            | `D359EFE1F29D72F8237C3B7EDD46B39EEB8E7B8A26562E9BEAC080C596049F7E` |
-| `apps/web/src/styles.css`         | `36F7D7472554D941FF8EF9FAC0D84E62EFF40ACE7203838791F58C6DC1753CA7` |
+| `apps/web/src/styles.css`         | `A768A4CD81F247A4EC5D0A87E8C0DDAFCFC909C4CA881E9E1991933B17F6B3F2` |
 | `tests/browser/pipeline.spec.ts`  | `877B7760EB281D3CCB13F2DE67985B2AF6913ADD517DA81CE6F20BDCE77D377E` |
 | `tests/browser/workbench.spec.ts` | `0A14BAE567884B9A5832B7299AEF91AC01E21CCDB42FB804F3DE7F770920AE1B` |
 
@@ -95,7 +95,8 @@ placed the 320px approval control below the fixed-navigation boundary. A second
 run showed that an artificial 24px evaluation reserve was stricter than the
 product boundary while the secondary “Add another job” disclosure still pushed
 the pipeline decision too low. The evaluation assertion now retains an 8px
-cross-platform reserve, the pipeline retains 6px, and the secondary disclosure
+cross-platform reserve, with narrow-screen card padding reduced enough to clear
+that reserve on macOS; the pipeline retains 6px, and the secondary disclosure
 moves after the current application. The failing cases and passing lifecycle
 controls were rerun before the full suite.
 

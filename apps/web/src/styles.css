@@ -7964,7 +7964,7 @@ summary:hover > .disclosure-cue {
 
   .evaluation-summary-card {
     gap: 0.3rem;
-    padding: 0.55rem;
+    padding: 0.45rem 0.55rem;
   }
 
   .evaluation-caveat {
