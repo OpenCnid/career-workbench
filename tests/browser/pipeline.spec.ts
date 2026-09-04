@@ -178,6 +178,13 @@ test("pipeline hierarchy is compact, unboxed, and keeps the current decision vis
   const nextAction = application.locator(":scope > .next-action");
   await expect(nextAction).toHaveCSS("border-radius", "0px");
   await expect(nextAction).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  const [applicationBox, taskDisclosureBox] = await Promise.all([
+    application.boundingBox(),
+    taskDisclosure.boundingBox(),
+  ]);
+  expect(applicationBox).not.toBeNull();
+  expect(taskDisclosureBox).not.toBeNull();
+  expect(applicationBox?.y ?? 0).toBeLessThan(taskDisclosureBox?.y ?? 0);
 
   const required = [
     application.getByText("Synthetic Labs", { exact: true }),

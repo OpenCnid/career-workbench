@@ -8007,6 +8007,16 @@ summary:hover > .disclosure-cue {
   .application-card {
     padding-block: 0.95rem;
   }
+
+  .application-card > .progressive-details {
+    margin-top: 0.4rem;
+  }
+
+  .application-card > .approval-gate {
+    gap: 0.5rem;
+    margin-top: 0.3rem;
+    padding-top: 0.4rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -7189,6 +7189,31 @@ function Pipeline({
         journeyStep={4}
         className="pipeline-page-header"
       />
+      <div className="pipeline-board">
+        {snapshot.applications.length === 0 ? (
+          snapshot.opportunities.length === 0 ? (
+            <section className="empty-next-action">
+              <h2>Save a job first</h2>
+              <p>Add a job you want to track, then return to the pipeline.</p>
+              <Link className="button-link primary" to="/opportunities">
+                Go to saved jobs <ArrowRight aria-hidden="true" />
+              </Link>
+            </section>
+          ) : (
+            <Empty>Choose a saved job below to start tracking it.</Empty>
+          )
+        ) : (
+          snapshot.applications.map((application) => (
+            <ApplicationCard
+              key={application.id}
+              application={application}
+              snapshot={snapshot}
+              locale={locale}
+              timezone={timezone}
+            />
+          ))
+        )}
+      </div>
       {missing.length > 0 && (
         <div className="pipeline-add-opportunity">
           <TaskDisclosure
@@ -7241,33 +7266,6 @@ function Pipeline({
           </TaskDisclosure>
         </div>
       )}
-      <div className="pipeline-board">
-        {snapshot.applications.length === 0 ? (
-          snapshot.opportunities.length === 0 ? (
-            <section className="empty-next-action">
-              <h2>Save a job first</h2>
-              <p>Add a job you want to track, then return to the pipeline.</p>
-              <Link className="button-link primary" to="/opportunities">
-                Go to saved jobs <ArrowRight aria-hidden="true" />
-              </Link>
-            </section>
-          ) : (
-            <Empty>
-              Choose a saved opportunity above to start tracking it.
-            </Empty>
-          )
-        ) : (
-          snapshot.applications.map((application) => (
-            <ApplicationCard
-              key={application.id}
-              application={application}
-              snapshot={snapshot}
-              locale={locale}
-              timezone={timezone}
-            />
-          ))
-        )}
-      </div>
     </>
   );
 }

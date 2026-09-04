@@ -6,11 +6,11 @@
 - Synthetic seed identity: `evaluations-self-play-v1` with the deterministic
   `pipeline-selfplay` application, event, and approval overlays
 - Start SHA: `19b6fa1ed625dbab5b8a8d77d1f381afd6bf6f06`
-- End SHA: `19b6fa1ed625dbab5b8a8d77d1f381afd6bf6f06`
+- Delivery branch: `fix/evaluations-pipeline-more-ux` (PR #6)
 - Node: `v24.19.0`
 - pnpm: `11.24.0`
-- No commit, push, pull request, reset, rebase, or discarded change was
-  performed.
+- The evidence was first captured before delivery; the user subsequently
+  authorized commit, push, pull request, and merge.
 
 All retained data is synthetic. Browser tests use the supported snapshot and
 approval HTTP contracts; no provider, live evaluation, personal data, or
@@ -30,9 +30,9 @@ The final source and test freeze is:
 
 | File                              | SHA-256                                                            |
 | --------------------------------- | ------------------------------------------------------------------ |
-| `apps/web/src/App.tsx`            | `3C4ABFC3B9A75590C9563D39CA36FA7CC90A9753056EC85F1F2A5D0D40549FAF` |
-| `apps/web/src/styles.css`         | `29348562947D0FD52DFBA17E737FF4945EEBABC9E6BE113FC7CA59B0CF3635EA` |
-| `tests/browser/pipeline.spec.ts`  | `065D95D39374009808F1478D217C4E2E71BCA13FDC9605EF9771155BB0DD764F` |
+| `apps/web/src/App.tsx`            | `D359EFE1F29D72F8237C3B7EDD46B39EEB8E7B8A26562E9BEAC080C596049F7E` |
+| `apps/web/src/styles.css`         | `36F7D7472554D941FF8EF9FAC0D84E62EFF40ACE7203838791F58C6DC1753CA7` |
+| `tests/browser/pipeline.spec.ts`  | `877B7760EB281D3CCB13F2DE67985B2AF6913ADD517DA81CE6F20BDCE77D377E` |
 | `tests/browser/workbench.spec.ts` | `0A14BAE567884B9A5832B7299AEF91AC01E21CCDB42FB804F3DE7F770920AE1B` |
 
 ## User-facing simplification
@@ -57,11 +57,14 @@ collapsed status editor visibly says “Edit” or “Close,” history says “
 “Hide,” the tracking form uses “Saved job” and “Add to pipeline,” and pending
 agent decisions use “Approve status change” or “Keep current status.”
 
-The opportunity selector uses the same deterministic role/organization ordering
-as Fit check. Duplicate role, organization, and requisition combinations receive
-stable ordinal labels. Application history is newest first and describes the
-actual transition, rather than repeating only a technical event name; timestamps
-are locale/timezone formatted and retain machine-readable `datetime` values.
+The current application now precedes the secondary “Add another job” disclosure,
+so the current state, next action, and approval decision remain the first task
+path at narrow widths. The opportunity selector uses the same deterministic
+role/organization ordering as Fit check. Duplicate role, organization, and
+requisition combinations receive stable ordinal labels. Application history is
+newest first and describes the actual transition, rather than repeating only a
+technical event name; timestamps are locale/timezone formatted and retain
+machine-readable `datetime` values.
 
 ## Self-play counterexamples and revisions
 
@@ -87,11 +90,14 @@ and case matrix in each review round.
    reproducible failure in the ordinary, pending approval, 50-job duplicate,
    long-string, empty, keyboard/accessibility, or multi-transition cases.
 
-The first PR portability run added one more counterexample: Linux font metrics
-placed the 320px approval control 1.8px below the fixed-navigation boundary.
-Narrow-screen spacing now leaves a deliberate reserve, and the focused test
-requires at least 6px of clearance rather than accepting an edge-aligned local
-pass.
+The PR portability runs added two more counterexamples. Linux font metrics first
+placed the 320px approval control below the fixed-navigation boundary. A second
+run showed that an artificial 24px evaluation reserve was stricter than the
+product boundary while the secondary “Add another job” disclosure still pushed
+the pipeline decision too low. The evaluation assertion now retains an 8px
+cross-platform reserve, the pipeline retains 6px, and the secondary disclosure
+moves after the current application. The failing cases and passing lifecycle
+controls were rerun before the full suite.
 
 ## Focused browser assertions
 
@@ -120,7 +126,7 @@ pass.
 | `pnpm exec playwright test tests/browser/pipeline.spec.ts`                                                                                                            |    0 | 5 passed, including four exact viewport captures and focused Axe checks.                               |
 | `pnpm exec playwright test tests/browser/workbench.spec.ts tests/browser/pipeline.spec.ts --grep "complete source-to-sealed-artifact\|pipeline hierarchy is compact"` |    0 | Failed integration path and previously passing hierarchy control both passed, 2/2.                     |
 | `pnpm check`                                                                                                                                                          |    0 | 26 Vitest files, 336 tests, contracts, provenance, patches, hygiene, docs, build, and packages passed. |
-| `pnpm test:e2e`                                                                                                                                                       |    0 | 34 Chromium tests passed in 1.7 minutes.                                                               |
+| `pnpm test:e2e`                                                                                                                                                       |    0 | 34 Chromium tests passed in 1.5 minutes.                                                               |
 
 The first full end-to-end attempt exposed two stale assertions for the previous
 pipeline choice separator and lowercase state text; a focused rerun then exposed
@@ -136,7 +142,7 @@ above.
 
 | Viewport | Screenshot                                                        | SHA-256                                                            |
 | -------: | ----------------------------------------------------------------- | ------------------------------------------------------------------ |
-| 1280×720 | `docs/qa/generated/pipeline-selfplay/final/pipeline-1280x720.png` | `84D43342CF1A510FBDC177EC983878619933319C43CF774076EBAA47DC719CFC` |
-| 768×1024 | `docs/qa/generated/pipeline-selfplay/final/pipeline-768x1024.png` | `5DF1A2D230ECD306DD779B709B115B8AD599C2FA82E402F7A8797F51ECAE4E23` |
-|  375×812 | `docs/qa/generated/pipeline-selfplay/final/pipeline-375x812.png`  | `04AC0436147E1169330C6BDB81573134337E1B55C78C3D7977EF0AEFAAAA4875` |
-|  320×812 | `docs/qa/generated/pipeline-selfplay/final/pipeline-320x812.png`  | `FB581E74BF63B764786EC6EAC04B4E13B264FF8B4B19D76B225D16E453B73F91` |
+| 1280×720 | `docs/qa/generated/pipeline-selfplay/final/pipeline-1280x720.png` | `767C9CEFEF7C919BCB5B96683ADEDC5656C945FE06F43C5E47B188F0ED6E6B46` |
+| 768×1024 | `docs/qa/generated/pipeline-selfplay/final/pipeline-768x1024.png` | `73A307CBFF72F293B62FFB9F98A4C1A9EBF45A6B675518D190BC68A5866EFA89` |
+|  375×812 | `docs/qa/generated/pipeline-selfplay/final/pipeline-375x812.png`  | `7B56DAB063ED690D31E3920ABFCBE9A64947EF4230CB49BC0269E61DFE4FA2F0` |
+|  320×812 | `docs/qa/generated/pipeline-selfplay/final/pipeline-320x812.png`  | `E1D4FAF857100779D56EE4CE8506130B0D4CBBDA286A3E7D73326B20DAEE61DF` |

@@ -5,12 +5,12 @@
 - Route: `/evaluations`
 - Synthetic seed: `evaluations-self-play-v1`
 - Start SHA: `19b6fa1ed625dbab5b8a8d77d1f381afd6bf6f06`
-- End SHA: `19b6fa1ed625dbab5b8a8d77d1f381afd6bf6f06`
+- Delivery branch: `fix/evaluations-pipeline-more-ux` (PR #6)
 - Node: `v24.19.0`
 - pnpm: `11.24.0`
 - Starting worktree: clean
-- No commit, push, pull request, reset, rebase, or discarded change was
-  performed.
+- The evidence was first captured before delivery; the user subsequently
+  authorized commit, push, pull request, and merge.
 
 The requested handoff baseline was `16a6be4dc6ddabe35d94ace59819b34a1e6e853f`.
 The merge base between HEAD and that commit is the starting HEAD. HEAD is an
@@ -248,9 +248,9 @@ captures, not full-page captures.
 | `docs/qa/generated/evaluations-selfplay/final/evaluations-768x1024-completed.png`         | 768×1024   | `A408F5C1667AEF08DC9E0C358631AFC76340FF977155CFDFC0CEB91CE69EE451` |
 | `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-completed.png`          | 375×812    | `ECB7E039F18FA28B0CE7BCFDBCF3238E184306BEEC788465D73E066EA0DC93E4` |
 | `docs/qa/generated/evaluations-selfplay/final/evaluations-320x812-completed.png`          | 320×812    | `F1077805BA1DE2AF7D68D7B110C1C1BDB7AAA4F9B8BF0BAD3F1A0C1D03CCB904` |
-| `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-picker-50-jobs.png`     | 375×812    | `C7FBA896ECD2B9911ACE071D2294DB3DADDD7335C133B75CD6F827DBF9DF5DE2` |
-| `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-picker-duplicates.png`  | 375×812    | `C4679B6A50C3FEFD6864BE69ABC0275142DC2A341FB572F61221C6804A4508CD` |
-| `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-current-detail.png`     | 375×812    | `6BE45F7AD43888A4449E893697C13BA3577F6C37C265A64732AA8D8C01F8E51C` |
+| `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-picker-50-jobs.png`     | 375×812    | `97477DA33BF305FA91CBDA9ACF0FD724D56D0F7400F6F4D485C321C1AD313354` |
+| `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-picker-duplicates.png`  | 375×812    | `BD130F4DBBE9637F54208C00B782FD37ED35905BA2CDA15A9DEA672A52964EE1` |
+| `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-current-detail.png`     | 375×812    | `FEBB2EDBDF397BF0108AF2FB7F90C8E0DE3F1EAD40660AA0FD041E52807709ED` |
 | `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-history-five-rows.png`  | 375×812    | `3E401F33EE1B954942A85A77EBC37F9983FCE23ECE407B015F54137BEE7AAAB8` |
 | `docs/qa/generated/evaluations-selfplay/final/evaluations-768x1024-history-five-rows.png` | 768×1024   | `DFC1C9AD5DBB79657FF5290771964576FB06AF40A5B1589F45E507F4623731F1` |
 | `docs/qa/generated/evaluations-selfplay/final/evaluations-375x812-history-detail.png`     | 375×812    | `CB4BE4C0718DAB9D1E590FD7DE757ED2A876FFF960999703B1318F75F88DC2A1` |
@@ -263,11 +263,11 @@ captures, not full-page captures.
 
 | File                                   | SHA-256                                                            |
 | -------------------------------------- | ------------------------------------------------------------------ |
-| `apps/web/src/App.tsx`                 | `3C4ABFC3B9A75590C9563D39CA36FA7CC90A9753056EC85F1F2A5D0D40549FAF` |
-| `apps/web/src/styles.css`              | `29348562947D0FD52DFBA17E737FF4945EEBABC9E6BE113FC7CA59B0CF3635EA` |
+| `apps/web/src/App.tsx`                 | `D359EFE1F29D72F8237C3B7EDD46B39EEB8E7B8A26562E9BEAC080C596049F7E` |
+| `apps/web/src/styles.css`              | `36F7D7472554D941FF8EF9FAC0D84E62EFF40ACE7203838791F58C6DC1753CA7` |
 | `packages/contracts/src/api.ts`        | `56FDFBCE2486D830C584E5A8DB676B4EBA8820CD77BAC60D2C865747E5B80719` |
 | `tests/support/evaluations-fixture.ts` | `1DD30BE18F6967C4A2489FC0C063CF2BDEE58D0F3D0D8102EF711DB36ED05654` |
-| `tests/browser/evaluations.spec.ts`    | `7BD34A9A6BE8383E56BED2BAE3947CCFD222EDE07C998A5C4D49972E14ACFEBF` |
+| `tests/browser/evaluations.spec.ts`    | `FEA88E1CEC360E6546B04A61C6D7314F60248457F9BBC518ABA5AD739E1878BA` |
 | `tests/browser/workbench.spec.ts`      | `0A14BAE567884B9A5832B7299AEF91AC01E21CCDB42FB804F3DE7F770920AE1B` |
 
 ## Verification commands
