@@ -832,6 +832,7 @@ export interface SourceView {
   readonly contentDigest: string;
   readonly byteLength: number;
   readonly inlineText: string | null;
+  readonly originalLocator: string | null;
 }
 
 export interface ProfileFactView {
@@ -911,7 +912,9 @@ export interface EvidenceView {
   readonly classification: string;
   readonly claim: string;
   readonly sourceId: string | null;
+  readonly locator: Static<typeof SourceLocatorSchema> | null;
   readonly candidateFactId: string | null;
+  readonly proposedByOperationId: string | null;
   readonly decision: string;
   readonly decisionReason: string | null;
 }
@@ -927,6 +930,8 @@ export interface DimensionScoreView {
 export interface EvaluationView {
   readonly id: string;
   readonly revision: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
   readonly opportunityId: string;
   readonly rubricId: string;
   readonly acceptedEvidenceIds: readonly string[];
@@ -937,6 +942,7 @@ export interface EvaluationView {
   readonly state: string;
   readonly gaps: readonly string[];
   readonly contradictions: readonly string[];
+  readonly criticalFindings: readonly string[];
   readonly operationId: string | null;
   readonly staleReason: string | null;
 }
