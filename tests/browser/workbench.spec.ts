@@ -27,6 +27,10 @@ interface BrowserSnapshot {
     readonly id: string;
     readonly revision: number;
     readonly status: string;
+    readonly subject: string;
+    readonly predicate: string;
+    readonly value: string | number | boolean | null;
+    readonly sourceLocators: readonly { readonly sourceId: string }[];
   }[];
   readonly searchProfiles: readonly {
     readonly id: string;
@@ -120,7 +124,9 @@ async function createWorkspaceIfNeeded(page: Page) {
         name: "Turn your experience into your next move.",
       }),
     ).toBeVisible();
-    await expect(page.locator("main.onboarding p")).toHaveCount(0);
+    await expect(page.locator(".welcome-promise")).toContainText(
+      "nothing is sent or submitted automatically",
+    );
     await expect(page.getByLabel("Workbench name")).toHaveCount(0);
     await expect(page.getByLabel("Roles you want next")).toHaveCount(0);
     await page
@@ -129,11 +135,11 @@ async function createWorkspaceIfNeeded(page: Page) {
     await create.click();
     await expect(
       page.getByRole("heading", {
-        name: "Build the case for what comes next.",
+        name: "Make your next move with evidence, not guesswork.",
       }),
     ).toBeVisible();
     await expect(
-      page.getByText("Welcome, Avery", { exact: true }),
+      page.getByText("Your workflow · Welcome, Avery", { exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText("Welcome, Avery Example", { exact: true }),
@@ -147,7 +153,8 @@ async function createWorkspaceIfNeeded(page: Page) {
 
 async function completeCareerSetupIfNeeded(page: Page): Promise<void> {
   await page.goto("/overview");
-  if ((await page.getByRole("link", { name: "Career" }).count()) > 0) return;
+  if ((await page.getByRole("link", { name: "Career record" }).count()) > 0)
+    return;
 
   const browserSession = await responseJson<{ readonly csrfToken: string }>(
     await page.request.get("/api/v1/session"),
@@ -243,7 +250,7 @@ async function completeCareerSetupIfNeeded(page: Page): Promise<void> {
   );
   expect(confirmResponse.ok()).toBe(true);
   await page.reload();
-  await expect(page.getByRole("link", { name: "Career" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Career record" })).toBeVisible();
 }
 
 async function openMoreDestination(page: Page, name: string): Promise<void> {
@@ -251,7 +258,28 @@ async function openMoreDestination(page: Page, name: string): Promise<void> {
   if ((await more.getAttribute("open")) === null) {
     await more.locator("summary").click();
   }
+  const menu = more.locator(":scope > .more-menu");
+  await expect(page.locator(".sidebar")).toHaveCSS("z-index", "40");
+  await expect(menu).toBeVisible();
+  await expect(menu).toHaveCSS("background-color", "rgb(18, 21, 18)");
+  await expect(menu).toHaveCSS("opacity", "1");
+  await expect(menu).toHaveCSS("backdrop-filter", "none");
   await more.getByRole("link", { name, exact: true }).click();
+}
+
+async function openTaskDisclosure(page: Page, name: string): Promise<void> {
+  const disclosure = page
+    .locator("details.task-disclosure")
+    .filter({ hasText: name })
+    .first();
+  await disclosure
+    .waitFor({ state: "attached", timeout: 1_000 })
+    .catch(() => undefined);
+  if ((await disclosure.count()) === 0) return;
+  if ((await disclosure.getAttribute("open")) === null) {
+    await disclosure.locator(":scope > summary").click();
+  }
+  await expect(disclosure).toHaveAttribute("open", "");
 }
 
 test("complete source-to-sealed-artifact flow survives correction and exposes activity", async ({
@@ -289,6 +317,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   const syntheticCareerLines = [
     "Avery Example worked as Software Engineer at Synthetic Systems from 2021 to 2024.",
     "Avery Example built TypeScript services.",
+    "Avery Example earned the Synthetic Cloud Practitioner certification.",
   ] as const;
   await page.getByLabel("Upload a résumé file").setInputFiles({
     name: "synthetic-resume.pdf",
@@ -361,6 +390,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     throw new Error("Expected the uploaded PDF to retain extracted text.");
   expect(syntheticCareerSource).toContain(syntheticCareerLines[0]);
   expect(syntheticCareerSource).toContain(syntheticCareerLines[1]);
+  expect(syntheticCareerSource).toContain(syntheticCareerLines[2]);
   let organizerCommand = 0;
   const organizerHeaders = (operationId?: string) => ({
     authorization: `CW-DSH ${DSH_TOKEN}`,
@@ -408,6 +438,14 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
       predicate: "built",
       value: "TypeScript services.",
       quote: "Avery Example built TypeScript services.",
+    },
+    {
+      factType: "certification",
+      subject: "Avery Example",
+      predicate: "earned",
+      value: "the Synthetic Cloud Practitioner certification.",
+      quote:
+        "Avery Example earned the Synthetic Cloud Practitioner certification.",
     },
   ] as const) {
     const start = syntheticCareerSource.indexOf(proposedFact.quote);
@@ -464,8 +502,8 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await expect(summaryReview).toContainText(
     "Avery Example built TypeScript services.",
   );
-  await expect(summaryReview.locator(".fact-card")).toHaveCount(2);
-  await expect(summaryReview.getByRole("checkbox")).toHaveCount(2);
+  await expect(summaryReview.locator(".fact-card")).toHaveCount(3);
+  await expect(summaryReview.getByRole("checkbox")).toHaveCount(3);
   await expect(summaryReview.getByRole("checkbox").first()).toBeChecked();
   await expect(
     summaryReview.getByRole("button", { name: /^Keep /u }),
@@ -529,12 +567,15 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
       .length,
   ).toBeGreaterThanOrEqual(3);
 
-  await page.getByRole("link", { name: "Career" }).click();
+  await page.getByRole("link", { name: "Career record" }).click();
   await expect(page.locator(".page-header")).toContainText(
-    "Start with a résumé, rough notes, or one role.",
+    "Review the experience Workbench can use",
   );
+  await openTaskDisclosure(page, "Add more career history");
   await expect(
-    page.getByRole("link", { name: "Manage them in Settings." }),
+    page.getByRole("link", {
+      name: "Manage identity and search preferences.",
+    }),
   ).toHaveAttribute("href", "/settings");
   await expect(
     page.getByText("1 career source", { exact: true }),
@@ -542,7 +583,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await expect(
     page.getByLabel("Saved candidate source").locator("option"),
   ).toHaveCount(2);
-  await openMoreDestination(page, "Settings");
+  await openMoreDestination(page, "Preferences");
   await expect(
     page.getByRole("heading", { name: "Identity and search preferences" }),
   ).toBeVisible();
@@ -566,9 +607,15 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   const searchPreferences = page.getByRole("region", {
     name: "Search preferences",
   });
+  await expect(searchPreferences).toContainText("Add your search direction");
   await expect(searchPreferences).toContainText(
-    "Finish your deferred search direction",
+    "Enter a target role before saving",
   );
+  await expect(
+    searchPreferences.getByRole("button", {
+      name: "Save search preferences",
+    }),
+  ).toHaveAttribute("aria-describedby", "settings-target-role-help");
   await page.screenshot({
     path: join(evidenceRoot, "profile-settings.png"),
     fullPage: true,
@@ -599,16 +646,31 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
       name: "Open active job-search criteria",
     }),
   ).toHaveAttribute("href", "/discover");
-  await page.getByRole("link", { name: "Career" }).click();
+  await page.getByRole("link", { name: "Career record" }).click();
+  await openTaskDisclosure(page, "Add more career history");
   await page.getByRole("tab", { name: "Add a role manually" }).click();
   await expect(page.getByLabel("Your name")).toHaveValue("Avery Example");
   await page.getByLabel("Your name").fill("Avery Example");
   await page.getByLabel("Role title").fill("Software Engineer");
   await page.getByLabel("Organization").fill("Synthetic Systems");
   await page.getByLabel("Dates").fill("2021 to 2024");
-  await page.getByLabel(/Achievements/u).fill("mentored synthetic developers");
+  await page
+    .getByRole("textbox", { name: "Achievements optional" })
+    .fill("mentored synthetic developers");
   await page.getByRole("button", { name: "Add role for review" }).click();
   await expect(page.getByText("Role added.")).toBeVisible();
+  const manualRoleSnapshot = await responseJson<BrowserSnapshot>(
+    await page.request.get("/api/v1/snapshot"),
+  );
+  const manualRoleSourceId = manualRoleSnapshot.profileFacts
+    .find((fact) =>
+      `${fact.subject} ${fact.predicate} ${String(fact.value)}`.includes(
+        "mentored synthetic developers",
+      ),
+    )
+    ?.sourceLocators.at(0)?.sourceId;
+  if (manualRoleSourceId === undefined)
+    throw new Error("Expected the manual role fact to retain its source ID.");
   const proposed = page
     .locator(".fact-card")
     .filter({ hasText: "mentored synthetic developers" });
@@ -620,7 +682,9 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await expect(factSource).toContainText(
     "Avery Example mentored synthetic developers",
   );
-  await expect(factSource).toContainText("From your saved career material");
+  await expect(factSource).toContainText("Career source · captured");
+  await expect(factSource).toContainText(`ID ${manualRoleSourceId}`);
+  await expect(factSource).toContainText("fingerprint");
   await proposed
     .getByRole("button", {
       name: "Keep Avery Example mentored synthetic developers",
@@ -664,9 +728,9 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     }),
   ).toContainText("saved");
 
-  await page.getByRole("link", { name: "Jobs" }).click();
+  await page.getByRole("link", { name: "Find roles", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Find your next role." }),
+    page.getByRole("heading", { name: "Research roles worth considering." }),
   ).toBeVisible();
   await expect(page.getByLabel("Roles", { exact: true })).toHaveValue(
     "Senior Software Engineer focused on AI platforms",
@@ -698,10 +762,12 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     page.getByRole("button", { name: "Saved", exact: true }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("heading", { name: "Find matching jobs" }),
+    page.getByRole("heading", {
+      name: "Research roles from this direction",
+    }),
   ).toBeVisible();
   const startSearch = page.getByRole("button", {
-    name: "Find jobs",
+    name: "Ask AI to research roles",
   });
   await expect(startSearch).toBeEnabled();
   await expect(startSearch).toBeFocused();
@@ -731,7 +797,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   });
   await startSearch.click();
   await expect(
-    page.getByRole("button", { name: "Finding jobs…" }),
+    page.getByRole("button", { name: "Researching roles…" }),
   ).toBeDisabled();
   finishInPageDiscovery.resolve(undefined);
   await expect(
@@ -795,10 +861,21 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
         workArrangement: "remote",
         advertisedCompensation: "$190,000-$225,000",
         requisitionId: `SYN-DISC-${String(index)}`,
-        whyFound: ["The title and production AI scope match saved criteria."],
-        matchedCriteria: ["Senior", "Remote", "AI platform"],
+        whyFound: [
+          `Current listing from Synthetic discovery feed ${String(index)}.${index === 9 ? ` ${"S".repeat(430)}` : ""}`,
+          index === 9
+            ? `The title and production AI scope match saved criteria. ${"X".repeat(430)}`
+            : "The title and production AI scope match saved criteria.",
+        ],
+        matchedCriteria:
+          index === 9
+            ? ["Senior", "Remote", "AI platform", "Z".repeat(300)]
+            : ["Senior", "Remote", "AI platform"],
         gaps: ["On-call expectations are not stated."],
-        risks: ["Posting liveness needs review."],
+        risks:
+          index === 9
+            ? ["Posting liveness needs review.", "Y".repeat(450)]
+            : ["Posting liveness needs review."],
       },
     });
     expect(leadResponse.ok()).toBe(true);
@@ -823,6 +900,176 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   expect(discoveryTerminal.ok()).toBe(true);
   await page.reload();
   await expect(page.getByText("9 new")).toBeVisible();
+  await expect(
+    page.getByText("On-call expectations are not stated.").first(),
+  ).toBeVisible();
+  const firstDiscoveryPage = page.locator(".discovery-card");
+  await expect(firstDiscoveryPage).toHaveCount(5);
+  expect(
+    await firstDiscoveryPage.evaluateAll((cards) =>
+      cards.every((card) => card.getBoundingClientRect().height <= 280),
+    ),
+  ).toBe(true);
+  const leadNine = firstDiscoveryPage.filter({
+    hasText: "Senior AI Platform Engineer 9",
+  });
+  const leadEight = firstDiscoveryPage.filter({
+    hasText: "Senior AI Platform Engineer 8",
+  });
+  await expect(
+    leadNine.getByText("Posting liveness needs review."),
+  ).toBeHidden();
+  await leadNine
+    .getByRole("button", {
+      name: "Review details for Senior AI Platform Engineer 9 at Synthetic AI Company 9",
+    })
+    .click();
+  await expect(
+    leadNine.getByText("Posting liveness needs review."),
+  ).toBeVisible();
+  await expect(leadNine).toContainText(
+    "Current listing from Synthetic discovery feed 9.",
+  );
+  await expect(leadNine).toContainText("X".repeat(100));
+  await expect(leadNine).toContainText("Y".repeat(100));
+  await expect(leadNine).toContainText("Z".repeat(100));
+  await expect(leadNine).toContainText("S".repeat(100));
+  const expandedLayout = await page.evaluate(() => ({
+    horizontalOverflow:
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
+    overflowingElements: [...document.querySelectorAll<HTMLElement>("*")]
+      .filter((element) => element.scrollWidth > element.clientWidth + 1)
+      .sort(
+        (left, right) =>
+          right.scrollWidth -
+          right.clientWidth -
+          (left.scrollWidth - left.clientWidth),
+      )
+      .slice(0, 8)
+      .map((element) => ({
+        className: element.className,
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        tagName: element.tagName,
+      })),
+  }));
+  expect(
+    expandedLayout.horizontalOverflow,
+    JSON.stringify(expandedLayout.overflowingElements),
+  ).toBeLessThanOrEqual(0);
+  await page.setViewportSize({ width: 375, height: 812 });
+  const narrowDetails = await leadNine
+    .locator(".lead-more-content")
+    .evaluate((details) => ({
+      clientHeight: details.clientHeight,
+      scrollHeight: details.scrollHeight,
+      viewportHeight: window.innerHeight,
+      horizontalOverflow:
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    }));
+  expect(narrowDetails.horizontalOverflow).toBeLessThanOrEqual(0);
+  expect(narrowDetails.clientHeight).toBeLessThanOrEqual(
+    Math.ceil(narrowDetails.viewportHeight * 0.65) + 2,
+  );
+  expect(narrowDetails.scrollHeight).toBeGreaterThan(
+    narrowDetails.clientHeight,
+  );
+  const sourceNote = leadNine.locator(".lead-source-note");
+  await sourceNote.scrollIntoViewIfNeeded();
+  await expect(sourceNote).toContainText("S".repeat(100));
+  expect(
+    await leadNine
+      .locator(".lead-more-content")
+      .evaluate((details) => details.scrollTop),
+  ).toBeGreaterThan(0);
+  await leadNine
+    .locator(".lead-more-content")
+    .evaluate((details) => details.scrollTo({ top: 0 }));
+  await page.setViewportSize({ width: 320, height: 812 });
+  const narrowestDetails = await leadNine
+    .locator(".lead-more-content")
+    .evaluate((details) => ({
+      clientHeight: details.clientHeight,
+      scrollHeight: details.scrollHeight,
+      viewportHeight: window.innerHeight,
+      horizontalOverflow:
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    }));
+  expect(narrowestDetails.horizontalOverflow).toBeLessThanOrEqual(0);
+  expect(narrowestDetails.clientHeight).toBeLessThanOrEqual(
+    Math.ceil(narrowestDetails.viewportHeight * 0.65) + 2,
+  );
+  expect(narrowestDetails.scrollHeight).toBeGreaterThan(
+    narrowestDetails.clientHeight,
+  );
+  const mobileLeadActions = leadNine.locator(
+    ".lead-actions > a, .lead-actions > button",
+  );
+  expect(
+    await mobileLeadActions.evaluateAll((actions) =>
+      actions.every((action) => action.getBoundingClientRect().height >= 40),
+    ),
+  ).toBe(true);
+  const viewLeadNine = leadNine.getByRole("link", {
+    name: "View Senior AI Platform Engineer 9 at Synthetic AI Company 9 (opens in a new tab)",
+  });
+  const saveLeadNine = leadNine.getByRole("button", {
+    name: "Save Senior AI Platform Engineer 9 at Synthetic AI Company 9",
+  });
+  const passLeadNine = leadNine.getByRole("button", {
+    name: "Pass on Senior AI Platform Engineer 9 at Synthetic AI Company 9",
+  });
+  const hideLeadNineDetails = leadNine.getByRole("button", {
+    name: "Hide details for Senior AI Platform Engineer 9 at Synthetic AI Company 9",
+  });
+  await viewLeadNine.focus();
+  await page.keyboard.press("Tab");
+  await expect(saveLeadNine).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(passLeadNine).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(hideLeadNineDetails).toBeFocused();
+  await hideLeadNineDetails.click();
+  const newDiscoveryTab = page.getByRole("tab", { name: "New · 9" });
+  const savedDiscoveryTab = page.getByRole("tab", { name: "Saved · 0" });
+  await newDiscoveryTab.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(savedDiscoveryTab).toBeFocused();
+  await expect(savedDiscoveryTab).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowLeft");
+  await expect(newDiscoveryTab).toBeFocused();
+  const nextDiscoveryPage = page.getByRole("button", { name: "Next" });
+  await nextDiscoveryPage.scrollIntoViewIfNeeded();
+  expect(
+    await nextDiscoveryPage.evaluate((nextButton) => {
+      const footer = document.querySelector<HTMLElement>(".sidebar");
+      if (footer === null) return false;
+      return (
+        nextButton.getBoundingClientRect().bottom <=
+        footer.getBoundingClientRect().top + 1
+      );
+    }),
+  ).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await leadEight
+    .getByRole("button", {
+      name: "Review details for Senior AI Platform Engineer 8 at Synthetic AI Company 8",
+    })
+    .click();
+  await expect(
+    leadNine.getByText("Posting liveness needs review."),
+  ).toBeHidden();
+  await expect(
+    page.locator('.lead-more-toggle[aria-expanded="true"]'),
+  ).toHaveCount(1);
+  await leadEight
+    .getByRole("button", {
+      name: "Hide details for Senior AI Platform Engineer 8 at Synthetic AI Company 8",
+    })
+    .click();
   const compactSearch = page.getByRole("region", {
     name: "Job search setup",
   });
@@ -830,14 +1077,18 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     "Senior Software Engineer focused on AI platforms",
   );
   await expect(
-    compactSearch.getByRole("button", { name: "Find new matches" }),
+    compactSearch.getByRole("button", { name: "Research again" }),
   ).toBeVisible();
   await expect(compactSearch.getByLabel("Roles", { exact: true })).toBeHidden();
-  await compactSearch.getByRole("button", { name: "Edit" }).click();
+  await compactSearch
+    .getByRole("button", { name: "Edit search criteria" })
+    .click();
   await expect(
     compactSearch.getByLabel("Roles", { exact: true }),
   ).toBeVisible();
-  await compactSearch.getByRole("button", { name: "Done" }).click();
+  await compactSearch
+    .getByRole("button", { name: "Finish editing search criteria" })
+    .click();
   await expect(page.getByText("Page 1 of 2")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Senior AI Platform Engineer 9" }),
@@ -861,7 +1112,11 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     path: join(productEvidenceRoot, "discovery-inbox.png"),
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Move to New" }).click();
+  await page
+    .getByRole("button", {
+      name: "Move Senior AI Platform Engineer 9 at Synthetic AI Company 9 to New",
+    })
+    .click();
   await expect(page.getByText(/moved back to New/u)).toBeVisible();
   await expect(page.getByRole("tab", { name: /New · 9/u })).toHaveAttribute(
     "data-state",
@@ -869,9 +1124,11 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   );
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
-    page.getByRole("heading", { name: "Find your next role." }),
+    page.getByRole("heading", { name: "Research roles worth considering." }),
   ).toBeVisible();
-  await compactSearch.getByRole("button", { name: "Edit" }).click();
+  await compactSearch
+    .getByRole("button", { name: "Edit search criteria" })
+    .click();
   await expect(page.getByLabel("Roles", { exact: true })).toBeVisible();
   await page.screenshot({
     path: join(productEvidenceRoot, "discovery-mobile.png"),
@@ -879,9 +1136,12 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   });
   await page.setViewportSize({ width: 1280, height: 720 });
 
-  await openMoreDestination(page, "Opportunities");
+  await openMoreDestination(page, "Saved jobs");
+  await openTaskDisclosure(page, "Add another saved job");
   await page.getByLabel("Organization").fill("Synthetic Labs");
   await page.getByLabel("Role title").fill("Platform Engineer");
+  await expect(page.getByLabel("Posting URL")).toBeHidden();
+  await page.getByText("Add posting details", { exact: true }).click();
   await page
     .getByLabel("Posting URL")
     .fill("https://example.test/jobs/platform-engineer");
@@ -902,6 +1162,15 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
       exact: true,
     }),
   });
+  await expect(
+    capturedOpportunity.getByRole("link", { name: "Evaluate this job" }),
+  ).toHaveAttribute("href", /\/evaluations\?opportunity=/);
+  await expect(
+    capturedOpportunity.getByText("View saved posting"),
+  ).toBeHidden();
+  await capturedOpportunity
+    .getByText("Review posting and signals", { exact: true })
+    .click();
   await capturedOpportunity.getByText("View saved posting").click();
   await expect(
     capturedOpportunity.locator(".source-inspection pre"),
@@ -909,17 +1178,23 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     "Synthetic Labs needs a Platform Engineer to build TypeScript services.",
   );
 
-  await openMoreDestination(page, "Evaluations");
+  await openMoreDestination(page, "Fit analysis");
+  await openTaskDisclosure(page, "Choose a job or check again");
   await expect(
-    page.getByLabel("Saved job").locator('option[value=""]'),
+    page.getByLabel("Saved job", { exact: true }).locator('option[value=""]'),
   ).toBeDisabled();
   await page
-    .getByLabel("Saved job")
+    .getByLabel("Saved job", { exact: true })
     .selectOption({ label: "Platform Engineer · Synthetic Labs" });
   await page.getByRole("button", { name: "Check fit" }).click();
   const evaluation = page.locator(".current-evaluation > .evaluation-card");
   await expect(evaluation.locator(".score strong")).toHaveText("78");
   await expect(evaluation).toContainText("Fit estimate, not a recommendation.");
+  await expect(
+    evaluation.locator(".evaluation-critical-findings li"),
+  ).not.toHaveCount(0);
+  await expect(evaluation.getByRole("tab", { name: "Used" })).toBeHidden();
+  await openTaskDisclosure(page, "Choose a job or check again");
   await page.getByRole("button", { name: "Check again" }).click();
   await expect(
     page.locator(".current-evaluation > .evaluation-card"),
@@ -928,6 +1203,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     "open",
     "",
   );
+  await evaluation.getByText("Review fit evidence", { exact: true }).click();
   await evaluation.getByRole("tab", { name: "Used" }).click();
   await expect(
     evaluation.getByRole("heading", { name: "Your experience" }),
@@ -961,13 +1237,16 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     fullPage: true,
   });
 
-  await openMoreDestination(page, "Opportunities");
+  await openMoreDestination(page, "Saved jobs");
   const firstOpportunity = page.locator(".opportunity-card").filter({
     has: page.getByRole("heading", {
       name: "Platform Engineer",
       exact: true,
     }),
   });
+  await firstOpportunity
+    .getByText("Review posting and signals", { exact: true })
+    .click();
   await firstOpportunity.getByLabel("Posting liveness").selectOption("active");
   await firstOpportunity
     .getByLabel("Legitimacy signals")
@@ -976,9 +1255,9 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await expect(firstOpportunity).toContainText("liveness active");
   await expect(firstOpportunity).toContainText("legitimacy high confidence");
 
-  await openMoreDestination(page, "Pipeline");
+  await openMoreDestination(page, "Application progress");
   await page
-    .getByLabel("Opportunity")
+    .getByLabel("Opportunity", { exact: true })
     .selectOption({ label: "Platform Engineer · Synthetic Labs" });
   await page.getByRole("button", { name: "Start pipeline record" }).click();
   const application = page.locator(".application-card").filter({
@@ -987,12 +1266,18 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
       exact: true,
     }),
   });
+  const transitionApproval = application.getByLabel(
+    "application transition approval",
+  );
   await expect(application).toContainText("considering");
   await expect(
     application.getByRole("link", {
       name: "Prepare tailored materials",
     }),
   ).toHaveAttribute("href", "/drafts");
+  await expect(transitionApproval).toBeVisible();
+  await expect(application.getByLabel("Record next state")).toBeHidden();
+  await application.getByText("Update status", { exact: true }).click();
   await application.getByLabel("Record next state").selectOption("preparing");
   await application.getByRole("button", { name: "Record transition" }).click();
   await expect(application).toContainText("preparing");
@@ -1007,7 +1292,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await application.getByRole("button", { name: "Record transition" }).click();
   await expect(application).toContainText("ready for review");
 
-  await openMoreDestination(page, "Drafts");
+  await openMoreDestination(page, "Materials");
   await page.getByLabel("Artifact type").selectOption("draft_cover_letter");
   await page.getByRole("button", { name: "Generate staged draft" }).click();
   const draft = page
@@ -1024,23 +1309,45 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   );
   await draft.getByRole("button", { name: "Inspect draft" }).click();
   await expect(draft).toContainText("[NON-FACTUAL STYLE]");
+  await draft.getByText("Review supporting records", { exact: true }).click();
   await expect(draft).toContainText("supporting references");
   await expect(requestArtifactApproval).toBeEnabled();
   await requestArtifactApproval.click();
   await expect(
     artifactApproval.getByText("pending", { exact: true }),
   ).toBeVisible();
-  await expect(artifactApproval).toContainText("artifact.review");
+  await expect(
+    artifactApproval.getByText("Review and seal the candidate artifact", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(artifactApproval).toContainText("Bound revision");
   await expect(
     artifactApproval.getByText("Expires", { exact: true }),
   ).toBeVisible();
+  const artifactTechnicalReceipt = artifactApproval.locator(
+    "details.approval-technical",
+  );
+  await expect(artifactTechnicalReceipt.locator("code").first()).toBeHidden();
+  await expect(artifactTechnicalReceipt.locator("code").last()).toBeHidden();
+  await artifactTechnicalReceipt
+    .getByText("Technical receipt", { exact: true })
+    .click();
+  await expect(
+    artifactTechnicalReceipt.getByText("artifact.review", { exact: true }),
+  ).toBeVisible();
+  const artifactTargetId = await artifactTechnicalReceipt
+    .locator("code")
+    .first()
+    .textContent();
+  if (artifactTargetId === null) throw new Error("Missing artifact target ID.");
+  await artifactTechnicalReceipt
+    .getByText("Technical receipt", { exact: true })
+    .click();
   await artifactApproval.getByRole("button", { name: "Deny request" }).click();
   await expect(
     artifactApproval.getByText("denied", { exact: true }),
   ).toBeVisible();
-  const artifactTargetId = await artifactApproval.locator("code").textContent();
-  if (artifactTargetId === null) throw new Error("Missing artifact target ID.");
   const browserSession = await responseJson<{ readonly csrfToken: string }>(
     await page.request.get("/api/v1/session"),
   );
@@ -1083,15 +1390,16 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await expect(
     artifactApproval.getByText("consumed", { exact: true }),
   ).toBeVisible();
-  await expect(artifactApproval).toContainText(
-    "Seal draft_cover_letter artifact",
-  );
+  await expect(
+    artifactTechnicalReceipt.getByText(/Seal draft_cover_letter artifact/u),
+  ).toBeHidden();
   await page.screenshot({
     path: join(productEvidenceRoot, "reviewed-draft-provenance.png"),
     fullPage: true,
   });
 
-  await openMoreDestination(page, "Pipeline");
+  await openMoreDestination(page, "Application progress");
+  await application.getByText("Update status", { exact: true }).click();
   await application.getByLabel("Record next state").selectOption("applied");
   await application
     .getByRole("button", { name: "Record as applied. Does not submit." })
@@ -1100,11 +1408,18 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await application
     .getByRole("button", { name: "Authorize responded for the DSH Agent" })
     .click();
-  const transitionApproval = application.getByLabel(
-    "application transition approval",
-  );
   await expect(transitionApproval).toContainText("pending");
-  await expect(transitionApproval).toContainText("to responded");
+  await expect(
+    transitionApproval.getByText("Move application from applied to responded", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    transitionApproval.locator("details.approval-technical code").first(),
+  ).toBeHidden();
+  await expect(
+    transitionApproval.locator("details.approval-technical code").last(),
+  ).toBeHidden();
   await transitionApproval
     .getByRole("button", { name: "Approve exact request" })
     .click();
@@ -1118,11 +1433,12 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     }),
   ).toHaveAttribute("href", "/evaluations");
 
-  await openMoreDestination(page, "Opportunities");
+  await openMoreDestination(page, "Saved jobs");
   for (const [organization, roleTitle] of [
     ["Synthetic Systems", "Developer Experience Engineer"],
     ["Synthetic Tools", "Staff TypeScript Engineer"],
   ] as const) {
+    await openTaskDisclosure(page, "Add another saved job");
     await page.getByLabel("Organization").fill(organization);
     await page.getByLabel("Role title").fill(roleTitle);
     await page
@@ -1131,18 +1447,21 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     await page.getByRole("button", { name: "Capture opportunity" }).click();
     await expect(page.getByRole("heading", { name: roleTitle })).toBeVisible();
   }
-  await openMoreDestination(page, "Evaluations");
+  await openMoreDestination(page, "Fit analysis");
   for (const roleTitle of [
     "Developer Experience Engineer",
     "Staff TypeScript Engineer",
   ]) {
+    await openTaskDisclosure(page, "Choose a job or check again");
     const optionValue = await page
-      .getByLabel("Saved job")
+      .getByLabel("Saved job", { exact: true })
       .locator("option")
       .filter({ hasText: roleTitle })
       .getAttribute("value");
     if (optionValue === null) throw new Error(`Missing ${roleTitle} option.`);
-    await page.getByLabel("Saved job").selectOption(optionValue);
+    await page
+      .getByLabel("Saved job", { exact: true })
+      .selectOption(optionValue);
     await page.getByRole("button", { name: "Check fit" }).click();
     await expect(
       page.locator(".evaluation-card").filter({ hasText: roleTitle }),
@@ -1219,18 +1538,18 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     })
     .map((item) => item.id);
   expect(evaluationIds).toHaveLength(3);
-  await openMoreDestination(page, "Compare");
+  await openMoreDestination(page, "Compare roles");
   const comparisonEmpty = page.locator(".comparison-empty");
   await expect(
     comparisonEmpty.getByRole("heading", {
-      name: "Prepare a three-opportunity comparison",
+      name: "Before you compare",
     }),
   ).toBeVisible();
-  await expect(comparisonEmpty).toContainText("3 of 3 current evaluations");
+  await expect(comparisonEmpty).toContainText("3 of 3 agent-evaluated roles");
   await expect(
     comparisonEmpty.getByRole("link", { name: "Review evaluations" }),
   ).toHaveAttribute("href", "/evaluations");
-  await expect(comparisonEmpty.getByText("Exact next action")).toBeVisible();
+  await expect(comparisonEmpty.getByText("Next action")).toBeVisible();
   await expect(
     comparisonEmpty.getByRole("link", { name: "Open diagnostics" }).first(),
   ).toHaveAttribute("href", "/diagnostics");
@@ -1302,11 +1621,24 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     },
   );
   expect(comparisonTerminal.ok()).toBe(true);
-  await openMoreDestination(page, "Compare");
+  await openMoreDestination(page, "Compare roles");
   await expect(
     page.getByRole("heading", { name: "Opportunity comparisons" }),
   ).toBeVisible();
-  await expect(page.getByText("operating-system authority")).toBeVisible();
+  await expect(page.getByText("access to your computer")).toBeVisible();
+  await expect(
+    page.getByText(
+      "Review how missing preference evidence affects the tie before deciding.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("table", { name: "Skills forward" }),
+  ).toBeHidden();
+  await page
+    .locator(".comparison-card")
+    .first()
+    .getByText("Review exact rankings", { exact: true })
+    .click();
   await expect(
     page.getByRole("table", { name: "Skills forward" }),
   ).toBeVisible();
@@ -1320,7 +1652,17 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await expect(
     comparisonApproval.getByText("pending", { exact: true }),
   ).toBeVisible();
-  await expect(comparisonApproval).toContainText("comparison.accept");
+  await expect(
+    comparisonApproval.getByText("Accept the proposed comparison", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    comparisonApproval.locator("details.approval-technical code").first(),
+  ).toBeHidden();
+  await expect(
+    comparisonApproval.locator("details.approval-technical code").last(),
+  ).toBeHidden();
   await comparisonApproval
     .getByRole("button", { name: "Approve exact request" })
     .click();
@@ -1341,7 +1683,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     fullPage: true,
   });
 
-  await openMoreDestination(page, "Import");
+  await openMoreDestination(page, "Import data");
   await page
     .getByLabel("Career Ops directory")
     .fill(resolve("tests/fixtures/career-ops-v1.18"));
@@ -1351,9 +1693,16 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Application mappings" }),
+  ).toBeHidden();
+  await expect(page.getByText("agent skills and prompts")).toBeVisible();
+  await page
+    .getByText("Review application state mapping", { exact: true })
+    .click();
+  await page.getByText("Inspect selected source", { exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Application mappings" }),
   ).toBeVisible();
   await expect(page.getByRole("table")).toContainText("Globex");
-  await expect(page.getByText("agent skills and prompts")).toBeVisible();
   const importMappings = page
     .getByRole("group", { name: "Career Ops mappings" })
     .getByRole("checkbox");
@@ -1371,33 +1720,125 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     expect.objectContaining({ disposition: "skipped" }),
   );
   const importReceipt = page.locator(".import-receipt").first();
-  await importReceipt.getByText(/Mapping receipt/u).click();
+  const mappingReceipt = importReceipt.getByText(/Mapping receipt/u);
+  await expect(importReceipt.locator(".receipt-fingerprint")).toBeHidden();
+  await mappingReceipt.click();
+  await expect(importReceipt.locator(".receipt-fingerprint")).toBeVisible();
   await expect(
     importReceipt.getByText("skipped", { exact: true }),
   ).toBeVisible();
+  await mappingReceipt.click();
+  await expect(importReceipt.locator(".receipt-fingerprint")).toBeHidden();
+  await page
+    .getByLabel("Career Ops directory")
+    .fill("fixtures/career-ops-v1.18");
   await page.screenshot({
     path: join(importEvidenceRoot, "career-ops-imported.png"),
     fullPage: true,
   });
 
-  await page.getByRole("link", { name: "Career" }).click();
-  await page
+  await page.getByRole("link", { name: "Career record" }).click();
+  const careerRecord = page
     .locator(".profile-record-details")
-    .filter({ hasText: "Your career record" })
-    .locator(":scope > summary")
-    .click();
+    .filter({ hasText: "Your career record" });
+  if ((await careerRecord.getAttribute("open")) === null) {
+    await careerRecord.locator(":scope > summary").click();
+  }
+  const compactGroups = await careerRecord
+    .locator(".career-fact-group")
+    .evaluateAll((groups) =>
+      groups.map((group) => ({
+        visibleRows: [
+          ...group.querySelectorAll<HTMLElement>(
+            ":scope > .career-fact-rows > .career-fact-row",
+          ),
+        ].filter((row) => row.checkVisibility()).length,
+        visibleRowHeights: [
+          ...group.querySelectorAll<HTMLElement>(
+            ":scope > .career-fact-rows > .career-fact-row",
+          ),
+        ]
+          .filter((row) => row.checkVisibility())
+          .map((row) => Math.round(row.getBoundingClientRect().height)),
+      })),
+    );
+  expect(compactGroups.length).toBeGreaterThan(0);
+  expect(compactGroups.every((group) => group.visibleRows <= 3)).toBe(true);
+  expect(
+    compactGroups
+      .flatMap((group) => group.visibleRowHeights)
+      .every((height) => height <= 90),
+  ).toBe(true);
+  await expect(
+    careerRecord.getByRole("heading", { name: "Other", exact: true }),
+  ).toBeVisible();
+  await expect(careerRecord).toContainText(
+    "the Synthetic Cloud Practitioner certification.",
+  );
+  await expect(careerRecord.getByText("Edit", { exact: true })).toHaveCount(0);
   const verified = page
     .locator(".fact-card")
     .filter({ hasText: "TypeScript services" });
+  const containingOverflow = careerRecord
+    .locator("details.career-fact-overflow")
+    .filter({ has: verified });
+  if ((await containingOverflow.count()) > 0 && !(await verified.isVisible())) {
+    await containingOverflow.locator(":scope > summary").click();
+  }
+  const sourceDetails = verified.getByLabel(
+    "Source details for Avery Example built TypeScript services",
+  );
+  const certification = careerRecord
+    .locator(".career-fact-row")
+    .filter({ hasText: "Synthetic Cloud Practitioner certification" });
+  const certificationSourceDetails = certification.getByLabel(
+    "Source details for Avery Example earned the Synthetic Cloud Practitioner certification",
+  );
+  await verified
+    .getByRole("button", {
+      name: "Check source for Avery Example built TypeScript services",
+    })
+    .click();
+  await expect(sourceDetails).toBeVisible();
+  await expect(sourceDetails).toContainText("Career source · captured");
+  await expect(sourceDetails).toContainText(`ID ${careerSource.id}`);
+  await expect(sourceDetails).toContainText("fingerprint");
+  await certification
+    .getByRole("button", {
+      name: "Edit saved career detail Avery Example earned the Synthetic Cloud Practitioner certification",
+    })
+    .click();
+  await expect(sourceDetails).toBeHidden();
+  await expect(
+    careerRecord.locator('button[aria-expanded="true"]'),
+  ).toHaveCount(1);
+  await verified
+    .getByRole("button", {
+      name: "Check source for Avery Example built TypeScript services",
+    })
+    .click();
+  await expect(certification.getByLabel("Updated value")).toBeHidden();
+  await certification
+    .getByRole("button", {
+      name: "Check source for Avery Example earned the Synthetic Cloud Practitioner certification",
+    })
+    .click();
+  await expect(sourceDetails).toBeHidden();
+  await expect(certificationSourceDetails).toBeVisible();
+  await expect(
+    careerRecord.locator('button[aria-expanded="true"]'),
+  ).toHaveCount(1);
   await verified
     .getByRole("button", {
       name: "Edit saved career detail Avery Example built TypeScript services",
     })
     .click();
+  await expect(certificationSourceDetails).toBeHidden();
   await expect(verified).toContainText(
     "dependent items will be marked out of date",
   );
-  await verified.getByLabel("Updated value").fill("JavaScript services");
+  const longCorrection = `JavaScript services. ${"Reliable platform work across teams and systems. ".repeat(24)}${"X".repeat(700)}`;
+  await verified.getByLabel("Updated value").fill(longCorrection);
   await verified
     .getByRole("button", {
       name: "Save correction for Avery Example built TypeScript services",
@@ -1406,10 +1847,42 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await expect(
     page.locator(".fact-card").filter({ hasText: "JavaScript services" }),
   ).toContainText("saved");
+  const correctedLongFact = careerRecord
+    .locator(".career-fact-row")
+    .filter({ hasText: "JavaScript services" });
+  await expect(
+    correctedLongFact.getByRole("button", { name: "Show full detail" }),
+  ).toBeVisible();
+  expect(
+    await correctedLongFact.evaluate((row) =>
+      Math.round(row.getBoundingClientRect().height),
+    ),
+  ).toBeLessThanOrEqual(90);
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth <=
+        document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
+  await correctedLongFact
+    .getByRole("button", { name: "Show full detail" })
+    .click();
+  await expect(
+    correctedLongFact.getByRole("button", { name: "Show less" }),
+  ).toBeVisible();
+  await expect(correctedLongFact).toContainText("X".repeat(100));
+  await correctedLongFact.getByRole("button", { name: "Show less" }).click();
+  expect(
+    await correctedLongFact.evaluate((row) =>
+      Math.round(row.getBoundingClientRect().height),
+    ),
+  ).toBeLessThanOrEqual(90);
 
-  await openMoreDestination(page, "Evaluations");
+  await openMoreDestination(page, "Fit analysis");
+  await openTaskDisclosure(page, "Choose a job or check again");
   await page
-    .getByLabel("Saved job")
+    .getByLabel("Saved job", { exact: true })
     .selectOption({ label: "Platform Engineer · Synthetic Labs" });
   await expect(
     page.locator(".current-evaluation > .evaluation-card"),
@@ -1421,13 +1894,16 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
     .filter({ hasText: "Fit estimate, not a recommendation." })
     .first();
   await expect(staleLocalEvaluation).toContainText("Stale:");
+  await staleLocalEvaluation
+    .getByText("Review fit evidence", { exact: true })
+    .click();
   await staleLocalEvaluation.getByRole("tab", { name: "Artifacts" }).click();
   await expect(staleLocalEvaluation).toContainText("stale");
 
-  await openMoreDestination(page, "Compare");
+  await openMoreDestination(page, "Compare roles");
   await expect(page.locator(".comparison-card").first()).toContainText("stale");
 
-  await openMoreDestination(page, "Drafts");
+  await openMoreDestination(page, "Materials");
   await expect(draft).toContainText("stale");
   await expect(draft).toContainText("was superseded");
 
@@ -1551,8 +2027,47 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   );
   expect(childTerminalResponse.ok()).toBe(true);
 
-  await openMoreDestination(page, "Activity");
-  await expect(page.getByText(/Latest sequence: [1-9]/u)).toBeVisible();
+  for (let index = 1; index <= 6; index += 1) {
+    const completedRootResponse = await page.request.post(
+      "/api/v1/operations",
+      {
+        headers: dshHeaders(),
+        data: {
+          kind: "evaluation",
+          inputIdentity: opportunityId,
+          requestedCapabilities: ["workspace.read"],
+          route: "ordinary_dsh",
+          dshSessionId: DSH_SESSION,
+          provider: "openai-codex",
+          model: "gpt-5.6-sol",
+          reasoningEffort: "high",
+        },
+      },
+    );
+    expect(completedRootResponse.ok()).toBe(true);
+    const completedRoot = await responseJson<OperationResponse>(
+      completedRootResponse,
+    );
+    const completedRootTerminal = await page.request.post(
+      `/api/v1/operations/${completedRoot.id}/terminal`,
+      {
+        headers: dshHeaders(completedRoot.id),
+        data: {
+          expectedRevision: completedRoot.revision,
+          state: "succeeded",
+          category: "completed",
+          message: `Synthetic completed root ${String(index)}.`,
+          resultIds: [],
+          artifactIds: [],
+        },
+      },
+    );
+    expect(completedRootTerminal.ok()).toBe(true);
+  }
+
+  await openMoreDestination(page, "Agent activity");
+  await expect(page.getByText(/Activity is connected/u)).toBeVisible();
+  await page.getByText("View audit history", { exact: true }).click();
   await expect(page.locator(".timeline li").first()).toBeVisible();
   await expect(page.locator(".timeline li")).toHaveCount(10);
   await expect(page.locator(".timeline li").first().locator("p")).toContainText(
@@ -1567,7 +2082,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   const newestSequence = Number(
     await page.locator(".timeline li > span").first().textContent(),
   );
-  await page.getByRole("button", { name: "Older" }).click();
+  await page.getByRole("button", { name: "Older", exact: true }).click();
   await expect(page.getByText(/Page 2 of/u)).toBeVisible();
   const olderSequence = Number(
     await page.locator(".timeline li > span").first().textContent(),
@@ -1578,6 +2093,20 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   expect(await page.locator(".timeline li").count()).toBeLessThanOrEqual(25);
   await page.getByLabel("Events per page").selectOption("10");
   await expect(page.locator(".timeline li")).toHaveCount(10);
+  await expect(
+    page.getByText(/active operation (?:branch|branches) shown first/u),
+  ).toBeVisible();
+  const parentCard = page
+    .locator(".operation-card")
+    .filter({ hasText: parentOperation.id })
+    .first();
+  await expect(parentCard).toBeVisible();
+  await expect(
+    parentCard.getByRole("button", { name: "Request cancellation" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Show 3 older completed" }),
+  ).toBeVisible();
   const childCard = page
     .locator(".operation-card")
     .filter({ hasText: childOperation.id });
@@ -1591,10 +2120,6 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await expect(childCard).toContainText(
     "1 recorded request; only the exact live parent Agent can deliver",
   );
-  const parentCard = page
-    .locator(".operation-card")
-    .filter({ hasText: parentOperation.id })
-    .first();
   await parentCard
     .getByRole("button", { name: "Request cancellation" })
     .click();
@@ -1607,7 +2132,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   });
   await page.reload();
   await expect(page.getByRole("heading", { name: "Activity" })).toBeVisible();
-  await expect(page.getByText(/Latest sequence: [1-9]/u)).toBeVisible();
+  await expect(page.getByText(/Activity is connected/u)).toBeVisible();
   await page.screenshot({
     path: join(evidenceRoot, "activity-recovered.png"),
     fullPage: true,
@@ -1626,7 +2151,7 @@ test("complete source-to-sealed-artifact flow survives correction and exposes ac
   await evaluationHandoff.getByRole("link", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/evaluations\?opportunity=/u);
   await expect(
-    page.getByLabel("Saved job").locator("option:checked"),
+    page.getByLabel("Saved job", { exact: true }).locator("option:checked"),
   ).toHaveText("Senior AI Platform Engineer 9 · Synthetic AI Company 9");
 });
 
@@ -1679,7 +2204,7 @@ test("dark refresh keeps every canonical route readable and resilient", async ({
     "rgb(11, 13, 12)",
   );
   await expect(page.locator(".workspace-identity")).toContainText(
-    "Local · private",
+    "Local records · private",
   );
   await expect(
     page.getByRole("link", { name: "Go to overview" }),
@@ -1698,7 +2223,7 @@ test("dark refresh keeps every canonical route readable and resilient", async ({
   await page.goto("/overview");
   await expect(
     page.getByRole("heading", {
-      name: "Build the case for what comes next.",
+      name: "Make your next move with evidence, not guesswork.",
     }),
   ).toBeVisible();
   await page.keyboard.press("Tab");
@@ -1868,6 +2393,7 @@ test("@a11y key routes have no serious axe violations and support keyboard navig
   page,
 }) => {
   test.setTimeout(120_000);
+  await mkdir(evidenceRoot, { recursive: true });
   await createWorkspaceIfNeeded(page);
   await completeCareerSetupIfNeeded(page);
   for (const route of [
@@ -1886,6 +2412,26 @@ test("@a11y key routes have no serious axe violations and support keyboard navig
   ]) {
     await page.goto(`/${route}`);
     await expect(page.locator("h1")).toBeVisible();
+    if (route === "overview") {
+      await expect(
+        page.getByRole("heading", {
+          name: "One evidence trail. Five clearer decisions.",
+        }),
+      ).toBeVisible();
+      await expect(page.locator(".product-journey li")).toHaveCount(5);
+    } else {
+      const workflow = page.getByRole("navigation", {
+        name: "Career workflow",
+      });
+      await expect(workflow).toBeVisible();
+      await expect(workflow.getByRole("link")).toHaveCount(5);
+      const pageStory = page.getByLabel("How this page helps");
+      await expect(pageStory).toBeVisible();
+      await expect(pageStory.getByText("Uses", { exact: true })).toBeVisible();
+      await expect(
+        pageStory.getByText("Creates", { exact: true }),
+      ).toBeVisible();
+    }
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
       .analyze();
@@ -1900,23 +2446,45 @@ test("@a11y key routes have no serious axe violations and support keyboard navig
   await page.goto("/overview");
   await expect(
     page.getByRole("heading", {
-      name: "Build the case for what comes next.",
+      name: "Make your next move with evidence, not guesswork.",
     }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Evidence-backed career decisions.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Local records · private · nothing sent automatically", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Career evidence", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Evaluate and compare", { exact: true }),
   ).toBeVisible();
   await page.keyboard.press("Tab");
   const skipLink = page.getByRole("link", { name: "Skip to main content" });
   await expect(skipLink).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.locator("#main-content")).toBeFocused();
-  await page.getByRole("link", { name: "Career" }).focus();
-  await expect(page.getByRole("link", { name: "Career" })).toBeFocused();
+  await page.getByRole("link", { name: "Career record" }).focus();
+  await expect(page.getByRole("link", { name: "Career record" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("heading", { name: "Add your career history" }),
+    page.getByRole("heading", { name: "Your career record" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Next: Find roles" }),
   ).toBeVisible();
 
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/overview");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
   const mobilePrimary = page.getByRole("navigation", {
     name: "Mobile primary",
   });
@@ -1938,15 +2506,108 @@ test("@a11y key routes have no serious axe violations and support keyboard navig
   await expect(moreDestinations).toBeVisible();
   await expect(moreDestinations.getByRole("link")).toHaveCount(9);
   await expect(
-    moreDestinations.getByRole("link", { name: "Opportunities" }),
+    moreDestinations.getByRole("link", { name: "Saved jobs" }),
   ).toBeFocused();
+  const moreLabels = [
+    "Saved jobs",
+    "Fit analysis",
+    "Compare roles",
+    "Application progress",
+    "Materials",
+    "Import data",
+    "Agent activity",
+    "Preferences",
+    "System status",
+  ] as const;
+  for (const [index, label] of moreLabels.entries()) {
+    await expect(
+      moreDestinations.getByRole("link", { name: label }),
+    ).toBeFocused();
+    if (index < moreLabels.length - 1) await page.keyboard.press("Tab");
+  }
+  await page.keyboard.press("Tab");
+  await expect(
+    moreDestinations.getByRole("link", { name: "Saved jobs" }),
+  ).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(
+    moreDestinations.getByRole("link", { name: "System status" }),
+  ).toBeFocused();
+  const mobileMoreBounds = await page
+    .locator(".mobile-more-panel")
+    .evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return {
+        bottom: Math.round(bounds.bottom),
+        left: Math.round(bounds.left),
+        right: Math.round(bounds.right),
+        top: Math.round(bounds.top),
+        viewportHeight: window.innerHeight,
+        viewportWidth: window.innerWidth,
+      };
+    });
+  expect(mobileMoreBounds.left).toBeGreaterThanOrEqual(0);
+  expect(mobileMoreBounds.top).toBeGreaterThanOrEqual(0);
+  expect(mobileMoreBounds.right).toBeLessThanOrEqual(
+    mobileMoreBounds.viewportWidth,
+  );
+  expect(mobileMoreBounds.bottom).toBeLessThanOrEqual(
+    mobileMoreBounds.viewportHeight,
+  );
+  await page.screenshot({
+    path: join(evidenceRoot, "mobile-more.png"),
+  });
   await page.keyboard.press("Escape");
   await expect(more).toHaveAttribute("aria-expanded", "false");
   await expect(more).toBeFocused();
   await page.keyboard.press("Enter");
-  await moreDestinations.getByRole("link", { name: "Drafts" }).click();
+  await moreDestinations.getByRole("link", { name: "Materials" }).click();
   await expect(
     page.getByRole("heading", { name: "Drafts and review" }),
   ).toBeVisible();
+  const mobileDraftCard = page.locator(".draft-card").first();
+  const mobileMeasuredCard =
+    (await mobileDraftCard.count()) > 0
+      ? mobileDraftCard
+      : page.getByLabel("How this page helps");
+  await expect(mobileMeasuredCard).toBeVisible();
+  if ((await mobileDraftCard.count()) > 0) {
+    const mobileDraftAction = mobileDraftCard.getByRole("button", {
+      name: "Inspect draft",
+    });
+    await mobileDraftAction.focus();
+    await expect(mobileDraftAction).toBeFocused();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const action = document.activeElement?.getBoundingClientRect();
+          const footer = document
+            .querySelector(".sidebar")
+            ?.getBoundingClientRect();
+          return (
+            action !== undefined &&
+            footer !== undefined &&
+            action.bottom <= footer.top + 1
+          );
+        }),
+      )
+      .toBe(true);
+  }
+  const mobileDraftLayout = await mobileMeasuredCard.evaluate((card) => {
+    const bounds = card.getBoundingClientRect();
+    return {
+      cardLeft: Math.round(bounds.left),
+      cardRight: Math.round(bounds.right),
+      overflow:
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+      viewportWidth: window.innerWidth,
+    };
+  });
+  expect(mobileDraftLayout.overflow).toBeLessThanOrEqual(0);
+  expect(mobileDraftLayout.cardLeft).toBeGreaterThanOrEqual(0);
+  expect(mobileDraftLayout.cardRight).toBeLessThanOrEqual(
+    mobileDraftLayout.viewportWidth,
+  );
   await expect(more).toHaveAttribute("aria-current", "page");
 });
