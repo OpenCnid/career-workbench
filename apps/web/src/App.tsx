@@ -1,5 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as Dialog from "@radix-ui/react-dialog";
 import * as Tabs from "@radix-ui/react-tabs";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
@@ -8,6 +15,7 @@ import {
   ArrowRight,
   BriefcaseBusiness,
   Check,
+  ChevronDown,
   CircleGauge,
   Columns3,
   Database,
@@ -43,6 +51,7 @@ import type {
   ComparisonView,
   DomainEventView,
   DiscoveryLeadView,
+  EvidenceView,
   EvaluationView,
   JobDiscoveryRunResponse,
   OperationView,
@@ -68,82 +77,124 @@ const primaryNav = [
   { to: "/discover", label: "Find roles", icon: Search },
 ] as const;
 
-const moreNavGroups = [
+const moreJourneyStages = [
   {
-    label: "Collect",
-    items: [
+    step: "1",
+    label: "Career evidence",
+    description: "Build a trusted record",
+    destinations: [
+      {
+        to: "/profile",
+        label: "Career record",
+        description: "Review the experience you approved",
+        icon: UserRound,
+      },
+    ],
+  },
+  {
+    step: "2",
+    label: "Find roles",
+    description: "Research and save roles",
+    destinations: [
+      {
+        to: "/discover",
+        label: "Find roles",
+        description: "Search from your evidence and priorities",
+        icon: Search,
+      },
       {
         to: "/opportunities",
         label: "Saved jobs",
-        description: "Postings preserved for analysis",
+        description: "Review roles you chose to keep",
         icon: BriefcaseBusiness,
       },
     ],
   },
   {
-    label: "Decide",
-    items: [
+    step: "3",
+    label: "Evaluate and compare",
+    description: "Check fit and trade-offs",
+    destinations: [
       {
         to: "/evaluations",
         label: "Fit analysis",
-        description: "Evidence, fit, and gaps",
+        description: "See your fit, main concern, and next action",
         icon: FileCheck2,
       },
       {
         to: "/comparisons",
         label: "Compare roles",
-        description: "Trade-offs across roles",
+        description: "Weigh evaluated roles side by side",
         icon: Scale,
       },
     ],
   },
   {
-    label: "Prepare",
-    items: [
+    step: "4",
+    label: "Track progress",
+    description: "Keep status and next action clear",
+    destinations: [
       {
         to: "/pipeline",
         label: "Application progress",
-        description: "States and next actions",
+        description: "Track status after you choose to pursue",
         icon: Columns3,
-      },
-      {
-        to: "/drafts",
-        label: "Materials",
-        description: "Evidence-grounded drafts",
-        icon: FilePenLine,
       },
     ],
   },
   {
-    label: "Maintain",
-    items: [
+    step: "5",
+    label: "Prepare materials",
+    description: "Create reviewable drafts",
+    destinations: [
       {
-        to: "/imports",
-        label: "Import data",
-        description: "Bring supported records forward",
-        icon: FolderInput,
-      },
-      {
-        to: "/activity",
-        label: "Agent activity",
-        description: "Work, progress, and recovery",
-        icon: Activity,
-      },
-      {
-        to: "/settings",
-        label: "Preferences",
-        description: "Identity and search direction",
-        icon: Settings2,
-      },
-      {
-        to: "/diagnostics",
-        label: "System status",
-        description: "Local analysis readiness",
-        icon: Database,
+        to: "/drafts",
+        label: "Materials",
+        description: "Prepare evidence-grounded drafts",
+        icon: FilePenLine,
       },
     ],
   },
 ] as const;
+
+const moreSupportItems = [
+  {
+    to: "/imports",
+    label: "Import data",
+    description: "Bring in supported records",
+    icon: FolderInput,
+  },
+  {
+    to: "/activity",
+    label: "Agent activity",
+    description: "Review work and recovery",
+    icon: Activity,
+  },
+  {
+    to: "/settings",
+    label: "Preferences",
+    description: "Update identity and search direction",
+    icon: Settings2,
+  },
+  {
+    to: "/diagnostics",
+    label: "System status",
+    description: "Check local analysis readiness",
+    icon: Database,
+  },
+] as const;
+
+const moreRoutePaths = new Set([
+  "/opportunities",
+  "/evaluations",
+  "/comparisons",
+  "/pipeline",
+  "/drafts",
+  "/imports",
+  "/activity",
+  "/settings",
+  "/diagnostics",
+]);
 
 const pageStories = {
   profile: {
@@ -166,10 +217,9 @@ const pageStories = {
     creates: "A saved opportunity",
   },
   evaluations: {
-    helps:
-      "Understand why a role fits, what supports that view, and what is still unknown.",
-    uses: "Career evidence and a saved job",
-    creates: "An explainable fit view",
+    helps: "See why this job fits, what supports it, and what remains unknown.",
+    uses: "Career evidence + saved job",
+    creates: "Explainable fit view",
   },
   comparisons: {
     helps:
@@ -697,6 +747,120 @@ function Onboarding({
   );
 }
 
+function MoreDestinations({
+  firstLinkRef,
+  lastLinkRef,
+  onNavigate,
+  surface,
+}: {
+  readonly firstLinkRef?: RefObject<HTMLAnchorElement | null>;
+  readonly lastLinkRef?: RefObject<HTMLAnchorElement | null>;
+  readonly onNavigate: () => void;
+  readonly surface: "desktop" | "mobile";
+}): React.JSX.Element {
+  return (
+    <>
+      <header className="more-menu-intro">
+        <h2 id={`${surface}-more-title`}>Career path</h2>
+        <p id={`${surface}-more-description`} className="sr-only">
+          Five ordered stages followed by optional workspace support.
+        </p>
+      </header>
+      <div className="more-menu-groups">
+        <section
+          className="more-journey-group"
+          aria-labelledby={`${surface}-more-journey-title`}
+        >
+          <h2 id={`${surface}-more-journey-title`} className="sr-only">
+            Career journey
+          </h2>
+          <ol className="more-stage-list">
+            {moreJourneyStages.map((stage) => (
+              <li className="more-stage" key={stage.step}>
+                <div className="more-stage-heading">
+                  <span className="more-step" aria-hidden="true">
+                    {stage.step}
+                  </span>
+                  <h3 className="sr-only">
+                    <span className="sr-only">Stage {stage.step} of 5: </span>
+                    {stage.label}
+                  </h3>
+                  <small className="sr-only">{stage.description}</small>
+                </div>
+                <div className="more-stage-actions">
+                  {stage.destinations.map(
+                    ({ to, label, description, icon: Icon }) => {
+                      const descriptionId = `${surface}-more-${to.slice(1)}-description`;
+                      return (
+                        <NavLink
+                          key={to}
+                          ref={to === "/profile" ? firstLinkRef : undefined}
+                          to={to}
+                          aria-label={label}
+                          aria-describedby={descriptionId}
+                          onClick={onNavigate}
+                        >
+                          <Icon aria-hidden="true" />
+                          <span className="more-destination-copy">
+                            <strong>{label}</strong>
+                            <small id={descriptionId} className="sr-only">
+                              {description}
+                            </small>
+                          </span>
+                          <span
+                            className="more-current-label"
+                            aria-hidden="true"
+                          >
+                            Current
+                          </span>
+                        </NavLink>
+                      );
+                    },
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+        <section
+          className="more-support-group"
+          aria-labelledby={`${surface}-more-support-title`}
+        >
+          <header className="more-group-heading">
+            <h2 id={`${surface}-more-support-title`}>Workspace support</h2>
+          </header>
+          <div className="more-support-grid">
+            {moreSupportItems.map(({ to, label, description, icon: Icon }) => {
+              const descriptionId = `${surface}-more-${to.slice(1)}-description`;
+              return (
+                <NavLink
+                  key={to}
+                  ref={to === "/diagnostics" ? lastLinkRef : undefined}
+                  to={to}
+                  aria-label={label}
+                  aria-describedby={descriptionId}
+                  onClick={onNavigate}
+                >
+                  <Icon aria-hidden="true" />
+                  <span className="more-destination-copy">
+                    <strong>{label}</strong>
+                    <small id={descriptionId} className="sr-only">
+                      {description}
+                    </small>
+                  </span>
+                  <span className="more-current-label" aria-hidden="true">
+                    Current
+                  </span>
+                </NavLink>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+    </>
+  );
+}
+
 function Layout({
   snapshot,
   streamState,
@@ -711,9 +875,7 @@ function Layout({
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const firstMoreLinkRef = useRef<HTMLAnchorElement>(null);
   const lastMoreLinkRef = useRef<HTMLAnchorElement>(null);
-  const moreRouteIsActive = moreNavGroups.some((group) =>
-    group.items.some((item) => item.to === location.pathname),
-  );
+  const moreRouteIsActive = moreRoutePaths.has(location.pathname);
   const setupComplete = careerSetupComplete(snapshot);
   useEffect(() => {
     if (mobileMenuOpen) firstMoreLinkRef.current?.focus();
@@ -734,7 +896,7 @@ function Layout({
       if (event.key !== "Escape") return;
       if (mobileMenuOpen) {
         setMobileMenuOpen(false);
-        moreButtonRef.current?.focus();
+        window.requestAnimationFrame(() => moreButtonRef.current?.focus());
         return;
       }
       if (desktopMoreRef.current?.open === true) {
@@ -792,38 +954,19 @@ function Layout({
                 <Menu aria-hidden="true" />
                 <span>More</span>
               </summary>
-              <div className="more-menu" aria-label="More destinations">
-                <header>
-                  <strong>More tools</strong>
-                  <small>Follow the work from capture to upkeep.</small>
-                </header>
-                <div className="more-menu-groups">
-                  {moreNavGroups.map((group) => (
-                    <section key={group.label}>
-                      <h2>{group.label}</h2>
-                      <div>
-                        {group.items.map(
-                          ({ to, label, description, icon: Icon }) => (
-                            <NavLink
-                              key={to}
-                              to={to}
-                              onClick={() => {
-                                if (desktopMoreRef.current !== null)
-                                  desktopMoreRef.current.open = false;
-                              }}
-                            >
-                              <Icon aria-hidden="true" />
-                              <span>
-                                <strong>{label}</strong>
-                                <small aria-hidden="true">{description}</small>
-                              </span>
-                            </NavLink>
-                          ),
-                        )}
-                      </div>
-                    </section>
-                  ))}
-                </div>
+              <div
+                className="more-menu"
+                role="region"
+                aria-labelledby="desktop-more-title"
+                aria-describedby="desktop-more-description"
+              >
+                <MoreDestinations
+                  surface="desktop"
+                  onNavigate={() => {
+                    if (desktopMoreRef.current !== null)
+                      desktopMoreRef.current.open = false;
+                  }}
+                />
               </div>
             </details>
           </nav>
@@ -831,7 +974,11 @@ function Layout({
             <span className={`stream-dot ${streamState}`} aria-hidden="true" />
             <span>Activity {streamState}</span>
           </div>
-          <nav className="mobile-primary-nav" aria-label="Mobile primary">
+          <nav
+            className="mobile-primary-nav"
+            aria-label="Mobile primary"
+            inert={mobileMenuOpen}
+          >
             {primaryNav.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
@@ -846,6 +993,7 @@ function Layout({
               ref={moreButtonRef}
               className={`mobile-more-trigger${moreRouteIsActive ? " active" : ""}`}
               type="button"
+              aria-haspopup="dialog"
               aria-expanded={mobileMenuOpen}
               aria-controls="mobile-more-destinations"
               aria-current={moreRouteIsActive ? "page" : undefined}
@@ -861,42 +1009,16 @@ function Layout({
               id="mobile-more-destinations"
               role="dialog"
               aria-modal="true"
-              aria-label="More destinations"
+              aria-labelledby="mobile-more-title"
+              aria-describedby="mobile-more-description"
             >
-              <header>
-                <strong>More tools</strong>
-                <small>Follow the work from capture to upkeep.</small>
-              </header>
               <nav aria-label="More destinations">
-                {moreNavGroups.map((group) => (
-                  <section key={group.label}>
-                    <h2>{group.label}</h2>
-                    <div>
-                      {group.items.map(
-                        ({ to, label, description, icon: Icon }) => (
-                          <NavLink
-                            key={to}
-                            ref={
-                              to === "/opportunities"
-                                ? firstMoreLinkRef
-                                : to === "/diagnostics"
-                                  ? lastMoreLinkRef
-                                  : undefined
-                            }
-                            to={to}
-                            onClick={() => setMobileMenuOpen(false)}
-                          >
-                            <Icon aria-hidden="true" />
-                            <span>
-                              <strong>{label}</strong>
-                              <small aria-hidden="true">{description}</small>
-                            </span>
-                          </NavLink>
-                        ),
-                      )}
-                    </div>
-                  </section>
-                ))}
+                <MoreDestinations
+                  surface="mobile"
+                  firstLinkRef={firstMoreLinkRef}
+                  lastLinkRef={lastMoreLinkRef}
+                  onNavigate={() => setMobileMenuOpen(false)}
+                />
               </nav>
             </div>
           )}
@@ -919,6 +1041,7 @@ function Layout({
       <main
         className="content"
         id="main-content"
+        inert={mobileMenuOpen}
         tabIndex={-1}
         onFocusCapture={(event) => {
           if (!window.matchMedia("(max-width: 720px)").matches) return;
@@ -975,6 +1098,7 @@ function PageHeader({
   description,
   story,
   journeyStep,
+  className,
 }: {
   readonly eyebrow: string;
   readonly title: string;
@@ -986,26 +1110,16 @@ function PageHeader({
     readonly next?: { readonly label: string; readonly to: string };
   };
   readonly journeyStep?: number;
+  readonly className?: string;
 }): React.JSX.Element {
   return (
-    <header className="page-header">
+    <header className={["page-header", className].filter(Boolean).join(" ")}>
       <p className="eyebrow">{eyebrow}</p>
       <h1>{title}</h1>
       <p className="page-description">{description}</p>
       {story !== undefined && (
         <>
-          <nav className="journey-rail" aria-label="Career workflow">
-            {productJourney.map((step, index) => (
-              <Link
-                key={step.title}
-                to={step.to}
-                aria-current={journeyStep === index + 1 ? "step" : undefined}
-              >
-                <span>{index + 1}</span>
-                {step.title}
-              </Link>
-            ))}
-          </nav>
+          <JourneyRail journeyStep={journeyStep} />
           <section className="page-story" aria-label="How this page helps">
             <div className="page-story-benefit">
               <span>How this helps</span>
@@ -1037,24 +1151,54 @@ function PageHeader({
   );
 }
 
+function JourneyRail({
+  journeyStep,
+}: {
+  readonly journeyStep: number | undefined;
+}): React.JSX.Element {
+  return (
+    <nav className="journey-rail" aria-label="Career workflow">
+      {productJourney.map((step, index) => (
+        <Link
+          key={step.title}
+          to={step.to}
+          aria-current={journeyStep === index + 1 ? "step" : undefined}
+        >
+          <span>{index + 1}</span>
+          {step.title}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 function ProgressiveDetails({
   summary,
   hint,
   children,
   className = "",
+  summaryLabel,
+  closedCue,
+  openCue = "Close",
 }: {
   readonly summary: string;
   readonly hint: string;
   readonly children: React.ReactNode;
   readonly className?: string;
+  readonly summaryLabel?: string;
+  readonly closedCue?: string;
+  readonly openCue?: string;
 }): React.JSX.Element {
   return (
     <details
-      className={`progressive-details${className.length > 0 ? ` ${className}` : ""}`}
+      className={`progressive-details${closedCue === undefined ? "" : " has-disclosure-cue"}${className.length > 0 ? ` ${className}` : ""}`}
     >
-      <summary>
+      <summary aria-label={summaryLabel}>
         <span>{summary}</span>
         <small>{hint}</small>
+        {closedCue !== undefined && (
+          <DisclosureCue closedLabel={closedCue} openLabel={openCue} />
+        )}
       </summary>
       <div className="progressive-details-body">{children}</div>
     </details>
@@ -1066,11 +1210,15 @@ function TaskDisclosure({
   summary,
   hint,
   children,
+  closedCue,
+  openCue = "Close",
 }: {
   readonly collapsed: boolean;
   readonly summary: string;
   readonly hint: string;
   readonly children: React.ReactNode;
+  readonly closedCue?: string;
+  readonly openCue?: string;
 }): React.JSX.Element {
   if (!collapsed) return <>{children}</>;
   return (
@@ -1080,9 +1228,28 @@ function TaskDisclosure({
           <strong>{summary}</strong>
           <small>{hint}</small>
         </span>
+        {closedCue !== undefined && (
+          <DisclosureCue closedLabel={closedCue} openLabel={openCue} />
+        )}
       </summary>
       <div className="task-disclosure-body">{children}</div>
     </details>
+  );
+}
+
+function DisclosureCue({
+  closedLabel,
+  openLabel,
+}: {
+  readonly closedLabel: string;
+  readonly openLabel: string;
+}): React.JSX.Element {
+  return (
+    <span className="disclosure-cue">
+      <span className="disclosure-cue-closed">{closedLabel}</span>
+      <span className="disclosure-cue-open">{openLabel}</span>
+      <ChevronDown aria-hidden="true" />
+    </span>
   );
 }
 
@@ -5065,151 +5232,1254 @@ function OpportunityCard({
   );
 }
 
+interface OpportunityChoice {
+  readonly opportunity: OpportunityView;
+  readonly label: string;
+  readonly searchText: string;
+}
+
+function normalizeEvaluationSearch(value: string, locale: string): string {
+  return value.trim().replace(/\s+/gu, " ").toLocaleLowerCase(locale);
+}
+
+function opportunityChoices(
+  opportunities: readonly OpportunityView[],
+  locale: string,
+): readonly OpportunityChoice[] {
+  const collator = new Intl.Collator(locale, {
+    numeric: true,
+    sensitivity: "base",
+  });
+  const sorted = [...opportunities].sort(
+    (left, right) =>
+      collator.compare(left.roleTitle, right.roleTitle) ||
+      collator.compare(left.organization, right.organization) ||
+      collator.compare(left.requisitionId ?? "", right.requisitionId ?? "") ||
+      left.id.localeCompare(right.id),
+  );
+  const baseCounts = new Map<string, number>();
+  const requisitionCounts = new Map<string, number>();
+  for (const item of sorted) {
+    const base = `${item.roleTitle} — ${item.organization}`;
+    baseCounts.set(base, (baseCounts.get(base) ?? 0) + 1);
+    if (item.requisitionId !== null) {
+      const requisitionKey = `${base}\u0000${item.requisitionId}`;
+      requisitionCounts.set(
+        requisitionKey,
+        (requisitionCounts.get(requisitionKey) ?? 0) + 1,
+      );
+    }
+  }
+  const seen = new Map<string, number>();
+  const requisitionSeen = new Map<string, number>();
+  return sorted.map((opportunity) => {
+    const base = `${opportunity.roleTitle} — ${opportunity.organization}`;
+    const occurrence = (seen.get(base) ?? 0) + 1;
+    seen.set(base, occurrence);
+    const duplicateCount = baseCounts.get(base) ?? 1;
+    let discriminator = `saved job ${String(occurrence)} of ${String(duplicateCount)}`;
+    if (opportunity.requisitionId !== null) {
+      const requisitionKey = `${base}\u0000${opportunity.requisitionId}`;
+      const sameRequisitionCount = requisitionCounts.get(requisitionKey) ?? 1;
+      const requisitionOccurrence =
+        (requisitionSeen.get(requisitionKey) ?? 0) + 1;
+      requisitionSeen.set(requisitionKey, requisitionOccurrence);
+      discriminator = `requisition ${opportunity.requisitionId}${
+        sameRequisitionCount > 1
+          ? ` · duplicate ${String(requisitionOccurrence)} of ${String(sameRequisitionCount)}`
+          : ""
+      }`;
+    }
+    return {
+      opportunity,
+      label: duplicateCount === 1 ? base : `${base} · ${discriminator}`,
+      searchText: normalizeEvaluationSearch(
+        `${opportunity.roleTitle} ${opportunity.organization}`,
+        locale,
+      ),
+    };
+  });
+}
+
+function JobPicker({
+  choices,
+  selectedId,
+  locale,
+  onSelect,
+}: {
+  readonly choices: readonly OpportunityChoice[];
+  readonly selectedId: string;
+  readonly locale: string;
+  readonly onSelect: (opportunityId: string) => void;
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [queryText, setQueryText] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const openerRef = useRef<HTMLButtonElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const selected = choices.find(
+    (choice) => choice.opportunity.id === selectedId,
+  );
+  const normalizedQuery = normalizeEvaluationSearch(queryText, locale);
+  const filtered = choices.filter((choice) =>
+    choice.searchText.includes(normalizedQuery),
+  );
+  useEffect(() => setActiveIndex(0), [queryText]);
+  const select = (opportunityId: string): void => {
+    onSelect(opportunityId);
+    setOpen(false);
+  };
+  const move = (nextIndex: number): void => {
+    if (filtered.length === 0) return;
+    const bounded = (nextIndex + filtered.length) % filtered.length;
+    setActiveIndex(bounded);
+    optionRefs.current[bounded]?.focus();
+  };
+  return (
+    <Dialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (nextOpen) {
+          setQueryText("");
+          setActiveIndex(0);
+        }
+      }}
+    >
+      <Dialog.Trigger asChild>
+        <button
+          className="evaluation-picker-trigger"
+          type="button"
+          ref={openerRef}
+          aria-label={`Change selected job. Current job: ${selected?.label ?? "none"}`}
+        >
+          <Search aria-hidden="true" />
+          <span>{selected === undefined ? "Choose job" : "Change job"}</span>
+          <small>{choices.length} saved</small>
+        </button>
+      </Dialog.Trigger>
+      <Dialog.Portal>
+        <Dialog.Overlay className="evaluation-dialog-overlay" />
+        <Dialog.Content
+          className="evaluation-dialog evaluation-picker-dialog"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            searchRef.current?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            openerRef.current?.focus();
+          }}
+        >
+          <div className="evaluation-dialog-heading">
+            <div>
+              <Dialog.Title>Choose a saved job</Dialog.Title>
+              <Dialog.Description>
+                Search by role or organization. Results are ordered by role,
+                then organization.
+              </Dialog.Description>
+            </div>
+            <Dialog.Close asChild>
+              <button type="button" aria-label="Close saved job picker">
+                Close
+              </button>
+            </Dialog.Close>
+          </div>
+          <label className="evaluation-picker-search">
+            Search saved jobs
+            <input
+              ref={searchRef}
+              type="search"
+              value={queryText}
+              onChange={(event) => setQueryText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  move(0);
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  move(filtered.length - 1);
+                }
+              }}
+              aria-controls="evaluation-job-results"
+              autoComplete="off"
+            />
+          </label>
+          <p className="evaluation-picker-count" aria-live="polite">
+            {filtered.length === 0
+              ? "No matching saved jobs"
+              : `${String(filtered.length)} matching ${filtered.length === 1 ? "job" : "jobs"}`}
+          </p>
+          {filtered.length === 0 ? (
+            <p className="evaluation-picker-empty" role="status">
+              No saved jobs match that role or organization.
+            </p>
+          ) : (
+            <div
+              className="evaluation-picker-results"
+              id="evaluation-job-results"
+              role="listbox"
+              aria-label="Saved jobs"
+            >
+              {filtered.map((choice, index) => (
+                <button
+                  key={choice.opportunity.id}
+                  ref={(node) => {
+                    optionRefs.current[index] = node;
+                  }}
+                  id={`evaluation-job-${choice.opportunity.id}`}
+                  type="button"
+                  role="option"
+                  aria-selected={choice.opportunity.id === selectedId}
+                  aria-label={choice.label}
+                  tabIndex={index === activeIndex ? 0 : -1}
+                  onFocus={() => setActiveIndex(index)}
+                  onClick={() => select(choice.opportunity.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      move(index + 1);
+                    } else if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      move(index - 1);
+                    } else if (event.key === "Home") {
+                      event.preventDefault();
+                      move(0);
+                    } else if (event.key === "End") {
+                      event.preventDefault();
+                      move(filtered.length - 1);
+                    } else if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      select(choice.opportunity.id);
+                    }
+                  }}
+                >
+                  <strong>{choice.opportunity.roleTitle}</strong>
+                  <span>{choice.opportunity.organization}</span>
+                  {choice.label !==
+                    `${choice.opportunity.roleTitle} — ${choice.opportunity.organization}` && (
+                    <small>
+                      {choice.label.slice(
+                        `${choice.opportunity.roleTitle} — ${choice.opportunity.organization} · `
+                          .length,
+                      )}
+                    </small>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+function timestampValue(value: string | null | undefined): number {
+  const parsed = Date.parse(value ?? "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatAbsoluteTimestamp(
+  timestamp: string,
+  locale: string,
+  timezone: string,
+): string {
+  return new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+    timeZone: timezone,
+  }).format(new Date(timestamp));
+}
+
+function evaluationStateLabel(state: string): string {
+  if (state === "not_evaluated") return "Not evaluated";
+  if (state === "waiting_for_user") return "Waiting for user";
+  return `${state.slice(0, 1).toUpperCase()}${state.slice(1).replaceAll("_", " ")}`;
+}
+
+function evaluationStateMessage(state: string): string {
+  const messages: Readonly<Record<string, string>> = {
+    canceled: "The latest check was canceled; no new result was committed.",
+    completed: "The latest fit check completed with an authoritative result.",
+    failed:
+      "The latest check failed; any earlier completed result remains separate.",
+    indeterminate:
+      "The latest operation has no trusted terminal and will not be replayed silently.",
+    not_evaluated: "This saved job has not been checked yet.",
+    pending: "The check is admitted but has not started.",
+    queued: "The check is queued and has not produced a result.",
+    running:
+      "A new check is running; any score shown is the last completed result.",
+    stale: "The saved result no longer reflects the current evidence.",
+    waiting_for_user: "The check needs user input before it can continue.",
+  };
+  return messages[state] ?? `Authoritative evaluation state: ${state}.`;
+}
+
+function criticalEvaluationFinding(
+  evaluation: EvaluationView | undefined,
+  state: string,
+  operation: OperationView | undefined,
+): string {
+  if (
+    (state === "failed" || state === "canceled" || state === "indeterminate") &&
+    operation?.terminalMessage !== null &&
+    operation?.terminalMessage !== undefined
+  )
+    return operation.terminalMessage;
+  const staleReason = evaluation?.staleReason;
+  if (state === "stale" && staleReason !== null && staleReason !== undefined)
+    return staleReason;
+  const fallbacks: Readonly<Record<string, string>> = {
+    not_evaluated: "No completed fit evidence exists for this saved job.",
+    pending: "No fit result exists until the admitted check finishes.",
+    queued: "No fit result exists until the queued check finishes.",
+    running: "Do not treat the in-progress check as a final fit result.",
+    stale: "The prior result is stale and should be checked again.",
+    waiting_for_user: "The requested input is blocking a trustworthy result.",
+  };
+  if (state !== "completed")
+    return (
+      fallbacks[state] ?? "No final fit result is available for this check."
+    );
+  const authoritative = evaluation?.criticalFindings[0];
+  if (authoritative !== undefined) return authoritative;
+  const contradiction = evaluation?.contradictions[0];
+  if (contradiction !== undefined) return contradiction;
+  const gap = evaluation?.gaps[0];
+  if (gap !== undefined) return gap;
+  const completedFallback =
+    "No critical contradiction is recorded; compare the result with your priorities.";
+  return completedFallback;
+}
+
+function evaluationDelta(
+  evaluation: EvaluationView,
+  newestFirst: readonly EvaluationView[],
+): string {
+  if (evaluation.state !== "completed") return "Not comparable";
+  const position = newestFirst.findIndex((item) => item.id === evaluation.id);
+  const olderCompleted = newestFirst
+    .slice(position + 1)
+    .filter((item) => item.state === "completed");
+  const preceding = olderCompleted.find(
+    (item) => item.rubricId === evaluation.rubricId,
+  );
+  if (preceding === undefined)
+    return olderCompleted.length === 0 ? "New" : "Not comparable";
+  const points =
+    (evaluation.aggregateScoreBasisPoints -
+      preceding.aggregateScoreBasisPoints) /
+    100;
+  const formatted = Number.isInteger(points)
+    ? points.toFixed(0)
+    : points.toFixed(1);
+  return `${points > 0 ? "+" : ""}${formatted} pp`;
+}
+
+function evaluationHasRecordedScore(evaluation: EvaluationView): boolean {
+  return evaluation.state === "completed" || evaluation.state === "stale";
+}
+
 function Evaluations({
   snapshot,
 }: {
   readonly snapshot: SnapshotResponse;
 }): React.JSX.Element {
   const refresh = useRefresh();
+  const navigate = useNavigate();
   const location = useLocation();
+  const locale = snapshot.workspace?.locale ?? "en-US";
+  const timezone = snapshot.workspace?.timezone ?? "UTC";
+  const choices = opportunityChoices(snapshot.opportunities, locale);
   const requestedOpportunityId = new URLSearchParams(location.search).get(
     "opportunity",
   );
   const requestedOpportunity = snapshot.opportunities.find(
     (opportunity) => opportunity.id === requestedOpportunityId,
   );
-  const [opportunityId, setOpportunityId] = useState(
-    requestedOpportunity?.id ?? snapshot.opportunities[0]?.id ?? "",
+  const opportunityId =
+    requestedOpportunity?.id ?? choices[0]?.opportunity.id ?? "";
+  const opportunity = snapshot.opportunities.find(
+    (item) => item.id === opportunityId,
   );
   const hasVerifiedCareerFact = snapshot.profileFacts.some(
     (fact) =>
       fact.status === "verified" &&
       (fact.factType === "experience" || fact.factType === "achievement"),
   );
-  const selectedEvaluations = [...snapshot.evaluations]
-    .reverse()
-    .filter((evaluation) => evaluation.opportunityId === opportunityId);
-  const selectedEvaluation = selectedEvaluations[0];
-  const previousEvaluations = selectedEvaluations.slice(1);
+  const selectedEvaluations = snapshot.evaluations
+    .filter((evaluation) => evaluation.opportunityId === opportunityId)
+    .toSorted(
+      (left, right) =>
+        timestampValue(right.createdAt) - timestampValue(left.createdAt) ||
+        right.id.localeCompare(left.id),
+    );
+  const latestEvaluation = selectedEvaluations[0];
+  const latestCompleted = selectedEvaluations.find(
+    (evaluation) => evaluation.state === "completed",
+  );
+  const relevantOperations = snapshot.operations
+    .filter(
+      (operation) =>
+        operation.kind === "evaluation" &&
+        operation.inputIdentity === opportunityId,
+    )
+    .toSorted(
+      (left, right) =>
+        timestampValue(right.lastActivityAt) -
+          timestampValue(left.lastActivityAt) ||
+        right.id.localeCompare(left.id),
+    );
+  const latestOperation = relevantOperations[0];
+  const operationIsCurrent =
+    latestOperation !== undefined &&
+    latestOperation.state !== "succeeded" &&
+    timestampValue(latestOperation.lastActivityAt) >=
+      timestampValue(latestEvaluation?.updatedAt);
+  const currentOperation = operationIsCurrent
+    ? latestOperation
+    : latestEvaluation?.operationId === null ||
+        latestEvaluation?.operationId === undefined
+      ? undefined
+      : snapshot.operations.find(
+          (operation) => operation.id === latestEvaluation.operationId,
+        );
+  const currentState = operationIsCurrent
+    ? latestOperation.state
+    : (latestEvaluation?.state ?? "not_evaluated");
+  const checkIsActive = [
+    "pending",
+    "queued",
+    "running",
+    "waiting_for_user",
+  ].includes(currentState);
+  const summaryEvaluation =
+    latestEvaluation?.state === "completed" ||
+    latestEvaluation?.state === "stale"
+      ? latestEvaluation
+      : (latestCompleted ?? latestEvaluation);
+  const historyEvaluations = selectedEvaluations.filter(
+    (evaluation) => evaluation.id !== latestEvaluation?.id,
+  );
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const [detailEvaluationId, setDetailEvaluationId] = useState<string | null>(
+    null,
+  );
+  const detailTriggerRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    setShowAllHistory(false);
+    setDetailEvaluationId(null);
+  }, [opportunityId]);
   useEffect(() => {
     if (
-      requestedOpportunity !== undefined &&
-      opportunityId !== requestedOpportunity.id
-    ) {
-      setOpportunityId(requestedOpportunity.id);
-      return;
-    }
-    if (
       requestedOpportunity === undefined &&
-      !snapshot.opportunities.some(
-        (opportunity) => opportunity.id === opportunityId,
-      )
+      opportunityId !== "" &&
+      requestedOpportunityId !== opportunityId
     ) {
-      setOpportunityId(snapshot.opportunities[0]?.id ?? "");
+      void navigate(
+        `/evaluations?opportunity=${encodeURIComponent(opportunityId)}`,
+        { replace: true },
+      );
     }
-  }, [opportunityId, requestedOpportunity, snapshot.opportunities]);
+  }, [navigate, opportunityId, requestedOpportunity, requestedOpportunityId]);
+  const selectOpportunity = (nextOpportunityId: string): void => {
+    void navigate(
+      `/evaluations?opportunity=${encodeURIComponent(nextOpportunityId)}`,
+      { replace: true },
+    );
+  };
   const run = useMutation({
     mutationFn: () => mutate("/api/v1/evaluations/fixture", { opportunityId }),
     onSuccess: refresh,
   });
+  const openDetails = (evaluationId: string, trigger: HTMLElement): void => {
+    detailTriggerRef.current = trigger;
+    setDetailEvaluationId(evaluationId);
+  };
+  const detailEvaluation = snapshot.evaluations.find(
+    (evaluation) => evaluation.id === detailEvaluationId,
+  );
+  const detailUsesCurrentOperation =
+    currentOperation !== undefined &&
+    detailEvaluation?.operationId === currentOperation.id;
+  const detailIsCurrent =
+    detailEvaluation?.id === latestEvaluation?.id &&
+    (!operationIsCurrent || detailUsesCurrentOperation);
+  const visibleHistory = showAllHistory
+    ? historyEvaluations
+    : historyEvaluations.slice(0, 5);
   return (
     <>
       <PageHeader
+        className="evaluation-page-header"
         eyebrow="Step 3 of 5 · Check fit"
-        title="Check the fit."
-        description="Choose a saved job, then review its score, evidence, and gaps."
+        title="Fit check"
+        description="See the current fit, the concern that matters most, and what to do next."
         story={pageStories.evaluations}
         journeyStep={3}
       />
-      <TaskDisclosure
-        collapsed={selectedEvaluation !== undefined}
-        summary="Choose a job or check again"
-        hint="Your latest result stays visible below"
-      >
-        <section className="panel run-panel task-panel">
-          <div>
-            <p className="eyebrow">Do this now</p>
-            <h2>Choose a saved job</h2>
+      {snapshot.opportunities.length === 0 ? (
+        <section className="evaluation-empty-state" aria-labelledby="no-jobs">
+          <header>
+            <div className="evaluation-job-identity">
+              <p className="eyebrow">Current job · none</p>
+              <h2 id="no-jobs">Save a job before checking fit</h2>
+            </div>
+            <div className="evaluation-current-score" aria-label="Fit result">
+              <small>Fit result</small>
+              <strong className="evaluation-no-score">Not available</strong>
+            </div>
+          </header>
+          <div className="evaluation-state-line">
+            <StatusPill tone="neutral">No saved jobs</StatusPill>
+            <span>No evaluation can start until a saved job is selected.</span>
           </div>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              run.mutate();
-            }}
+          <p className="evaluation-caveat" role="note">
+            <AlertTriangle aria-hidden="true" />
+            Fit evidence supports your decision—it is not an application
+            recommendation.
+          </p>
+          <section className="evaluation-primary-concern" role="note">
+            <small>Most important concern</small>
+            <p>There is no saved job to evaluate yet.</p>
+          </section>
+          <div className="evaluation-next-action" data-next-action>
+            <span>
+              <small>Next action</small>
+              <strong>Add a role you want to evaluate.</strong>
+            </span>
+            <Link className="button-link primary" to="/opportunities">
+              Save a job
+            </Link>
+          </div>
+        </section>
+      ) : (
+        <>
+          <section
+            className="evaluation-toolbar"
+            aria-label="Fit check controls"
           >
-            <label htmlFor="evaluation-opportunity">Saved job</label>
-            <select
-              id="evaluation-opportunity"
-              value={opportunityId}
-              onChange={(event) => setOpportunityId(event.target.value)}
-              required
-            >
-              <option value="" disabled>
-                Select an opportunity
-              </option>
-              {snapshot.opportunities.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.roleTitle} · {item.organization}
-                </option>
-              ))}
-            </select>
+            <JobPicker
+              choices={choices}
+              selectedId={opportunityId}
+              locale={locale}
+              onSelect={selectOpportunity}
+            />
             <button
-              className="primary"
-              type="submit"
+              className="primary evaluation-check-button"
+              type="button"
               disabled={
-                run.isPending || opportunityId === "" || !hasVerifiedCareerFact
+                run.isPending ||
+                checkIsActive ||
+                opportunityId === "" ||
+                !hasVerifiedCareerFact
               }
+              aria-label={`${latestEvaluation === undefined ? "Check fit" : "Check fit again"} for ${opportunity?.roleTitle ?? "selected job"} at ${opportunity?.organization ?? "selected organization"}`}
+              onClick={() => run.mutate()}
             >
               {run.isPending
                 ? "Checking…"
-                : selectedEvaluation === undefined
-                  ? "Check fit"
-                  : "Check again"}
+                : currentState === "waiting_for_user"
+                  ? "Input needed"
+                  : checkIsActive
+                    ? "Check in progress"
+                    : latestEvaluation === undefined
+                      ? "Check fit"
+                      : "Check again"}
             </button>
-          </form>
-          {!hasVerifiedCareerFact ? (
-            <p className="field-help">
-              Add your experience in Career before checking the fit.
-            </p>
-          ) : null}
+          </section>
           <ErrorNotice error={run.error} />
-        </section>
-      </TaskDisclosure>
-      <div className="card-list">
-        {snapshot.opportunities.length === 0 ? (
-          <Empty>Save a job first.</Empty>
-        ) : !hasVerifiedCareerFact ? (
-          <Empty>Add your experience first.</Empty>
-        ) : selectedEvaluation === undefined ? null : (
-          <>
-            <div className="current-evaluation">
-              <EvaluationCard
-                key={selectedEvaluation.id}
-                evaluation={selectedEvaluation}
-                snapshot={snapshot}
+          {opportunity !== undefined && (
+            <section className="current-evaluation">
+              <EvaluationSummary
+                opportunity={opportunity}
+                evaluation={summaryEvaluation}
+                currentEvaluation={latestEvaluation}
+                currentState={
+                  hasVerifiedCareerFact ? currentState : "no_evidence"
+                }
+                operation={currentOperation}
+                runPending={run.isPending}
+                hasVerifiedCareerFact={hasVerifiedCareerFact}
+                onRun={() => run.mutate()}
+                onOpenDetails={openDetails}
               />
-            </div>
-            {previousEvaluations.length > 0 && (
-              <details className="evaluation-history">
-                <summary>
-                  Previous{" "}
-                  {previousEvaluations.length === 1 ? "check" : "checks"}
-                  {" · "}
-                  {previousEvaluations.length}
-                </summary>
-                <div className="card-list">
-                  {previousEvaluations.map((evaluation) => (
-                    <EvaluationCard
+            </section>
+          )}
+          {historyEvaluations.length > 0 && opportunity !== undefined && (
+            <details className="evaluation-history">
+              <summary
+                aria-label={`Evaluation history for ${opportunity.roleTitle} at ${opportunity.organization}, ${String(historyEvaluations.length)} runs`}
+              >
+                History · {historyEvaluations.length}
+                <small>Newest first</small>
+              </summary>
+              <div className="evaluation-history-body">
+                <p>
+                  Times shown in {locale} · {timezone}
+                </p>
+                <ol className="evaluation-history-list">
+                  {visibleHistory.map((evaluation) => (
+                    <EvaluationHistoryRow
                       key={evaluation.id}
                       evaluation={evaluation}
+                      opportunity={opportunity}
+                      allEvaluations={selectedEvaluations}
+                      locale={locale}
+                      timezone={timezone}
+                      runNumber={
+                        selectedEvaluations.length -
+                        selectedEvaluations.findIndex(
+                          (item) => item.id === evaluation.id,
+                        )
+                      }
+                      onOpenDetails={openDetails}
+                    />
+                  ))}
+                </ol>
+                {historyEvaluations.length > 5 && (
+                  <button
+                    className="evaluation-history-more"
+                    type="button"
+                    aria-expanded={showAllHistory}
+                    onClick={() => setShowAllHistory((current) => !current)}
+                  >
+                    {showAllHistory
+                      ? "Show five most recent"
+                      : `Show all ${String(historyEvaluations.length)} runs`}
+                  </button>
+                )}
+              </div>
+            </details>
+          )}
+        </>
+      )}
+      <Dialog.Root
+        open={detailEvaluation !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setDetailEvaluationId(null);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="evaluation-dialog-overlay" />
+          {detailEvaluation !== undefined && opportunity !== undefined && (
+            <Dialog.Content
+              className="evaluation-dialog evaluation-detail-dialog"
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+                detailTriggerRef.current?.focus();
+              }}
+            >
+              <EvaluationDetail
+                key={detailEvaluation.id}
+                evaluation={detailEvaluation}
+                opportunity={opportunity}
+                snapshot={snapshot}
+                locale={locale}
+                timezone={timezone}
+                isCurrent={detailIsCurrent}
+                displayState={
+                  detailUsesCurrentOperation
+                    ? currentState
+                    : detailEvaluation.state
+                }
+                operation={
+                  detailUsesCurrentOperation ? currentOperation : undefined
+                }
+              />
+            </Dialog.Content>
+          )}
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
+  );
+}
+
+function EvaluationSummary({
+  opportunity,
+  evaluation,
+  currentEvaluation,
+  currentState,
+  operation,
+  runPending,
+  hasVerifiedCareerFact,
+  onRun,
+  onOpenDetails,
+}: {
+  readonly opportunity: OpportunityView;
+  readonly evaluation: EvaluationView | undefined;
+  readonly currentEvaluation: EvaluationView | undefined;
+  readonly currentState: string;
+  readonly operation: OperationView | undefined;
+  readonly runPending: boolean;
+  readonly hasVerifiedCareerFact: boolean;
+  readonly onRun: () => void;
+  readonly onOpenDetails: (evaluationId: string, trigger: HTMLElement) => void;
+}): React.JSX.Element {
+  const hasValidScore =
+    evaluation !== undefined && evaluationHasRecordedScore(evaluation);
+  const stateLabel =
+    currentState === "no_evidence"
+      ? "Career evidence needed"
+      : evaluationStateLabel(currentState);
+  const critical =
+    currentState === "no_evidence"
+      ? "A fit result cannot be trusted until career evidence is accepted."
+      : criticalEvaluationFinding(evaluation, currentState, operation);
+  const canReview = evaluation !== undefined;
+  const activeState = [
+    "pending",
+    "queued",
+    "running",
+    "waiting_for_user",
+  ].includes(currentState);
+  const reviewPreservedResult =
+    hasValidScore && currentState !== "completed" && canReview;
+  const reviewCurrentRun =
+    currentEvaluation !== undefined &&
+    (!evaluationHasRecordedScore(currentEvaluation) ||
+      currentEvaluation.id !== evaluation?.id);
+  return (
+    <article
+      className={`evaluation-summary-card state-${currentState}`}
+      data-evaluation-state={currentState}
+    >
+      <header>
+        <div className="evaluation-job-identity">
+          <p className="eyebrow">{opportunity.organization}</p>
+          <h2>{opportunity.roleTitle}</h2>
+        </div>
+        <div className="evaluation-current-score" aria-label="Fit result">
+          <small>
+            {hasValidScore
+              ? currentState === "completed"
+                ? "Current fit"
+                : currentState === "stale"
+                  ? "Stale result"
+                  : "Last completed"
+              : "Fit result"}
+          </small>
+          {hasValidScore ? (
+            <span>
+              <strong>{evaluation.displayScore}</strong>
+              <b>/100</b>
+            </span>
+          ) : (
+            <strong className="evaluation-no-score">Not final</strong>
+          )}
+        </div>
+      </header>
+      <div className="evaluation-state-line">
+        <StatusPill
+          tone={
+            currentState === "completed"
+              ? "good"
+              : currentState === "failed" || currentState === "canceled"
+                ? "warning"
+                : "neutral"
+          }
+        >
+          {stateLabel}
+        </StatusPill>
+        <span>
+          {currentState === "no_evidence"
+            ? "Add accepted experience before running a fit check."
+            : evaluationStateMessage(currentState)}
+        </span>
+      </div>
+      <p className="evaluation-caveat" role="note">
+        <AlertTriangle aria-hidden="true" />
+        Fit evidence supports your decision—it is not an application
+        recommendation.
+      </p>
+      <section className="evaluation-primary-concern" role="note">
+        <small>Most important concern</small>
+        <p>{critical}</p>
+      </section>
+      <div className="evaluation-next-action" data-next-action>
+        <span>
+          <small>Next action</small>
+          <strong>
+            {!hasVerifiedCareerFact
+              ? "Add career evidence, then return to this job."
+              : currentState === "completed"
+                ? "Review the concern and its supporting evidence."
+                : currentState === "waiting_for_user"
+                  ? "Review the requested input and continue the check."
+                  : activeState
+                    ? "Follow the check until it reaches a trusted terminal."
+                    : currentState === "not_evaluated"
+                      ? "Run the first fit check for this job."
+                      : "Run a new check while keeping the prior result visible."}
+          </strong>
+        </span>
+        <div className="evaluation-next-actions">
+          {reviewCurrentRun && (
+            <button
+              className="secondary"
+              type="button"
+              aria-label={`Review ${evaluationStateLabel(currentState).toLocaleLowerCase()} run evidence for ${opportunity.roleTitle} at ${opportunity.organization}`}
+              onClick={(event) =>
+                onOpenDetails(currentEvaluation.id, event.currentTarget)
+              }
+            >
+              Review current run
+            </button>
+          )}
+          {reviewPreservedResult && (
+            <button
+              className="secondary"
+              type="button"
+              aria-label={`${currentState === "stale" ? "Review stale fit evidence" : "Review last completed fit evidence"} for ${opportunity.roleTitle} at ${opportunity.organization}`}
+              onClick={(event) =>
+                onOpenDetails(evaluation.id, event.currentTarget)
+              }
+            >
+              {currentState === "stale"
+                ? "Review stale result"
+                : "Review last result"}
+            </button>
+          )}
+          {!hasVerifiedCareerFact ? (
+            <Link className="button-link secondary" to="/profile">
+              Add evidence
+            </Link>
+          ) : currentState === "completed" && canReview ? (
+            <button
+              className="secondary"
+              type="button"
+              aria-label={`Review full fit evidence for ${opportunity.roleTitle} at ${opportunity.organization}`}
+              onClick={(event) =>
+                onOpenDetails(evaluation.id, event.currentTarget)
+              }
+            >
+              Review evidence
+            </button>
+          ) : activeState ? (
+            <Link
+              className="button-link secondary"
+              to="/activity"
+              aria-label={`${currentState === "waiting_for_user" ? "Review requested input" : "View evaluation activity"} for ${opportunity.roleTitle} at ${opportunity.organization}`}
+            >
+              {currentState === "waiting_for_user"
+                ? "Review request"
+                : "View activity"}
+            </Link>
+          ) : (
+            <button
+              className="secondary"
+              type="button"
+              disabled={runPending}
+              aria-label={`Check fit for ${opportunity.roleTitle} at ${opportunity.organization}`}
+              onClick={onRun}
+            >
+              {runPending ? "Checking…" : "Check fit"}
+            </button>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function EvaluationHistoryRow({
+  evaluation,
+  opportunity,
+  allEvaluations,
+  locale,
+  timezone,
+  runNumber,
+  onOpenDetails,
+}: {
+  readonly evaluation: EvaluationView;
+  readonly opportunity: OpportunityView;
+  readonly allEvaluations: readonly EvaluationView[];
+  readonly locale: string;
+  readonly timezone: string;
+  readonly runNumber: number;
+  readonly onOpenDetails: (evaluationId: string, trigger: HTMLElement) => void;
+}): React.JSX.Element {
+  const timestamp = evaluation.createdAt;
+  const formattedTimestamp = formatAbsoluteTimestamp(
+    timestamp,
+    locale,
+    timezone,
+  );
+  const score = evaluationHasRecordedScore(evaluation)
+    ? `${evaluation.displayScore}/100${evaluation.state === "stale" ? " · stale" : ""}`
+    : "No final score";
+  const delta = evaluationDelta(evaluation, allEvaluations);
+  return (
+    <li>
+      <button
+        type="button"
+        aria-label={`Open run ${String(runNumber)} for ${opportunity.roleTitle} at ${opportunity.organization}, ${formattedTimestamp}, ${evaluationStateLabel(evaluation.state)}, ${score}, ${delta}`}
+        onClick={(event) => onOpenDetails(evaluation.id, event.currentTarget)}
+      >
+        <span className="evaluation-history-identity">
+          <strong>
+            Run {runNumber} · {opportunity.roleTitle}
+          </strong>
+          <small>{opportunity.organization}</small>
+          <time dateTime={timestamp}>{formattedTimestamp}</time>
+        </span>
+        <span className="evaluation-history-metrics">
+          <b>{evaluationStateLabel(evaluation.state)}</b>
+          <strong>{score}</strong>
+          <small>{delta}</small>
+        </span>
+      </button>
+    </li>
+  );
+}
+
+function EvaluationEvidenceItem({
+  evidence,
+  snapshot,
+}: {
+  readonly evidence: EvidenceView;
+  readonly snapshot: SnapshotResponse;
+}): React.JSX.Element {
+  const source =
+    evidence.sourceId === null
+      ? undefined
+      : snapshot.sources.find((item) => item.id === evidence.sourceId);
+  const candidateFact =
+    evidence.candidateFactId === null
+      ? undefined
+      : snapshot.profileFacts.find(
+          (item) => item.id === evidence.candidateFactId,
+        );
+  return (
+    <li className="evaluation-evidence-item">
+      <strong>{evidence.claim}</strong>
+      {candidateFact !== undefined && (
+        <section className="evaluation-candidate-fact">
+          <span>Accepted candidate fact</span>
+          <p>{String(candidateFact.value ?? "No recorded value")}</p>
+          <dl>
+            {candidateFact.sourceLocators.map((locator, index) => {
+              const factSource = snapshot.sources.find(
+                (item) => item.id === locator.sourceId,
+              );
+              return (
+                <div key={`${locator.sourceId}-${String(index)}`}>
+                  <dt>Fact provenance {index + 1}</dt>
+                  <dd>
+                    {factSource?.originalLocator ?? locator.sourceId} ·
+                    characters {locator.start}–{locator.end} · {locator.quote}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+        </section>
+      )}
+      <dl>
+        <div>
+          <dt>Classification</dt>
+          <dd>{evidence.classification.replaceAll("_", " ")}</dd>
+        </div>
+        <div>
+          <dt>Decision</dt>
+          <dd>
+            {evidence.decision}
+            {evidence.decisionReason === null
+              ? ""
+              : ` · ${evidence.decisionReason}`}
+          </dd>
+        </div>
+        <div>
+          <dt>Provenance</dt>
+          <dd>
+            {source?.originalLocator ??
+              evidence.sourceId ??
+              "No source locator"}
+          </dd>
+        </div>
+        <div>
+          <dt>Exact locator</dt>
+          <dd>
+            {evidence.locator === null
+              ? "No source-bound locator"
+              : `characters ${String(evidence.locator.start)}–${String(evidence.locator.end)} · ${evidence.locator.quote}`}
+          </dd>
+        </div>
+      </dl>
+    </li>
+  );
+}
+
+function EvaluationDetail({
+  evaluation,
+  opportunity,
+  snapshot,
+  locale,
+  timezone,
+  isCurrent,
+  displayState,
+  operation,
+}: {
+  readonly evaluation: EvaluationView;
+  readonly opportunity: OpportunityView;
+  readonly snapshot: SnapshotResponse;
+  readonly locale: string;
+  readonly timezone: string;
+  readonly isCurrent: boolean;
+  readonly displayState: string;
+  readonly operation: OperationView | undefined;
+}): React.JSX.Element {
+  const refresh = useRefresh();
+  const seal = useMutation({
+    mutationFn: () =>
+      mutate(`/api/v1/evaluations/${evaluation.id}/artifacts`, {}),
+    onSuccess: refresh,
+  });
+  const acceptedEvidence = evaluation.acceptedEvidenceIds.flatMap((id) => {
+    const evidence = snapshot.evidence.find((item) => item.id === id);
+    return evidence === undefined ? [] : [evidence];
+  });
+  const acceptedCandidate = acceptedEvidence.filter(
+    (item) => item.classification === "candidate_fact",
+  );
+  const acceptedAdditional = acceptedEvidence.filter(
+    (item) => item.classification !== "candidate_fact",
+  );
+  const rejectedEvidence = snapshot.evidence.filter(
+    (item) =>
+      item.decision === "rejected" &&
+      evaluation.operationId !== null &&
+      item.proposedByOperationId === evaluation.operationId,
+  );
+  const artifacts = snapshot.artifacts.filter((item) =>
+    item.evaluationIds.includes(evaluation.id),
+  );
+  const timestamp = formatAbsoluteTimestamp(
+    evaluation.createdAt,
+    locale,
+    timezone,
+  );
+  const context = `${opportunity.roleTitle} at ${opportunity.organization}, ${timestamp}`;
+  const hasRecordedScore = evaluationHasRecordedScore(evaluation);
+  return (
+    <>
+      <div className="evaluation-dialog-heading">
+        <div>
+          <Dialog.Title>{opportunity.roleTitle}</Dialog.Title>
+          <Dialog.Description>
+            {opportunity.organization} ·{" "}
+            <time dateTime={evaluation.createdAt}>{timestamp}</time>
+          </Dialog.Description>
+        </div>
+        <Dialog.Close asChild>
+          <button
+            type="button"
+            aria-label={`Close evaluation details for ${context}`}
+          >
+            Close
+          </button>
+        </Dialog.Close>
+      </div>
+      <div className="evaluation-dialog-scroll">
+        <div className="evaluation-detail-state">
+          <StatusPill tone={displayState === "completed" ? "good" : "warning"}>
+            {evaluationStateLabel(displayState)}
+          </StatusPill>
+          <span>
+            {hasRecordedScore
+              ? `${evaluation.displayScore}/100 · ${evaluation.state === "stale" ? "stale fit estimate" : "fit estimate"}, not a recommendation`
+              : "No final score is presented for this run."}
+          </span>
+          {evaluation.state === "stale" && evaluation.staleReason !== null && (
+            <span className="evaluation-stale-reason">
+              Stale reason: {evaluation.staleReason}
+            </span>
+          )}
+          {operation?.terminalMessage !== null &&
+            operation?.terminalMessage !== undefined && (
+              <span className="evaluation-terminal-message">
+                {operation.terminalMessage}
+              </span>
+            )}
+        </div>
+        <Tabs.Root defaultValue="score">
+          <Tabs.List aria-label={`Evaluation details for ${context}`}>
+            <Tabs.Trigger
+              value="score"
+              aria-label={`Score details for ${context}`}
+            >
+              Score
+            </Tabs.Trigger>
+            <Tabs.Trigger
+              value="evidence"
+              aria-label={`Evidence details for ${context}`}
+            >
+              Evidence
+            </Tabs.Trigger>
+            <Tabs.Trigger
+              value="findings"
+              aria-label={`Findings for ${context}`}
+            >
+              Findings
+            </Tabs.Trigger>
+            <Tabs.Trigger
+              value="artifacts"
+              aria-label={`Artifacts for ${context}`}
+            >
+              Artifacts
+            </Tabs.Trigger>
+          </Tabs.List>
+          <Tabs.Content value="score">
+            {!hasRecordedScore && (
+              <p className="evaluation-nonfinal-note">
+                This run has no valid aggregate result.
+              </p>
+            )}
+            {evaluation.dimensionScores.map((dimension) => (
+              <div className="dimension" key={dimension.dimensionKey}>
+                <div>
+                  <strong>{dimension.dimensionKey}</strong>
+                  <span>
+                    {dimension.inputBasisPoints / 100}% · weight{" "}
+                    {dimension.weightBasisPoints / 100}%
+                  </span>
+                </div>
+                <meter min="0" max="10000" value={dimension.inputBasisPoints}>
+                  {dimension.inputBasisPoints / 100}%
+                </meter>
+              </div>
+            ))}
+            <section className="evaluation-arithmetic">
+              <h3>Score arithmetic</h3>
+              <p className="math">{evaluation.arithmeticExplanation}</p>
+            </section>
+          </Tabs.Content>
+          <Tabs.Content value="evidence">
+            <section className="evaluation-evidence-section">
+              <h3>Accepted candidate facts · {acceptedCandidate.length}</h3>
+              {acceptedCandidate.length === 0 ? (
+                <Empty>
+                  No accepted candidate facts were bound to this run.
+                </Empty>
+              ) : (
+                <ul>
+                  {acceptedCandidate.map((evidence) => (
+                    <EvaluationEvidenceItem
+                      key={evidence.id}
+                      evidence={evidence}
                       snapshot={snapshot}
                     />
                   ))}
-                </div>
-              </details>
+                </ul>
+              )}
+            </section>
+            <section className="evaluation-evidence-section">
+              <h3>
+                Additional accepted evidence · {acceptedAdditional.length}
+              </h3>
+              {acceptedAdditional.length === 0 ? (
+                <Empty>
+                  No additional accepted evidence was bound to this run.
+                </Empty>
+              ) : (
+                <ul>
+                  {acceptedAdditional.map((evidence) => (
+                    <EvaluationEvidenceItem
+                      key={evidence.id}
+                      evidence={evidence}
+                      snapshot={snapshot}
+                    />
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section className="evaluation-evidence-section rejected-evidence">
+              <h3>Rejected evidence · {rejectedEvidence.length}</h3>
+              {rejectedEvidence.length === 0 ? (
+                <Empty>No related evidence was rejected.</Empty>
+              ) : (
+                <ul>
+                  {rejectedEvidence.map((evidence) => (
+                    <EvaluationEvidenceItem
+                      key={evidence.id}
+                      evidence={evidence}
+                      snapshot={snapshot}
+                    />
+                  ))}
+                </ul>
+              )}
+            </section>
+          </Tabs.Content>
+          <Tabs.Content value="findings">
+            <div className="evaluation-findings">
+              <section>
+                <h3>Authoritative critical findings</h3>
+                {evaluation.criticalFindings.length === 0 ? (
+                  <Empty>No critical findings recorded.</Empty>
+                ) : (
+                  <ul>
+                    {evaluation.criticalFindings.map((finding) => (
+                      <li key={finding}>{finding}</li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+              <section>
+                <h3>Gaps · {evaluation.gaps.length}</h3>
+                {evaluation.gaps.length === 0 ? (
+                  <Empty>No gaps recorded.</Empty>
+                ) : (
+                  <ul>
+                    {evaluation.gaps.map((gap) => (
+                      <li key={gap}>{gap}</li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+              <section>
+                <h3>Contradictions · {evaluation.contradictions.length}</h3>
+                {evaluation.contradictions.length === 0 ? (
+                  <Empty>No contradictions recorded.</Empty>
+                ) : (
+                  <ul>
+                    {evaluation.contradictions.map((contradiction) => (
+                      <li key={contradiction}>{contradiction}</li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+          </Tabs.Content>
+          <Tabs.Content value="artifacts">
+            {artifacts.length === 0 ? (
+              isCurrent && evaluation.state === "completed" ? (
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() => seal.mutate()}
+                  disabled={seal.isPending}
+                  aria-label={`Seal immutable report for ${context}`}
+                >
+                  {seal.isPending ? "Sealing…" : "Seal immutable report"}
+                </button>
+              ) : (
+                <Empty>No artifact was recorded for this run.</Empty>
+              )
+            ) : (
+              artifacts.map((artifact) => (
+                <ArtifactRow key={artifact.id} artifact={artifact} />
+              ))
             )}
-          </>
-        )}
+            <ErrorNotice error={seal.error} />
+          </Tabs.Content>
+        </Tabs.Root>
       </div>
     </>
   );
@@ -5252,6 +6522,11 @@ function ApprovalGate({
   requestDetails,
   approvedMessage,
   execute,
+  contextLabel,
+  heading = "Explicit approval",
+  description = "Your approval is bound to this exact local change and revision before the DSH Agent can continue.",
+  approveLabel = "Approve exact request",
+  denyLabel = "Deny request",
 }: {
   readonly effectKind: ApprovalView["effectKind"];
   readonly targetId: string;
@@ -5264,6 +6539,11 @@ function ApprovalGate({
   readonly requestDetails?: Readonly<Record<string, unknown>>;
   readonly approvedMessage?: string;
   readonly execute?: (approval: ApprovalView) => Promise<unknown>;
+  readonly contextLabel?: string;
+  readonly heading?: string;
+  readonly description?: string;
+  readonly approveLabel?: string;
+  readonly denyLabel?: string;
 }): React.JSX.Element {
   const refresh = useRefresh();
   const client = useQueryClient();
@@ -5332,15 +6612,12 @@ function ApprovalGate({
   return (
     <section
       className="approval-gate"
-      aria-label={`${effectKind.replaceAll(".", " ")} approval`}
+      aria-label={`${effectKind.replaceAll(".", " ")} approval${contextLabel === undefined ? "" : ` for ${contextLabel}`}`}
     >
       <header>
         <div>
-          <strong>Explicit approval</strong>
-          <p>
-            Requesting records the exact effect and revision. A separate approve
-            or deny decision is required before execution.
-          </p>
+          <strong>{heading}</strong>
+          <p>{description}</p>
         </div>
         <StatusPill
           tone={
@@ -5422,6 +6699,11 @@ function ApprovalGate({
               ? `approval-readiness-${targetId}`
               : undefined
           }
+          aria-label={
+            contextLabel === undefined
+              ? undefined
+              : `${requestLabel} for ${contextLabel}`
+          }
           onClick={() => requestApproval.mutate()}
         >
           {requestApproval.isPending ? "Requesting…" : requestLabel}
@@ -5433,17 +6715,27 @@ function ApprovalGate({
             className="primary"
             type="button"
             disabled={decideApproval.isPending}
+            aria-label={
+              contextLabel === undefined
+                ? undefined
+                : `${approveLabel} for ${contextLabel}`
+            }
             onClick={() => decideApproval.mutate("approved")}
           >
-            Approve exact request
+            {approveLabel}
           </button>
           <button
             className="secondary"
             type="button"
             disabled={decideApproval.isPending}
+            aria-label={
+              contextLabel === undefined
+                ? undefined
+                : `${denyLabel} for ${contextLabel}`
+            }
             onClick={() => decideApproval.mutate("denied")}
           >
-            Deny request
+            {denyLabel}
           </button>
         </div>
       )}
@@ -5461,6 +6753,11 @@ function ApprovalGate({
             className="primary"
             type="button"
             disabled={executeApproval.isPending}
+            aria-label={
+              contextLabel === undefined
+                ? undefined
+                : `${actionLabel} for ${contextLabel}`
+            }
             onClick={() => executeApproval.mutate()}
           >
             {executeApproval.isPending ? "Executing…" : actionLabel}
@@ -5750,277 +7047,6 @@ function Comparisons({
   );
 }
 
-function compactEvaluationText(value: string): string {
-  const compact = value.replace(/\s+/gu, " ").trim();
-  return compact.length <= 180
-    ? compact
-    : `${compact.slice(0, 179).trimEnd()}…`;
-}
-
-function EvaluationCard({
-  evaluation,
-  snapshot,
-}: {
-  readonly evaluation: EvaluationView;
-  readonly snapshot: SnapshotResponse;
-}): React.JSX.Element {
-  const refresh = useRefresh();
-  const seal = useMutation({
-    mutationFn: () =>
-      mutate(`/api/v1/evaluations/${evaluation.id}/artifacts`, {}),
-    onSuccess: refresh,
-  });
-  const opportunity = snapshot.opportunities.find(
-    (item) => item.id === evaluation.opportunityId,
-  );
-  const artifacts = snapshot.artifacts.filter((item) =>
-    item.evaluationIds.includes(evaluation.id),
-  );
-  const operation =
-    evaluation.operationId === null
-      ? undefined
-      : snapshot.operations.find((item) => item.id === evaluation.operationId);
-  const acceptedEvidence = evaluation.acceptedEvidenceIds.flatMap((id) => {
-    const evidence = snapshot.evidence.find((item) => item.id === id);
-    return evidence === undefined ? [] : [evidence];
-  });
-  const relatedSourceIds = new Set(
-    acceptedEvidence.flatMap((item) =>
-      item.sourceId === null ? [] : [item.sourceId],
-    ),
-  );
-  const relatedFactIds = new Set(
-    acceptedEvidence.flatMap((item) =>
-      item.candidateFactId === null ? [] : [item.candidateFactId],
-    ),
-  );
-  if (opportunity !== undefined)
-    relatedSourceIds.add(opportunity.sourceDocumentId);
-  const rejectedEvidence = snapshot.evidence.filter(
-    (item) =>
-      item.decision === "rejected" &&
-      ((item.sourceId !== null && relatedSourceIds.has(item.sourceId)) ||
-        (item.candidateFactId !== null &&
-          relatedFactIds.has(item.candidateFactId))),
-  );
-  const careerEvidence = acceptedEvidence.filter(
-    (item) => item.classification === "candidate_fact",
-  );
-  const additionalEvidenceCount = acceptedEvidence.filter(
-    (item) =>
-      item.classification !== "candidate_fact" &&
-      item.classification !== "opportunity_fact",
-  ).length;
-  const isLocalDemonstration = operation?.route === "deterministic";
-  return (
-    <article className={`evaluation-card ${evaluation.state}`}>
-      <header>
-        <div>
-          <p className="eyebrow">
-            {opportunity?.organization ?? "Opportunity"}
-          </p>
-          <h2>{opportunity?.roleTitle ?? "Evaluation"}</h2>
-        </div>
-        <div className="score">
-          <strong>{evaluation.displayScore}</strong>
-          <span>/ 100</span>
-        </div>
-      </header>
-      {isLocalDemonstration && (
-        <div className="notice warning evaluation-disclaimer" role="note">
-          <AlertTriangle aria-hidden="true" />
-          <strong>Fit estimate, not a recommendation.</strong>
-        </div>
-      )}
-      {operation !== undefined && operation.state !== "succeeded" && (
-        <div className="operation-status" aria-label="Evaluation operation">
-          <StatusPill
-            tone={
-              operation.state === "succeeded"
-                ? "good"
-                : operation.state === "running"
-                  ? "warning"
-                  : "neutral"
-            }
-          >
-            {operation.route.replaceAll("_", " ")} · {operation.state}
-          </StatusPill>
-          <span>
-            {operation.terminalMessage ?? "Authoritative operation in progress"}
-          </span>
-        </div>
-      )}
-      {evaluation.state === "stale" && (
-        <div className="notice warning">
-          <RefreshCw aria-hidden="true" />
-          <span>Stale: {evaluation.staleReason}</span>
-        </div>
-      )}
-      <div className="record-snapshot" aria-label="Evaluation summary">
-        <span>{evaluation.state.replaceAll("_", " ")}</span>
-        <span>{acceptedEvidence.length} evidence items used</span>
-        <span>
-          {evaluation.gaps.length === 0
-            ? "No blocking gaps"
-            : `${String(evaluation.gaps.length)} gap${evaluation.gaps.length === 1 ? "" : "s"} to review`}
-        </span>
-      </div>
-      {(evaluation.gaps.length > 0 || evaluation.contradictions.length > 0) && (
-        <section className="evaluation-critical-findings" role="note">
-          <strong>Review before deciding</strong>
-          <ul>
-            {[...evaluation.gaps, ...evaluation.contradictions].map(
-              (finding) => (
-                <li key={finding}>{finding}</li>
-              ),
-            )}
-          </ul>
-        </section>
-      )}
-      <ProgressiveDetails
-        className="evaluation-details"
-        summary="Review fit evidence"
-        hint="Score factors, supporting evidence, gaps, and report"
-      >
-        <Tabs.Root defaultValue="score">
-          <Tabs.List aria-label="Evaluation details">
-            <Tabs.Trigger value="score">Score</Tabs.Trigger>
-            <Tabs.Trigger value="evidence">Used</Tabs.Trigger>
-            <Tabs.Trigger value="gaps">Gaps</Tabs.Trigger>
-            <Tabs.Trigger value="artifacts">Artifacts</Tabs.Trigger>
-          </Tabs.List>
-          <Tabs.Content value="score">
-            {evaluation.dimensionScores.map((dimension) => (
-              <div className="dimension" key={dimension.dimensionKey}>
-                <div>
-                  <strong>{dimension.dimensionKey}</strong>
-                  <span>
-                    {dimension.inputBasisPoints / 100}% · weight{" "}
-                    {dimension.weightBasisPoints / 100}%
-                  </span>
-                </div>
-                <meter min="0" max="10000" value={dimension.inputBasisPoints}>
-                  {dimension.inputBasisPoints / 100}%
-                </meter>
-              </div>
-            ))}
-            <details className="evaluation-math">
-              <summary>How this was calculated</summary>
-              <p className="math">{evaluation.arithmeticExplanation}</p>
-            </details>
-          </Tabs.Content>
-          <Tabs.Content value="evidence">
-            <div className="evaluation-input-summary">
-              <section>
-                <Check aria-hidden="true" />
-                <div>
-                  <h3>Your experience</h3>
-                  {careerEvidence.slice(0, 2).map((evidence) => (
-                    <p key={evidence.id}>
-                      {compactEvaluationText(evidence.claim)}
-                    </p>
-                  ))}
-                  {careerEvidence.length > 2 && (
-                    <small>
-                      +{careerEvidence.length - 2} more career details
-                    </small>
-                  )}
-                </div>
-              </section>
-              <section>
-                <Check aria-hidden="true" />
-                <div>
-                  <h3>Saved job</h3>
-                  <p>
-                    {opportunity?.roleTitle ?? "Role"}
-                    {opportunity?.organization === undefined
-                      ? ""
-                      : ` at ${opportunity.organization}`}
-                  </p>
-                  {additionalEvidenceCount > 0 && (
-                    <small>
-                      +{additionalEvidenceCount} additional matched{" "}
-                      {additionalEvidenceCount === 1 ? "detail" : "details"}
-                    </small>
-                  )}
-                </div>
-              </section>
-            </div>
-            {rejectedEvidence.length > 0 && (
-              <details className="evaluation-unused-details">
-                <summary>Not used · {rejectedEvidence.length}</summary>
-                <ul className="evidence-list">
-                  {rejectedEvidence.map((evidence) => (
-                    <li key={evidence.id}>
-                      <AlertTriangle aria-hidden="true" />
-                      <span>
-                        {evidence.claim}
-                        <small>
-                          {evidence.classification.replaceAll("_", " ")}
-                          {evidence.decisionReason === null
-                            ? " · rejected"
-                            : ` · ${evidence.decisionReason}`}
-                        </small>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-          </Tabs.Content>
-          <Tabs.Content value="gaps">
-            <div className="evaluation-findings">
-              <section>
-                <h3>Critical findings and gaps</h3>
-                {evaluation.gaps.length === 0 ? (
-                  <Empty>
-                    No blocking gaps. Missing inputs received the rubric’s
-                    documented treatment.
-                  </Empty>
-                ) : (
-                  <ul>
-                    {evaluation.gaps.map((gap) => (
-                      <li key={gap}>{gap}</li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-              <section>
-                <h3>Contradictions</h3>
-                {evaluation.contradictions.length === 0 ? (
-                  <Empty>No contradictions recorded.</Empty>
-                ) : (
-                  <ul>
-                    {evaluation.contradictions.map((contradiction) => (
-                      <li key={contradiction}>{contradiction}</li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            </div>
-          </Tabs.Content>
-          <Tabs.Content value="artifacts">
-            {artifacts.length === 0 ? (
-              <button
-                className="secondary"
-                onClick={() => seal.mutate()}
-                disabled={seal.isPending}
-              >
-                Seal immutable report
-              </button>
-            ) : (
-              artifacts.map((artifact) => (
-                <ArtifactRow key={artifact.id} artifact={artifact} />
-              ))
-            )}
-            <ErrorNotice error={seal.error} />
-          </Tabs.Content>
-        </Tabs.Root>
-      </ProgressiveDetails>
-    </article>
-  );
-}
-
 function ArtifactRow({
   artifact,
 }: {
@@ -6094,18 +7120,50 @@ function nextApplicationAction(
   };
 }
 
+function applicationStateLabel(state: string): string {
+  const words = state.replaceAll("_", " ");
+  return `${words.slice(0, 1).toUpperCase()}${words.slice(1)}`;
+}
+
+function applicationHistoryLabel(event: DomainEventView): string {
+  const from = event.payload["from"];
+  const to = event.payload["to"];
+  const state = event.payload["state"];
+  if (
+    event.eventKind === "application.transitioned" &&
+    typeof from === "string" &&
+    typeof to === "string"
+  ) {
+    return `${applicationStateLabel(from)} → ${applicationStateLabel(to)}`;
+  }
+  if (event.eventKind === "application.created" && typeof state === "string") {
+    return `Started as ${applicationStateLabel(state)}`;
+  }
+  if (
+    (event.eventKind === "application.imported" ||
+      event.eventKind === "career_ops.application.imported") &&
+    typeof state === "string"
+  ) {
+    return `Imported as ${applicationStateLabel(state)}`;
+  }
+  return applicationStateLabel(event.eventKind.replaceAll(".", " "));
+}
+
 function Pipeline({
   snapshot,
 }: {
   readonly snapshot: SnapshotResponse;
 }): React.JSX.Element {
   const refresh = useRefresh();
+  const locale = snapshot.workspace?.locale ?? "en-US";
+  const timezone = snapshot.workspace?.timezone ?? "UTC";
   const missing = snapshot.opportunities.filter(
     (opportunity) =>
       !snapshot.applications.some(
         (application) => application.opportunityId === opportunity.id,
       ),
   );
+  const missingChoices = opportunityChoices(missing, locale);
   const [opportunityId, setOpportunityId] = useState(missing[0]?.id ?? "");
   useEffect(() => {
     if (opportunityId === "" && missing[0] !== undefined) {
@@ -6129,49 +7187,59 @@ function Pipeline({
         description="Keep each opportunity’s current status and next action clear. Nothing here submits externally."
         story={pageStories.pipeline}
         journeyStep={4}
+        className="pipeline-page-header"
       />
       {missing.length > 0 && (
-        <TaskDisclosure
-          collapsed={snapshot.applications.length > 0}
-          summary="Track another opportunity"
-          hint={`${String(snapshot.applications.length)} already in your pipeline`}
-        >
-          <section className="panel run-panel task-panel">
-            <div>
-              <p className="eyebrow">Do this now</p>
-              <h2>Start tracking an opportunity</h2>
-              <p>New records begin as considering.</p>
-            </div>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                create.mutate();
-              }}
-            >
-              <label htmlFor="pipeline-opportunity">Opportunity</label>
-              <select
-                id="pipeline-opportunity"
-                value={opportunityId}
-                onChange={(event) => setOpportunityId(event.target.value)}
-                required
+        <div className="pipeline-add-opportunity">
+          <TaskDisclosure
+            collapsed={snapshot.applications.length > 0}
+            summary="Add another job"
+            hint={`${String(snapshot.applications.length)} ${snapshot.applications.length === 1 ? "job" : "jobs"} tracked`}
+            closedCue="Open form"
+            openCue="Close form"
+          >
+            <section className="panel run-panel task-panel">
+              <div>
+                <p className="eyebrow">Do this now</p>
+                <h2>Add a job to your pipeline</h2>
+                <p>
+                  It starts in Considering. You can change the status later.
+                </p>
+              </div>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  create.mutate();
+                }}
               >
-                {missing.map((opportunity) => (
-                  <option key={opportunity.id} value={opportunity.id}>
-                    {opportunity.roleTitle} · {opportunity.organization}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="primary"
-                type="submit"
-                disabled={create.isPending}
-              >
-                Start pipeline record
-              </button>
-            </form>
-            <ErrorNotice error={create.error} />
-          </section>
-        </TaskDisclosure>
+                <label htmlFor="pipeline-opportunity">Saved job</label>
+                <select
+                  id="pipeline-opportunity"
+                  value={opportunityId}
+                  onChange={(event) => setOpportunityId(event.target.value)}
+                  required
+                >
+                  {missingChoices.map((choice) => (
+                    <option
+                      key={choice.opportunity.id}
+                      value={choice.opportunity.id}
+                    >
+                      {choice.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="primary"
+                  type="submit"
+                  disabled={create.isPending}
+                >
+                  Add to pipeline
+                </button>
+              </form>
+              <ErrorNotice error={create.error} />
+            </section>
+          </TaskDisclosure>
+        </div>
       )}
       <div className="pipeline-board">
         {snapshot.applications.length === 0 ? (
@@ -6194,6 +7262,8 @@ function Pipeline({
               key={application.id}
               application={application}
               snapshot={snapshot}
+              locale={locale}
+              timezone={timezone}
             />
           ))
         )}
@@ -6205,9 +7275,13 @@ function Pipeline({
 function ApplicationCard({
   application,
   snapshot,
+  locale,
+  timezone,
 }: {
   readonly application: ApplicationView;
   readonly snapshot: SnapshotResponse;
+  readonly locale: string;
+  readonly timezone: string;
 }): React.JSX.Element {
   const refresh = useRefresh();
   const allowed = applicationTransitions[application.state] ?? [];
@@ -6230,45 +7304,56 @@ function ApplicationCard({
   const opportunity = snapshot.opportunities.find(
     (item) => item.id === application.opportunityId,
   );
-  const history = snapshot.events.filter(
-    (event) =>
-      event.aggregateId === application.id &&
-      (event.eventKind === "application.created" ||
-        event.eventKind === "application.imported" ||
-        event.eventKind === "career_ops.application.imported" ||
-        event.eventKind === "application.transitioned"),
-  );
+  const history = snapshot.events
+    .filter(
+      (event) =>
+        event.aggregateId === application.id &&
+        (event.eventKind === "application.created" ||
+          event.eventKind === "application.imported" ||
+          event.eventKind === "career_ops.application.imported" ||
+          event.eventKind === "application.transitioned"),
+    )
+    .sort((left, right) => right.sequence - left.sequence);
   const nextAction = nextApplicationAction(application, snapshot);
+  const organization = opportunity?.organization ?? "Opportunity";
+  const roleTitle = opportunity?.roleTitle ?? application.opportunityId;
+  const applicationLabel = `${roleTitle} at ${organization}`;
+  const applicationTitleId = `application-${application.id}-title`;
   return (
-    <article className="application-card">
+    <article className="application-card" aria-labelledby={applicationTitleId}>
       <header>
-        <div>
-          <p className="eyebrow">
-            {opportunity?.organization ?? "Opportunity"}
-          </p>
-          <h2>{opportunity?.roleTitle ?? application.opportunityId}</h2>
+        <div className="application-identity">
+          <p className="eyebrow">{organization}</p>
+          <h2 id={applicationTitleId}>{roleTitle}</h2>
         </div>
-        <StatusPill
-          tone={
-            ["interview", "offer", "hired"].includes(application.state)
-              ? "good"
-              : ["rejected", "withdrawn", "closed"].includes(application.state)
-                ? "neutral"
-                : "warning"
-          }
-        >
-          {application.state.replaceAll("_", " ")}
-        </StatusPill>
+        <span className="application-current-state">
+          <small>Current status</small>
+          <StatusPill
+            tone={
+              ["interview", "offer", "hired"].includes(application.state)
+                ? "good"
+                : ["rejected", "withdrawn", "closed"].includes(
+                      application.state,
+                    )
+                  ? "neutral"
+                  : "warning"
+            }
+          >
+            {applicationStateLabel(application.state)}
+          </StatusPill>
+        </span>
       </header>
       <p className="next-action">
-        <strong>Next action:</strong>{" "}
+        <small>Next action</small>
         <Link to={nextAction.to}>{nextAction.label}</Link>
       </p>
       <ProgressiveDetails
-        summary={allowed.length > 0 ? "Update status" : "Review history"}
-        hint={`${String(history.length)} recorded change${history.length === 1 ? "" : "s"}`}
+        summary={allowed.length > 0 ? "Change status" : "View status history"}
+        hint={`${String(history.length)} ${history.length === 1 ? "update" : "updates"} recorded`}
+        summaryLabel={`${allowed.length > 0 ? "Change status" : "View status history"} for ${applicationLabel}. ${String(history.length)} ${history.length === 1 ? "update" : "updates"} recorded`}
+        closedCue={allowed.length > 0 ? "Edit" : "View"}
       >
-        <small>
+        <small className="application-record-meta">
           Entity revision {application.revision} · state revision{" "}
           {application.stateRevision} · effective {application.effectiveDate}
         </small>
@@ -6281,14 +7366,15 @@ function ApplicationCard({
             }}
           >
             <label>
-              Record next state
+              New status
               <select
+                aria-label={`New status for ${applicationLabel}`}
                 value={nextState}
                 onChange={(event) => setNextState(event.target.value)}
               >
                 {allowed.map((state) => (
                   <option key={state} value={state}>
-                    {state.replaceAll("_", " ")}
+                    {applicationStateLabel(state)}
                   </option>
                 ))}
               </select>
@@ -6296,6 +7382,7 @@ function ApplicationCard({
             <label>
               Local note
               <input
+                aria-label={`Local note for ${applicationLabel}`}
                 value={note}
                 maxLength={2_000}
                 onChange={(event) => setNote(event.target.value)}
@@ -6305,20 +7392,26 @@ function ApplicationCard({
               className="secondary"
               type="submit"
               disabled={transition.isPending}
+              aria-label={`Save status as ${applicationStateLabel(nextState)} for ${applicationLabel}`}
             >
-              {nextState === "applied"
-                ? "Record as applied. Does not submit."
-                : "Record transition"}
+              Save status
             </button>
           </form>
         )}
-        <details>
-          <summary>Transition history ({history.length})</summary>
+        <details className="application-history">
+          <summary
+            aria-label={`Transition history for ${applicationLabel}, ${String(history.length)} recorded change${history.length === 1 ? "" : "s"}`}
+          >
+            <span>Past status changes ({history.length})</span>
+            <DisclosureCue closedLabel="View" openLabel="Hide" />
+          </summary>
           <ol className="compact-history">
             {history.map((event) => (
               <li key={event.sequence}>
-                <span>{event.eventKind.replaceAll("_", " ")}</span>
-                <time>{new Date(event.timestamp).toLocaleString()}</time>
+                <strong>{applicationHistoryLabel(event)}</strong>
+                <time dateTime={event.timestamp}>
+                  {formatAbsoluteTimestamp(event.timestamp, locale, timezone)}
+                </time>
               </li>
             ))}
           </ol>
@@ -6330,8 +7423,13 @@ function ApplicationCard({
           targetId={application.id}
           targetRevision={application.revision}
           actionLabel="Continue in DSH"
-          requestLabel={`Authorize ${nextState} for the DSH Agent`}
+          requestLabel={`Review change to ${applicationStateLabel(nextState)}`}
           canRequest={nextState !== ""}
+          contextLabel={applicationLabel}
+          heading="Agent change approval"
+          description="A DSH Agent can change this local status only after you approve the exact change and revision."
+          approveLabel="Approve status change"
+          denyLabel="Keep current status"
           requestDetails={{
             applicationTransition: {
               state: nextState,
